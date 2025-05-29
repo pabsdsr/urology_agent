@@ -1,5 +1,4 @@
 import httpx
-import jwt
 from datetime import datetime, timedelta
 import asyncio
 import os
@@ -26,7 +25,7 @@ class TokenService:
 
     async def get_token(self):
         async with self._lock:
-            if(self.access_token and self.expires_at and datetime.now() < self.expires_at - timedelta(minutes=5)):
+            if(self.access_token and datetime.now() < self.expires_at - timedelta(minutes=5)):
                 return self.access_token
             
             if self.refresh_token:
@@ -72,16 +71,7 @@ class TokenService:
     def _update_tokens(self, auth_data):
         self.access_token = auth_data["access_token"]
         self.refresh_token = auth_data["refresh_token"]
-        self.expires_at = self._get_toke_expiration(self.access_token)
+        self.expires_at = datetime.now() + timedelta(hours=2)
 
-    def _get_toke_expiration(self, access_token):
-        try:
-            decoded_token = jwt.decode(access_token, options={"verify_signature": False})
-            expiration_time = decoded_token.get("exp")
-
-            if expiration_time:
-                return datetime.fromtimestamp(expiration_time)
-        except Exception:
-            pass
 
 token_service = TokenService()
