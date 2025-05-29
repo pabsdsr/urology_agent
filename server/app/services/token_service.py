@@ -77,9 +77,7 @@ class TokenService:
     def _get_toke_expiration(self, access_token):
         try:
             decoded_token = jwt.decode(access_token, options={"verify_signature": False})
-            print(f"this is the decoded token: {decoded_token}")
             expiration_time = decoded_token.get("exp")
-            print(f"this is the expiration time: {expiration_time}")
 
             if expiration_time:
                 return datetime.fromtimestamp(expiration_time)
