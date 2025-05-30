@@ -1,8 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
+from app.routes import hello, id
 load_dotenv()
-from app.routes import hello
 import uvicorn
 
 
@@ -21,6 +21,7 @@ def create_app():
     )
 
     app.include_router(hello.router)
+    app.include_router(id.router)
 
     return app
 
