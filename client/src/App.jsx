@@ -1,35 +1,64 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+// client/src/App.jsx
+import React, { useState } from "react";
 
-function App() {
-  const [count, setCount] = useState(0)
+export default function App() {
+  const [messages, setMessages] = useState([
+    { sender: "agent", text: "Hello! How can I help you with ModMed today?" }
+  ]);
+  const [input, setInput] = useState("");
+
+  const handleSend = () => {
+    if (!input.trim()) return;
+
+    const newMessage = { sender: "user", text: input };
+    setMessages((prev) => [...prev, newMessage]);
+    setInput("");
+
+    // Placeholder response from agent
+    setTimeout(() => {
+      setMessages((prev) => [
+        ...prev,
+        { sender: "agent", text: "Thanks for your message! (Response pending AI integration)" }
+      ]);
+    }, 1000);
+  };
 
   return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
+    <div className="flex flex-col h-screen bg-gray-100">
+      <header className="bg-blue-600 text-white text-2xl p-4 font-bold shadow">
+        ModMed Agent
+      </header>
+
+      <main className="flex-1 overflow-y-auto p-4 space-y-4">
+        {messages.map((msg, i) => (
+          <div
+            key={i}
+            className={`p-3 rounded-lg max-w-xl ${
+              msg.sender === "agent" ? "bg-white self-start" : "bg-blue-500 text-white self-end"
+            }`}
+          >
+            {msg.text}
+          </div>
+        ))}
+      </main>
+
+      <footer className="p-4 bg-white flex gap-2 border-t">
+        <input
+          className="flex-1 border rounded-lg px-3 py-2 shadow-sm"
+          placeholder="Type a message..."
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && handleSend()}
+        />
+        <button
+          className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+          onClick={handleSend}
+        >
+          Send
         </button>
-        <p>
-          Edit <code>src/App.jsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
-  )
+      </footer>
+    </div>
+  );
 }
 
-export default App
+
