@@ -7,20 +7,33 @@ export default function App() {
   ]);
   const [input, setInput] = useState("");
 
-  const handleSend = () => {
+  const handleSend = async () => {
     if (!input.trim()) return;
 
+    // user message
     const newMessage = { sender: "user", text: input };
     setMessages((prev) => [...prev, newMessage]);
     setInput("");
 
-    // Placeholder response from agent
-    setTimeout(() => {
+    try {
+      const res = await fetch("http://localhost:8080/hello");
+      const data = await res.json();
+
+      //try to extract a simple summary
+      const patientName =
+        data?.name?.[0]?.given?.join(" ") + " " + data?.name?.[0]?.family;
+      const birthDate = data?.birthDate;
+      const responseText = patientName
+        ? `Patient Name: ${patientName}\nDOB: ${birthDate}`
+        : "Patient data retrieved, but no name found.";
+
+      setMessages((prev) => [...prev, { sender: "agent", text: responseText }]);
+    } catch (error) {
       setMessages((prev) => [
         ...prev,
-        { sender: "agent", text: "Thanks for your message! (Response pending AI integration)" }
+        { sender: "agent", text: "⚠️ Failed to fetch patient data." }
       ]);
-    }, 1000);
+    }
   };
 
   return (
@@ -34,7 +47,9 @@ export default function App() {
           <div
             key={i}
             className={`p-3 rounded-lg max-w-xl ${
-              msg.sender === "agent" ? "bg-white self-start" : "bg-blue-500 text-white self-end"
+              msg.sender === "agent"
+                ? "bg-white self-start"
+                : "bg-blue-500 text-white self-end"
             }`}
           >
             {msg.text}
@@ -60,5 +75,6 @@ export default function App() {
     </div>
   );
 }
+
 
 
