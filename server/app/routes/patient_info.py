@@ -12,7 +12,7 @@ router = APIRouter(
 
 @router.get("")
 async def get_patient_info(
-    id = "295795"
+    id = "296015"
 ):
     token = await token_service.get_token()
     headers={
@@ -32,9 +32,10 @@ async def get_patient_info(
         f"https://stage.ema-api.com/ema-dev/firm/uropmsandbox460/ema/fhir/v2/ServiceRequest?patient={id}", # service requests
         f"https://stage.ema-api.com/ema-dev/firm/uropmsandbox460/ema/fhir/v2/DiagnosticReport?patient={id}", # diagnostic report
         
-        # f"https://stage.ema-api.com/ema-dev/firm/uropmsandbox460/ema/fhir/v2/Patient/{id}", # tasks
+        f"https://stage.ema-api.com/ema-dev/firm/uropmsandbox460/ema/fhir/v2/Task?code=PMRECALL&patient={id}", # tasks
+        # f"https://stage.ema-api.com/ema-dev/firm/uropmsandbox460/ema/fhir/v2/Practitioner", # practitioner
 
-        # maybe add practioners and tasks need to ask my dad
+        # probably don't need practioners but I need to ask my dad
     ]
 
     async with httpx.AsyncClient() as client:
