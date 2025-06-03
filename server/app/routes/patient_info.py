@@ -3,6 +3,7 @@ import httpx
 import asyncio
 import os
 from app.services.token_service import token_service
+from app.services.patient_info_service import parse_patient_information
 
 
 router = APIRouter(
@@ -43,5 +44,6 @@ async def get_patient_info(
         responses = await asyncio.gather(*tasks)
 
         results = [response.json() for response in responses]
+        parse_patient_information(results)
 
     return results
