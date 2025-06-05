@@ -11,7 +11,7 @@ router = APIRouter(
 @router.get("")
 async def hello_world():
     token = await token_service.get_token()
-    patient_response = httpx.get("https://stage.ema-api.com/ema-dev/firm/uropmsandbox460/ema/fhir/v2/Patient",
+    patient_response = httpx.get("https://stage.ema-api.com/ema-dev/firm/uropmsandbox460/ema/fhir/v2/Patient/295752",
                             headers= {
                                 "x-api-key" : os.environ.get("modmed_api_key"),
                                 "Authorization" : f"Bearer {token}"
