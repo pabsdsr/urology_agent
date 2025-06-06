@@ -4,6 +4,17 @@ from dotenv import load_dotenv
 load_dotenv()
 from app.routes import hello, all_patients, patient_info
 import uvicorn
+import os
+import sys
+from pydantic import BaseModel
+
+# Build paths relative to this file's location
+current_dir = os.path.dirname(os.path.abspath(__file__))
+env_path = os.path.normpath(os.path.join(current_dir, "../../ai/.env"))
+ai_src_path = os.path.normpath(os.path.join(current_dir, "../../ai/src"))
+
+load_dotenv(env_path)
+sys.path.append(ai_src_path)
 
 
 def create_app():
@@ -23,6 +34,21 @@ def create_app():
     app.include_router(hello.router)
     app.include_router(all_patients.router)
     app.include_router(patient_info.router)
+    
+
+    class CrewInput(BaseModel):
+        query: str
+        id: int
+
+    @app.post("/run-crew")
+    async def trigger_crew(input_data: CrewInput):
+        from ai.main import run as run_crew  # import only when needed
+        try:
+            result = run_crew(query=input_data.query, id=input_data.id)
+            return {"result": result}
+        except Exception as e:
+            return {"error": str(e)}
+
 
     return app
 
