@@ -2,6 +2,7 @@ from fastapi import APIRouter
 import httpx
 import asyncio
 import os
+import json
 from app.services.token_service import token_service
 
 
@@ -10,32 +11,32 @@ router = APIRouter(
     tags = ["patient_info"]
 )
 
-@router.get("")
-async def get_patient_info(
-    id = "296015"
-):
+@router.get("/{id}")
+async def get_patient_info(id):
     token = await token_service.get_token()
     headers={
                 "x-api-key": os.environ.get("modmed_api_key"),
                 "Authorization": f"Bearer {token}"
             }
     urls = [
-        f"https://stage.ema-api.com/ema-dev/firm/uropmsandbox460/ema/fhir/v2/Patient/{id}", # patient
-        f"https://stage.ema-api.com/ema-dev/firm/uropmsandbox460/ema/fhir/v2/Encounter?patient={id}", # encounters
-        f"https://stage.ema-api.com/ema-dev/firm/uropmsandbox460/ema/fhir/v2/DocumentReference?patient={id}", # documents
+        # Patient info
+        f"https://stage.ema-api.com/ema-dev/firm/uropmsandbox460/ema/fhir/v2/Patient/{id}",
+
+        # Encounters
+        f"https://stage.ema-api.com/ema-dev/firm/uropmsandbox460/ema/fhir/v2/Encounter?patient={id}",
+
+        # Documents
+        f"https://stage.ema-api.com/ema-dev/firm/uropmsandbox460/ema/fhir/v2/DocumentReference?patient={id}", 
 
         # Clinical data
         f"https://stage.ema-api.com/ema-dev/firm/uropmsandbox460/ema/fhir/v2/MedicationStatement?patient={id}", # medication statement
         f"https://stage.ema-api.com/ema-dev/firm/uropmsandbox460/ema/fhir/v2/AllergyIntolerance?patient={id}", # allergies
         f"https://stage.ema-api.com/ema-dev/firm/uropmsandbox460/ema/fhir/v2/Condition?patient={id}", # conditions
         f"https://stage.ema-api.com/ema-dev/firm/uropmsandbox460/ema/fhir/v2/FamilyMemberHistory?patient={id}", # family history
-        f"https://stage.ema-api.com/ema-dev/firm/uropmsandbox460/ema/fhir/v2/ServiceRequest?patient={id}", # service requests
         f"https://stage.ema-api.com/ema-dev/firm/uropmsandbox460/ema/fhir/v2/DiagnosticReport?patient={id}", # diagnostic report
         
-        f"https://stage.ema-api.com/ema-dev/firm/uropmsandbox460/ema/fhir/v2/Task?code=PMRECALL&patient={id}", # tasks
-        # f"https://stage.ema-api.com/ema-dev/firm/uropmsandbox460/ema/fhir/v2/Practitioner", # practitioner
-
-        # probably don't need practioners but I need to ask my dad
+        # Tasks
+        f"https://stage.ema-api.com/ema-dev/firm/uropmsandbox460/ema/fhir/v2/Task?code=PMRECALL&patient={id}"
     ]
 
     async with httpx.AsyncClient() as client:
@@ -43,5 +44,10 @@ async def get_patient_info(
         responses = await asyncio.gather(*tasks)
 
         results = [response.json() for response in responses]
+
+    filename = f"{id}.json"
+    filepath = os.path.join("../ai/knowledge", filename)
+    with open(filepath, 'w') as f:
+        json.dump(results, f, indent=2)
 
     return results
