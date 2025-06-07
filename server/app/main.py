@@ -2,8 +2,19 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 load_dotenv()
-from app.routes import hello, all_patients, patient_info
+from app.routes import hello, all_patients, patient_info, run_crew
 import uvicorn
+import os
+import sys
+from pydantic import BaseModel
+
+# Build paths relative to this file's location
+current_dir = os.path.dirname(os.path.abspath(__file__))
+env_path = os.path.normpath(os.path.join(current_dir, "../../ai/.env"))
+ai_src_path = os.path.normpath(os.path.join(current_dir, "../../ai/src"))
+
+load_dotenv(env_path)
+sys.path.append(ai_src_path)
 
 
 def create_app():
@@ -23,6 +34,7 @@ def create_app():
     app.include_router(hello.router)
     app.include_router(all_patients.router)
     app.include_router(patient_info.router)
+    app.include_router(run_crew.router)
 
     return app
 
