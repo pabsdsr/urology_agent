@@ -1,11 +1,13 @@
 rag_task:
   description: >
-    For the given {query} and {id}:
-    1. Clear the vector database by deleting the all the data inside the db folder using the 
-       clear_database_tool.
-    2. Load the appropriate files into the database using the load_file_tool with {id} as its parameter. 
-       If no files are found, return "No data for this patient found".
-    3. Search the database using the rag_tool and to retrieve relevant information to the {query}.
+    For the given {query}, {id}, and {prev_id}:
+    1. If {id} does not match {prev_id}, clean the database using the clear_database_tool. If {id} 
+       and {prev_id} match, do not clean the database
+    2. Additionally if {id} does not match {prev_id}, load the appropriate files into the database 
+       using the load_file_tool with {id} as its parameter. If no files are found, return "No data 
+       for this patient found". If {id} and {prev_id} match, do not load any files.
+    3. Search the database using the rag_tool and to retrieve relevant information to the {query} 
+       ensuring the information is about the patient with {id}.
     4. Evaluate if the retrieved information is meaningfully connected to {query}.
        - If yes, return the retrieved content.
        - If no, return "No relevant information found".

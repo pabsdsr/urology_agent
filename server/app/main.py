@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 load_dotenv()
-from app.routes import hello, all_patients, patient_info
+from app.routes import hello, all_patients, patient_info, run_crew
 import uvicorn
 import os
 import sys
@@ -34,21 +34,7 @@ def create_app():
     app.include_router(hello.router)
     app.include_router(all_patients.router)
     app.include_router(patient_info.router)
-    
-
-    class CrewInput(BaseModel):
-        query: str
-        id: int
-
-    @app.post("/run-crew")
-    async def trigger_crew(input_data: CrewInput):
-        from ai.main import run as run_crew  # import only when needed
-        try:
-            result = run_crew(query=input_data.query, id=input_data.id)
-            return {"result": result}
-        except Exception as e:
-            return {"error": str(e)}
-
+    app.include_router(run_crew.router)
 
     return app
 

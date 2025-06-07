@@ -21,8 +21,6 @@ def clear_database_tool():
         path = os.path.join(db_path, filename)
         if os.path.isdir(path):
             shutil.rmtree(path)
-        # else:
-        #     os.remove(path)
             
     return "All folders in db have been deleted, chroma.sqlite3 preserved."
 
@@ -33,7 +31,7 @@ def load_file_tool(id: str):
 
     json_file_path = os.path.join(knowledge_path, f"{id}.json")
     if not os.path.exists(json_file_path):
-        return "No relevant information"
+        return "No files for this patient found"
     
     rag_tool.add(source=json_file_path)
     

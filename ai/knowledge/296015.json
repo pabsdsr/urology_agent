@@ -98,9 +98,9 @@
   },
   {
     "resourceType": "Bundle",
-    "id": "3b9572ac-b485-4efc-8968-0bc466790f13",
+    "id": "b53e0a83-a4e2-48c4-9bbd-f8829b917db9",
     "meta": {
-      "lastUpdated": "2025-06-05T16:32:11.766+00:00"
+      "lastUpdated": "2025-06-07T01:04:11.995+00:00"
     },
     "type": "searchset",
     "total": 1,
@@ -181,9 +181,9 @@
   },
   {
     "resourceType": "Bundle",
-    "id": "398ca7bd-56ef-4315-bd92-69b7248ad284",
+    "id": "2881f71f-4e01-4ff5-9901-447c531575b7",
     "meta": {
-      "lastUpdated": "2025-06-05T16:32:11.880+00:00",
+      "lastUpdated": "2025-06-07T01:04:12.224+00:00",
       "tag": [
         {
           "system": "http://terminology.hl7.org/CodeSystem/v3-ObservationValue",
@@ -193,7 +193,7 @@
       ]
     },
     "type": "searchset",
-    "total": 1,
+    "total": 2,
     "link": [
       {
         "relation": "self",
@@ -247,14 +247,58 @@
           },
           "date": "2025-06-02T13:31:28.000+00:00"
         }
+      },
+      {
+        "fullUrl": "https://stage.ema-api.com/ema-dev/firm/uropmsandbox460/ema/fhir/v2/DocumentReference/file%7C99425",
+        "resource": {
+          "resourceType": "DocumentReference",
+          "id": "file|99425",
+          "meta": {
+            "tag": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/v3-ObservationValue",
+                "code": "SUBSETTED",
+                "display": "Resource encoded in summary mode"
+              }
+            ]
+          },
+          "identifier": [
+            {
+              "system": "filename",
+              "value": "Clinical_Lab_Results_5704.pdf"
+            }
+          ],
+          "status": "current",
+          "type": {
+            "text": "application/pdf"
+          },
+          "category": [
+            {
+              "coding": [
+                {
+                  "system": "https://stage.ema-api.com/ema-dev/firm/uropmsandbox460/ema/fhir/v2/ValueSet/document-category",
+                  "code": "22901",
+                  "display": "Clinical Results"
+                }
+              ],
+              "text": "Clinical Results"
+            }
+          ],
+          "subject": {
+            "reference": "https://stage.ema-api.com/ema-dev/firm/uropmsandbox460/ema/fhir/v2/Patient/296015",
+            "display": "https://stage.ema-api.com/ema-dev/firm/uropmsandbox460/ema/fhir/v2/Patient/296015"
+          },
+          "date": "2025-06-05T17:33:10.000+00:00",
+          "description": "Clinical Lab Results for Noodleman, David"
+        }
       }
     ]
   },
   {
     "resourceType": "Bundle",
-    "id": "351fc4de-bdef-470a-8666-73882c99ac7f",
+    "id": "94ef9bc4-984f-42d7-b9f0-d6a722252ca9",
     "meta": {
-      "lastUpdated": "2025-06-05T16:32:11.763+00:00"
+      "lastUpdated": "2025-06-07T01:04:11.707+00:00"
     },
     "type": "searchset",
     "total": 1,
@@ -306,9 +350,9 @@
   },
   {
     "resourceType": "Bundle",
-    "id": "266158aa-1b99-42c4-b99f-ae4247929f5b",
+    "id": "06fc7886-13d0-4785-ac99-853ff423176b",
     "meta": {
-      "lastUpdated": "2025-06-05T16:32:11.652+00:00"
+      "lastUpdated": "2025-06-07T01:04:11.967+00:00"
     },
     "type": "searchset",
     "total": 1,
@@ -383,9 +427,9 @@
   },
   {
     "resourceType": "Bundle",
-    "id": "2efa658b-cd07-4b67-96ed-f5029d0410f5",
+    "id": "6f05654f-c137-4403-a4f1-78a216a092c6",
     "meta": {
-      "lastUpdated": "2025-06-05T16:32:11.776+00:00"
+      "lastUpdated": "2025-06-07T01:04:11.986+00:00"
     },
     "type": "searchset",
     "total": 1,
@@ -457,9 +501,9 @@
   },
   {
     "resourceType": "Bundle",
-    "id": "d9bb9f1f-a6d6-4c77-87a6-f6201ea47810",
+    "id": "ece6b4e5-f558-4450-81eb-da7b0d8935ec",
     "meta": {
-      "lastUpdated": "2025-06-05T16:32:11.669+00:00"
+      "lastUpdated": "2025-06-07T01:04:12.082+00:00"
     },
     "type": "searchset",
     "total": 0,
@@ -472,39 +516,69 @@
   },
   {
     "resourceType": "Bundle",
-    "id": "32ec67aa-0679-4f8b-858a-749bbdf17dce",
+    "id": "97914eb1-f737-4632-adb3-7460172d4e6c",
     "meta": {
-      "lastUpdated": "2025-06-05T16:32:11.651+00:00"
+      "lastUpdated": "2025-06-07T01:04:11.901+00:00",
+      "tag": [
+        {
+          "system": "http://terminology.hl7.org/CodeSystem/v3-ObservationValue",
+          "code": "SUBSETTED",
+          "display": "Resource encoded in summary mode"
+        }
+      ]
     },
     "type": "searchset",
-    "total": 0,
-    "link": [
-      {
-        "relation": "self",
-        "url": "https://stage.ema-api.com/ema-dev/firm/uropmsandbox460/ema/fhir/v2/ServiceRequest?patient=296015"
-      }
-    ]
-  },
-  {
-    "resourceType": "Bundle",
-    "id": "50d00102-ffcd-4b7b-865f-daf1f0569b3f",
-    "meta": {
-      "lastUpdated": "2025-06-05T16:32:11.779+00:00"
-    },
-    "type": "searchset",
-    "total": 0,
+    "total": 1,
     "link": [
       {
         "relation": "self",
         "url": "https://stage.ema-api.com/ema-dev/firm/uropmsandbox460/ema/fhir/v2/DiagnosticReport?patient=296015"
+      },
+      {
+        "relation": "next",
+        "url": "https://stage.ema-api.com/ema-dev/firm/uropmsandbox460/ema/fhir/v2/DiagnosticReport?patient=296015&page=2"
+      }
+    ],
+    "entry": [
+      {
+        "fullUrl": "https://stage.ema-api.com/ema-dev/firm/uropmsandbox460/ema/fhir/v2/DiagnosticReport/LAB%7C9543",
+        "resource": {
+          "resourceType": "DiagnosticReport",
+          "id": "LAB|9543",
+          "meta": {
+            "lastUpdated": "2025-06-05T17:33:08.000+00:00",
+            "tag": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/v3-ObservationValue",
+                "code": "SUBSETTED",
+                "display": "Resource encoded in summary mode"
+              }
+            ]
+          },
+          "identifier": [
+            {
+              "system": "https://www.hl7.org/fhir/request.html#requisitionid",
+              "value": "1"
+            }
+          ],
+          "status": "final",
+          "code": {
+            "text": "100093-4 - T cruzi 15-16kD IgG Ser Ql IB"
+          },
+          "subject": {
+            "reference": "https://stage.ema-api.com/ema-dev/firm/uropmsandbox460/ema/fhir/v2/Patient/296015",
+            "display": "https://stage.ema-api.com/ema-dev/firm/uropmsandbox460/ema/fhir/v2/Patient/296015"
+          },
+          "issued": "2025-06-05T17:33:08.000+00:00"
+        }
       }
     ]
   },
   {
     "resourceType": "Bundle",
-    "id": "51deb4e5-613b-4852-8ff9-568a2c8381fc",
+    "id": "cd16cc0c-dab3-4cae-b06c-17c7fc8e837d",
     "meta": {
-      "lastUpdated": "2025-06-05T16:32:11.766+00:00"
+      "lastUpdated": "2025-06-07T01:04:11.895+00:00"
     },
     "type": "searchset",
     "total": 1,
