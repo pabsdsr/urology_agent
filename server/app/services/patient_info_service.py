@@ -16,7 +16,7 @@ def chunk_resource(entry):
         print(f"the patient has this condition: {resource.get('code')}")
 
 
-
+# pdf plumber
 
 def parse_patient_information(patient_info):
     for info in patient_info:
