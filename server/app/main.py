@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 load_dotenv()
-from app.routes import hello, all_patients, patient_info, run_crew
+from app.routes import hello, all_patients, run_crew
 import uvicorn
 import os
 import sys
@@ -33,7 +33,6 @@ def create_app():
 
     app.include_router(hello.router)
     app.include_router(all_patients.router)
-    app.include_router(patient_info.router)
     app.include_router(run_crew.router)
 
     return app
