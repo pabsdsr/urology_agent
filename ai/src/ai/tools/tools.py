@@ -11,8 +11,10 @@ db_path = os.path.normpath(os.path.join(current_dir, "../../../db"))
 knowledge_path = os.path.normpath(os.path.join(current_dir, "../../../knowledge"))
 
 @tool
-def clear_database_tool():
+def clear_database_tool(id: str, prev_id: str):
     """Reset the vector database by deleting all the data in the database folder."""
+    if id == prev_id:
+        return "Id matched previous id"
 
     if not os.path.exists(db_path):
         return "No db folder found."
@@ -26,16 +28,20 @@ def clear_database_tool():
 
 
 @tool  
-def load_file_tool(id: str):
+def load_file_tool(id: str, prev_id: str):
     """Load JSON file from knowledge folder and upload to vector database."""
+    if id == prev_id:
+        return "Id matched previous id"
 
-    json_file_path = os.path.join(knowledge_path, f"{id}.json")
-    if not os.path.exists(json_file_path):
+    dirpath = os.path.join(knowledge_path, id)
+    if not os.path.exists(dirpath):
         return "No files for this patient found"
+
+    for filename in os.listdir(dirpath):
+        path = os.path.join(dirpath, filename)
+        rag_tool.add(source=path)
     
-    rag_tool.add(source=json_file_path)
-    
-    return f"Successfully loaded {id}.json to database"
+    return f"Successfully loaded {id} to database"
 
 
 rag_tool = RagTool(
