@@ -1,20 +1,11 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from dotenv import load_dotenv
-load_dotenv()
-from app.routes import hello, all_patients, run_crew
 import uvicorn
-import os
-import sys
-from pydantic import BaseModel
+import warnings
+from app.crew.crew import Ai
+from app.routes import run_crew
 
-# Build paths relative to this file's location
-current_dir = os.path.dirname(os.path.abspath(__file__))
-env_path = os.path.normpath(os.path.join(current_dir, "../../ai/.env"))
-ai_src_path = os.path.normpath(os.path.join(current_dir, "../../ai/src"))
-
-load_dotenv(env_path)
-sys.path.append(ai_src_path)
+warnings.filterwarnings("ignore", category=SyntaxWarning, module="pysbd")
 
 
 def create_app():
@@ -31,16 +22,45 @@ def create_app():
         allow_headers=["*"],
     )
 
-    app.include_router(hello.router)
-    app.include_router(all_patients.router)
     app.include_router(run_crew.router)
+
+    @app.get("/")
+    def read_root():
+        return {"Hello": "World"}
 
     return app
 
+prev_id = None
+    
+def run(query: str, id: str):
+    global prev_id
+
+    inputs = {
+        "query": query,
+        "id": id,
+        "prev_id": prev_id
+    }
+
+    try:
+        result = Ai().crew().kickoff(inputs=inputs)
+        prev_id = id
+    except Exception as e:
+        raise Exception(f"An error occurred while running the crew: {e}")
+
+    # Extract output from llm agent
+    result = result.model_dump()
+    tasks_output = result.get("tasks_output", [])
+    for task in tasks_output:
+        if task.get("agent", "").strip() == "LLM Expert":
+            return task.get("raw", "No final answer found.")
+
+    return "No relevant output found from LLM Expert."
+
+    
 def main():
     app = create_app()
-    # we will have to adjust the port later in our production version
     uvicorn.run(app, host="0.0.0.0", port=8080)
 
 if __name__ == "__main__":
     main()
+    
