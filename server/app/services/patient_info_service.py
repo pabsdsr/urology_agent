@@ -4,7 +4,6 @@ import os
 import json
 from app.services.token_service import token_service
 
-
 async def get_patient_info(id: str):
     token = await token_service.get_token()
     headers = {
@@ -30,10 +29,16 @@ async def get_patient_info(id: str):
 
         results = [response.json() for response in responses]
 
-    dirpath = f"../ai/knowledge/{id}"
-    os.makedirs(dirpath, exist_ok=True)
-    filepath = os.path.join(dirpath, f"{id}.json")
-    with open(filepath, 'w') as f:
-        json.dump(results, f, indent=2)
+    BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "crew", "knowledge"))
+
+    dir_path = os.path.join(BASE_DIR, id)
+    os.makedirs(dir_path, exist_ok=True)
+    filepath = os.path.join(dir_path, f"{id}.json")
+
+    try:
+        with open(filepath, 'w') as f:
+            json.dump(results, f, indent=2)
+    except Exception as e:
+        print(f"Error writing file: {e}")
 
     return
