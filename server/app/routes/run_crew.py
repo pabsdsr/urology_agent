@@ -21,7 +21,7 @@ async def run_crew():
 
     from app.main import run
 
-    query = "Does this patient have any history of anxiety"
+    query = "Does this patient have any history of fatigue"
     id = "296015"
 
     try:
