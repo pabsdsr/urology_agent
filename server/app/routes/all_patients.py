@@ -4,34 +4,50 @@ import os
 from app.services.token_service import token_service
 
 router = APIRouter(
-    prefix = "/all_patients",
-    tags = ["all_patients"]
+    prefix="/all_patients",
+    tags=["all_patients"]
 )
 
 @router.get("")
 async def get_all_patients():
     token = await token_service.get_token()
+    headers = {
+        "x-api-key": os.environ.get("modmed_api_key"),
+        "Authorization": f"Bearer {token}"
+    }
+
+    patients = []
+    url = "https://stage.ema-api.com/ema-dev/firm/uropmsandbox460/ema/fhir/v2/Patient"
+
     async with httpx.AsyncClient() as client:
-        response = await client.get(
-            f"https://stage.ema-api.com/ema-dev/firm/uropmsandbox460/ema/fhir/v2/Patient",
-            headers={
-                "x-api-key": os.environ.get("modmed_api_key"),
-                "Authorization": f"Bearer {token}"
-            }
-        )
+        while url:
+            response = await client.get(url, headers=headers)
+            response.raise_for_status()
+            data = response.json()
 
-    data = response.json()
+            entries = data.get("entry", [])
+            for patient in entries:
+                resource = patient.get("resource", {})
+                if not resource:
+                    continue
+                id = resource.get("id")
+                name = resource.get("name", [{}])[0]
+                family_name = name.get("family", "")
+                given_names = name.get("given", [""])
+                given_name = given_names[0] if given_names else ""
 
-    results = []
+                patients.append({
+                    "id": id,
+                    "familyName": family_name,
+                    "givenName": given_name
+                })
 
-    for patient in data.get("entry", []):
-        id = patient["resource"]["id"]
-        family_name = patient["resource"]["name"][0]["family"]
-        given_name = patient["resource"]["name"][0]["given"][0]
-        results.append({
-            "id": id,
-            "familyName": family_name,
-            "givenName": given_name
-        })
+            # Find the next page URL
+            next_url = None
+            for link in data.get("link", []):
+                if link.get("relation") == "next":
+                    next_url = link.get("url")
+                    break
+            url = next_url
 
-    return results
+    return patients
