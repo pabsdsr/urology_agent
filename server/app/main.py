@@ -47,14 +47,13 @@ def run(query: str, id: str):
     except Exception as e:
         raise Exception(f"An error occurred while running the crew: {e}")
 
-    # Extract output from llm agent
     result = result.model_dump()
     tasks_output = result.get("tasks_output", [])
-    for task in tasks_output:
-        if task.get("agent", "").strip() == "LLM Expert":
-            return task.get("raw", "No final answer found.")
-
-    return "No relevant output found from LLM Expert."
+    if tasks_output:
+        last_task = tasks_output[-1]
+        return last_task.get("raw", "No final answer found.")
+    else:
+        return "No tasks were executed."
 
     
 def main():

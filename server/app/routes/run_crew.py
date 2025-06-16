@@ -9,20 +9,17 @@ router = APIRouter(
 )
 
 class CrewInput(BaseModel):
-        query: str
-        id: str
+    query: str
+    id: str
 
-# input_data: CrewInput
-@router.get("")
-async def run_crew():
-    # input_data.id
-    await get_patient_info("296015")
+@router.post("")
+async def run_crew(input_data: CrewInput):
+    id = input_data.id
+    query = input_data.query
 
+    await get_patient_info(id)
 
     from app.main import run
-
-    query = "Does this patient have any history of fatigue"
-    id = "296015"
 
     try:
         result = run(query=query, id=id)
