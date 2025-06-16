@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 import warnings
 from app.crew.crew import Ai
-from app.routes import run_crew
+from app.routes import run_crew, all_patients
 
 warnings.filterwarnings("ignore", category=SyntaxWarning, module="pysbd")
 
@@ -23,6 +23,7 @@ def create_app():
     )
 
     app.include_router(run_crew.router)
+    app.include_router(all_patients.router)
 
     @app.get("/")
     def read_root():
