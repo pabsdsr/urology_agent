@@ -4,6 +4,7 @@ import uvicorn
 import warnings
 from app.crew.crew import Ai
 from app.routes import run_crew
+from app.routes import patient
 
 warnings.filterwarnings("ignore", category=SyntaxWarning, module="pysbd")
 
@@ -23,6 +24,7 @@ def create_app():
     )
 
     app.include_router(run_crew.router)
+    app.include_router(patient.router)
 
     @app.get("/")
     def read_root():
@@ -30,20 +32,16 @@ def create_app():
 
     return app
 
-prev_id = None
     
 def run(query: str, id: str):
-    global prev_id
 
     inputs = {
         "query": query,
-        "id": id,
-        "prev_id": prev_id
+        "id": id
     }
 
     try:
         result = Ai().crew().kickoff(inputs=inputs)
-        prev_id = id
     except Exception as e:
         raise Exception(f"An error occurred while running the crew: {e}")
 

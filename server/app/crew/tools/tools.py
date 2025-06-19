@@ -1,68 +1,218 @@
-from crewai.tools import tool
+from crewai.tools import BaseTool
+from pydantic import BaseModel, Field
 import os
-import shutil
-from crewai_tools.tools import RagTool
-
-# Get the directory where this file (tools.py) is located
-current_dir = os.path.dirname(os.path.abspath(__file__))
-
-# Build paths relative to the tools.py file location
-db_path = os.path.normpath(os.path.join(current_dir, "../../db"))
-knowledge_path = os.path.normpath(os.path.join(current_dir, "../knowledge"))
-
-@tool
-def clear_database_tool(id: str, prev_id: str):
-    """Reset the vector database by deleting all the data in the database folder."""
-    if id == prev_id:
-        return "Id matched previous id"
-
-    if not os.path.exists(db_path):
-        return "No db folder found."
-
-    for filename in os.listdir(db_path):
-        path = os.path.join(db_path, filename)
-        if os.path.isdir(path):
-            shutil.rmtree(path)
-            
-    return "All folders in db have been deleted, chroma.sqlite3 preserved."
 
 
-@tool  
-def load_file_tool(id: str, prev_id: str):
-    """Load JSON file from knowledge folder and upload to vector database."""
-    if id == prev_id:
-        return "Id matched previous id"
+import json
+from typing import Any, Callable, Optional, Type, List
 
-    dirpath = os.path.join(knowledge_path, id)
-    if not os.path.exists(dirpath):
-        return "No files for this patient found"
 
-    for filename in os.listdir(dirpath):
-        path = os.path.join(dirpath, filename)
-        rag_tool.add(source=path)
+try:
+    from qdrant_client import QdrantClient
+    from qdrant_client.http.models import Filter, FieldCondition, MatchValue, FilterSelector
+
+    QDRANT_AVAILABLE = True
+except ImportError:
+    QDRANT_AVAILABLE = False
+    QdrantClient = Any  # type placeholder
+    Filter = Any
+    FieldCondition = Any
+    MatchValue = Any
+
+from crewai.tools import BaseTool
+from pydantic import BaseModel, Field
+
+
+class QdrantToolSchema(BaseModel):
+    """Input for QdrantTool."""
+
+    query: str = Field(
+        ...,
+        description="The query to search retrieve relevant information from the Qdrant database. Pass only the query, not the question.",
+    )
+    filter_by: Optional[str] = Field(
+        default=None,
+        description="Filter by properties. Pass only the properties, not the question.",
+    )
+    filter_value: Optional[str] = Field(
+        default=None,
+        description="Filter by value. Pass only the value, not the question.",
+    )
+
+
+class QdrantVectorSearchTool(BaseTool):
+    """Tool to query and filter results from a Qdrant database.
+
+    This tool enables vector similarity search on internal documents stored in Qdrant,
+    with optional filtering capabilities.
+
+    Attributes:
+        client: Configured QdrantClient instance
+        collection_name: Name of the Qdrant collection to search
+        limit: Maximum number of results to return
+        score_threshold: Minimum similarity score threshold
+        qdrant_url: Qdrant server URL
+        qdrant_api_key: Authentication key for Qdrant
+    """
+
+    model_config = {"arbitrary_types_allowed": True}
+    client: QdrantClient = None
+    name: str = "QdrantVectorSearchTool"
+    description: str = "A tool to search the Qdrant database for relevant information on internal documents."
+    args_schema: Type[BaseModel] = QdrantToolSchema
+    query: Optional[str] = None
+    filter_by: Optional[str] = None
+    filter_value: Optional[str] = None
+    collection_name: Optional[str] = "patient_collection"
+    hashed_collection_name: Optional[str] = "hashed_patient_data"
+    limit: Optional[int] = Field(default=5)
+    score_threshold: float = Field(default=0.35)
+    qdrant_url: str = Field(
+        ...,
+        description="The URL of the Qdrant server",
+    )
+    qdrant_api_key: Optional[str] = Field(
+        default=None,
+        description="The API key for the Qdrant server",
+    )
+    custom_embedding_fn: Optional[Callable] = Field(
+        default=None,
+        description="A custom embedding function to use for vectorization. If not provided, the default model will be used.",
+    )
+    package_dependencies: List[str] = ["qdrant-client"]
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        if QDRANT_AVAILABLE:
+            self.client = QdrantClient(
+                url=self.qdrant_url,
+                api_key=self.qdrant_api_key if self.qdrant_api_key else None,
+            )
+        else:
+            raise ImportError(
+                "The 'qdrant-client' package is required to use the QdrantVectorSearchTool. "
+                "Please install it with: uv add qdrant-client"
+            )
+
+    def _run(
+        self,
+        query: str,
+        filter_by: Optional[str] = None,
+        filter_value: Optional[str] = None,
+    ) -> str:
+        """Execute vector similarity search on Qdrant.
+
+        Args:
+            query: Search query to vectorize and match
+            filter_by: Optional metadata field to filter on
+            filter_value: Optional value to filter by
+
+        Returns:
+            JSON string containing search results with metadata and scores
+
+        Raises:
+            ImportError: If qdrant-client is not installed
+            ValueError: If Qdrant credentials are missing
+        """
+
+        if not self.qdrant_url:
+            raise ValueError("QDRANT_URL is not set")
+
+        search_filter = None
+        if filter_by and filter_value:
+            search_filter = Filter(
+                must=[
+                    FieldCondition(key=filter_by, match=MatchValue(value=filter_value))
+                ]
+            )
+
+        query_vector = (
+            self._vectorize_query(query, embedding_model="text-embedding-004")
+            if not self.custom_embedding_fn
+            else self.custom_embedding_fn(query)
+        )
+        search_results = self.client.query_points(
+            collection_name=self.collection_name,
+            query=query_vector,
+            query_filter=search_filter,
+            # so far providing it with more points doesnt seem to slow it down all that much
+            limit=21,
+            # score_threshold=self.score_threshold,
+        )
+
+        results = []
+        for point in search_results:
+            result = {
+                "metadata": point[1][0].payload.get("metadata", {}),
+                "context": point[1][0].payload.get("patient_text", ""),
+                "distance": point[1][0].score,
+            }
+            print(f"result: {result}")
+            results.append(result)
+
+        return json.dumps(results, indent=2)
     
-    return f"Successfully loaded {id} to database"
+    def delete_points_by_patient_id(self, patient_id : str):
+        id_filter = "patient_id"
+        delete_filter = Filter(
+            must=[
+                FieldCondition(key=id_filter, match=MatchValue(value=patient_id))
+                ]
+        )
 
+        delete_selector = FilterSelector(filter=delete_filter)
 
-rag_tool = RagTool(
-    config={
-        "llm": {
-            "provider": "google",
-            "config": {
-                "model": "gemini-2.0-flash-exp"
-            }
-        },
-        "embedding_model": {
-            "provider": "google",
-            "config": {
-                "model": "text-embedding-004"
-            }
-        },
-        "vectordb": {
-            "provider": "chroma",
-            "config": {
-                "dir": db_path 
-            }
-        }
-    }
+        delete_response = self.client.delete(
+            collection_name = self.collection_name,
+            points_selector = delete_selector
+        )
+
+        print(f"this is our delete response {delete_response}")
+    
+    def check_hashed_collection(self, patient_id : str):
+
+        id_filter = "patient_id"
+        search_filter = Filter(
+            must=[
+                FieldCondition(key=id_filter, match=MatchValue(value=patient_id))
+                ]
+        )
+
+        search_result = self.client.scroll(
+            collection_name=self.hashed_collection_name,
+            scroll_filter=search_filter,
+            limit=1
+        )
+
+        return search_result
+
+    def _vectorize_query(self, query: str, embedding_model: str) -> list[float]:
+        """Default vectorization function with openai.
+
+        Args:
+            query (str): The query to vectorize
+            embedding_model (str): The embedding model to use
+
+        Returns:
+            list[float]: The vectorized query
+        """
+        from google import genai
+        from google.genai import types
+
+        client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+
+        embedding = client.models.embed_content(
+            model=embedding_model,
+            contents=query,
+            config=types.EmbedContentConfig(task_type="RETRIEVAL_QUERY")
+        )
+
+        return embedding.embeddings[0].values
+
+qdrant_tool = QdrantVectorSearchTool(
+    collection_name="patient_collection",
+    limit=5,
+    qdrant_url= os.getenv("QDRANT_URL"),
+    qdrant_api_key= os.getenv("QDRANT_API_KEY")
+
 )

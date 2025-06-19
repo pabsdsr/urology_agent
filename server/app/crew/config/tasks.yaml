@@ -1,17 +1,17 @@
 rag_task:
   description: >
-    For the given {query}, {id}, and {prev_id}:
-    1. Clear the database using the clear_database_tool({id}, {prev_id}).
-    2. Load files to the database using the load_file_tool({id}, {prev_id}).
-    3. Ese the Knowledge base and to retrieve relevant information to the {query} ensuring the 
-       information is about the patient with {id}.
-    4. Evaluate if the retrieved information is meaningfully connected to {query}.
-       - If yes, return the retrieved content.
-       - If no, return "No relevant information found".
+    For the given {query} and patient {id}:
+    1. Use the QdrantVectorSearchTool with the following parameters:
+        - query: {query}
+        - filter_by: "patient_id"
+        - filter_value: "{id}"
+    2. Search for information relevant to the query about the specific patient
+    3. Evaluate if the retrieved information meaningfully answers the {query}
+    4. Return the most relevant content found
   expected_output: >
-    - Relevant content about {query} if found.
+    - Relevant content about {query} for patient {id} if found
     - "No data for this patient found" if no files were found corresponding to the {id}
-    - "No relevant information found" only if retrieved content is completely unrelated.
+    - "No relevant information found" if no meaningful matches exist for the query
   agent: rag_agent
 
 
