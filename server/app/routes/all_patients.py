@@ -9,7 +9,7 @@ router = APIRouter(
 )
 
 @router.post("")
-async def add_document():
+async def all_patients():
     token = await token_service.get_token()
     headers = {
         "x-api-key": os.environ.get("modmed_api_key"),
