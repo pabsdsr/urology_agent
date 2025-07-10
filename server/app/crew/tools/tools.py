@@ -45,6 +45,8 @@ llm = os.getenv("MODEL", "")
 provider, llm_model = llm.split("/", 1)
 if provider == "bedrock":
     provider = "aws_bedrock"
+if provider == "gemini":
+    provider = "google"
 embedding_model = os.getenv("EMBEDDING_MODEL", "")
 
 rag_tool = RagTool(
