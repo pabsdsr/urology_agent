@@ -24,5 +24,8 @@ ENV VIRTUAL_ENV=/app/.venv \
 COPY --from=builder ${VIRTUAL_ENV} ${VIRTUAL_ENV}
 
 COPY app ./app
+COPY .env .env
+
+EXPOSE 8080
 
 ENTRYPOINT ["python", "-m", "app.main"]

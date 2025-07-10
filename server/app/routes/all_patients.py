@@ -8,16 +8,17 @@ router = APIRouter(
     tags=["all_patients"]
 )
 
-@router.get("")
-async def get_all_patients():
+@router.post("")
+async def add_document():
     token = await token_service.get_token()
     headers = {
         "x-api-key": os.environ.get("modmed_api_key"),
         "Authorization": f"Bearer {token}"
     }
+    prefix= os.environ.get("modmed_url_prefix")
 
     patients = []
-    url = "https://stage.ema-api.com/ema-dev/firm/uropmsandbox460/ema/fhir/v2/Patient"
+    url = f"https://stage.ema-api.com/ema-dev/firm/{prefix}/ema/fhir/v2/Patient"
 
     async with httpx.AsyncClient() as client:
         while url:

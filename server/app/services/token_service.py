@@ -15,6 +15,8 @@ data = {
     "password" : os.environ.get("modmed_password")
 }
 
+prefix = os.environ.get("modmed_url_prefix")
+
 
 class TokenService:
     def __init__(self):
@@ -38,7 +40,7 @@ class TokenService:
     async def _refresh_token(self):
         async with httpx.AsyncClient() as client:
             response = await client.post(
-                "https://stage.ema-api.com/ema-dev/firm/uropmsandbox460/ema/ws/oauth2/grant",
+                f"https://stage.ema-api.com/ema-dev/firm/{prefix}/ema/ws/oauth2/grant",
                 headers=headers,
                 data = {
                     "grant_type" : "refresh_token",
@@ -57,7 +59,7 @@ class TokenService:
     async def _authenticate(self):
         async with httpx.AsyncClient() as client:
             response = await client.post(
-                "https://stage.ema-api.com/ema-dev/firm/uropmsandbox460/ema/ws/oauth2/grant",
+                f"https://stage.ema-api.com/ema-dev/firm/{prefix}/ema/ws/oauth2/grant",
                 headers=headers,
                 data=data
             )

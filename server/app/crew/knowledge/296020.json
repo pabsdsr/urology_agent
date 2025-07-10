@@ -98,9 +98,9 @@
   },
   {
     "resourceType": "Bundle",
-    "id": "5c83a843-760d-4f58-a209-bbcb0afae995",
+    "id": "aa32ba56-85fc-4517-8d61-82e7e7ff61e5",
     "meta": {
-      "lastUpdated": "2025-06-16T21:11:53.917+00:00"
+      "lastUpdated": "2025-07-09T23:30:23.248+00:00"
     },
     "type": "searchset",
     "total": 2,
@@ -243,124 +243,9 @@
   },
   {
     "resourceType": "Bundle",
-    "id": "8f5d0420-7369-4809-b5dc-8d568cc34584",
+    "id": "3b6d608f-ab02-40e8-bf70-c7bd1d046c47",
     "meta": {
-      "lastUpdated": "2025-06-16T21:11:54.032+00:00",
-      "tag": [
-        {
-          "system": "http://terminology.hl7.org/CodeSystem/v3-ObservationValue",
-          "code": "SUBSETTED",
-          "display": "Resource encoded in summary mode"
-        }
-      ]
-    },
-    "type": "searchset",
-    "total": 2,
-    "link": [
-      {
-        "relation": "self",
-        "url": "https://stage.ema-api.com/ema-dev/firm/uropmsandbox460/ema/fhir/v2/DocumentReference?patient=296020"
-      },
-      {
-        "relation": "next",
-        "url": "https://stage.ema-api.com/ema-dev/firm/uropmsandbox460/ema/fhir/v2/DocumentReference?patient=296020&page=2"
-      }
-    ],
-    "entry": [
-      {
-        "fullUrl": "https://stage.ema-api.com/ema-dev/firm/uropmsandbox460/ema/fhir/v2/DocumentReference/file%7C98694",
-        "resource": {
-          "resourceType": "DocumentReference",
-          "id": "file|98694",
-          "meta": {
-            "tag": [
-              {
-                "system": "http://terminology.hl7.org/CodeSystem/v3-ObservationValue",
-                "code": "SUBSETTED",
-                "display": "Resource encoded in summary mode"
-              }
-            ]
-          },
-          "identifier": [
-            {
-              "system": "filename",
-              "value": "Example_Doc.pdf"
-            }
-          ],
-          "status": "current",
-          "type": {
-            "text": "application/pdf"
-          },
-          "category": [
-            {
-              "coding": [
-                {
-                  "system": "https://stage.ema-api.com/ema-dev/firm/uropmsandbox460/ema/fhir/v2/ValueSet/document-category",
-                  "code": "22906",
-                  "display": "Consent"
-                }
-              ],
-              "text": "Consent"
-            }
-          ],
-          "subject": {
-            "reference": "https://stage.ema-api.com/ema-dev/firm/uropmsandbox460/ema/fhir/v2/Patient/296020",
-            "display": "https://stage.ema-api.com/ema-dev/firm/uropmsandbox460/ema/fhir/v2/Patient/296020"
-          },
-          "date": "2025-06-02T13:30:48.000+00:00"
-        }
-      },
-      {
-        "fullUrl": "https://stage.ema-api.com/ema-dev/firm/uropmsandbox460/ema/fhir/v2/DocumentReference/file%7C99426",
-        "resource": {
-          "resourceType": "DocumentReference",
-          "id": "file|99426",
-          "meta": {
-            "tag": [
-              {
-                "system": "http://terminology.hl7.org/CodeSystem/v3-ObservationValue",
-                "code": "SUBSETTED",
-                "display": "Resource encoded in summary mode"
-              }
-            ]
-          },
-          "identifier": [
-            {
-              "system": "filename",
-              "value": "Clinical_Lab_Results_5705.pdf"
-            }
-          ],
-          "status": "current",
-          "type": {
-            "text": "application/pdf"
-          },
-          "category": [
-            {
-              "coding": [
-                {
-                  "system": "https://stage.ema-api.com/ema-dev/firm/uropmsandbox460/ema/fhir/v2/ValueSet/document-category",
-                  "code": "22901",
-                  "display": "Clinical Results"
-                }
-              ],
-              "text": "Clinical Results"
-            }
-          ],
-          "subject": {
-            "reference": "https://stage.ema-api.com/ema-dev/firm/uropmsandbox460/ema/fhir/v2/Patient/296020",
-            "display": "https://stage.ema-api.com/ema-dev/firm/uropmsandbox460/ema/fhir/v2/Patient/296020"
-          },
-          "date": "2025-06-05T17:36:00.000+00:00",
-          "description": "Clinical Lab Results for Lackey, Amanda"
-        }
-      }
-    ]
-  },
-  {
-    "resourceType": "Bundle",
-    "id": "1009b310-4245-4ab2-bcd2-80724685b728",
-    "meta": {
-      "lastUpdated": "2025-06-16T21:11:53.820+00:00"
+      "lastUpdated": "2025-07-09T23:30:23.446+00:00"
     },
     "type": "searchset",
     "total": 2,
@@ -457,9 +342,9 @@
   },
   {
     "resourceType": "Bundle",
-    "id": "ad472a3c-76cc-405a-8e96-a5785cb31bb6",
+    "id": "0c48dd84-efd4-452e-b1e7-6791e376b5eb",
     "meta": {
-      "lastUpdated": "2025-06-16T21:11:53.902+00:00"
+      "lastUpdated": "2025-07-09T23:30:23.475+00:00"
     },
     "type": "searchset",
     "total": 1,
@@ -559,9 +444,9 @@
   },
   {
     "resourceType": "Bundle",
-    "id": "bbe4f133-2dd2-4691-afdc-c9f016d3c830",
+    "id": "32596581-0652-4e7d-8705-3d30ea6c0eff",
     "meta": {
-      "lastUpdated": "2025-06-16T21:11:53.964+00:00"
+      "lastUpdated": "2025-07-09T23:30:23.479+00:00"
     },
     "type": "searchset",
     "total": 2,
@@ -686,9 +571,9 @@
   },
   {
     "resourceType": "Bundle",
-    "id": "9a597842-4589-4ca1-b4c3-50d26828b6a7",
+    "id": "85907935-81b3-47f0-9068-8bcf6ae8246d",
     "meta": {
-      "lastUpdated": "2025-06-16T21:11:53.884+00:00"
+      "lastUpdated": "2025-07-09T23:30:23.462+00:00"
     },
     "type": "searchset",
     "total": 1,
@@ -744,9 +629,9 @@
   },
   {
     "resourceType": "Bundle",
-    "id": "23fbc109-4195-4a4e-a8c9-488772f52143",
+    "id": "e8355b97-c88c-440b-8c22-22a89e432286",
     "meta": {
-      "lastUpdated": "2025-06-16T21:11:53.961+00:00",
+      "lastUpdated": "2025-07-09T23:30:23.476+00:00",
       "tag": [
         {
           "system": "http://terminology.hl7.org/CodeSystem/v3-ObservationValue",
@@ -804,9 +689,9 @@
   },
   {
     "resourceType": "Bundle",
-    "id": "43896d1a-7c2a-4d0d-8efa-cec6d0ca7df7",
+    "id": "33911633-d70e-48bf-8d8f-6988faa4cd07",
     "meta": {
-      "lastUpdated": "2025-06-16T21:11:53.936+00:00"
+      "lastUpdated": "2025-07-09T23:30:23.491+00:00"
     },
     "type": "searchset",
     "total": 1,
@@ -872,6 +757,52 @@
             }
           }
         }
+      }
+    ]
+  },
+  {
+    "documents": [
+      {
+        "title": "urinalysis.pdf",
+        "content_base64": "URINALYSIS W/0 MICRO \nMale Kim \nMRN: HTR10000011 \nDOB: 02/12/1946, 73 yo Male \nSSN: \nLab \nUrine Appearance \nUrine Specimen \nUrine Color \nUrine Glucose \nUrine Bilirubin \nUrine Ketones \nUrine Specific Gravity \nUrine Blood \nUrine pH \nUrine Protein \nUrine Urobilinogen \nUrine Nitrites \nUrine Leukocyte Esterase Result \nClear \nVoided \nStraw \nNeg \nNeg \nNeg \n1.005 \nNeg \n6.0 \nNeg \n1 \nPositive \n70 Reference Range \nNORMAL \nNORMAL \nNEGATIVE \nNEGATIVE \nNEGATIVE \n< 1.030 \nNEGATIVE \n5.0 -9.0 \n< 30 mg/di \n< 2 mg/di \nNEGATIVE \nNEGATIVE Ordering Provider: \nDate Collected: \nNormality \nA \nA \nA \nA Moses Kim, M.D. \n05/29/2019 \nInterpretation \n**** Signed by Trang Pham on 05/29/19 at 3:23 PM (PDT)**** \nThe information contained in this medical record document is considered private and confidential patient informatio n. This informatio n can only be used for the medical \ndiagnosis and/or medical services that are being provided by the patient's selected caregivers. This information can only be distributed outside of the patient's care if the patient \nagrees and signs waivers of authorization for this information to be sent to an outside source or route.\nKim, Male MRN: HTRlO0000ll Printed: 06/10/2025 12:33 PM Page 1 of 1 ",
+        "contentType": "application/pdf",
+        "creation": "2025-06-25T01:03:39+00:00"
+      },
+      {
+        "title": "urinalysis_2:20:19.pdf",
+        "content_base64": "URINALYSIS W/0 MICRO \nMale Kim \nMRN: HTR10000011 \nDOB: 02/12/1946, 73 yo Male \nSSN: \nLab \nUrine Appearance \nUrine Specimen \nUrine Color \nUrine Glucose \nUrine Bilirubin \nUrine Ketones \nUrine Specific Gravity \nUrine Blood \nUrine pH \nUrine Protein \nUrine Urobilinogen \nUrine Nitrites \nUrine Leukocyte Esterase Result \nClear \nVoided \nYellow \nNeg \nNeg \nNeg \n1.005 \n25 \n6.0 \nNeg \n1 \nPositive \n15 Reference Range \nNORMAL \nNORMAL \nNEGATIVE \nNEGATIVE \nNEGATIVE \n< 1.030 \nNEGATIVE \n5.0 -9.0 \n< 30 mg/di \n< 2 mg/di \nNEGATIVE \nNEGATIVE \n**** Signed by Trang Pham on 02/20/19 at 2:58 PM (PST}**** Ordering Provider: \nDate Collected: \nNormality \nA \nA \nA \nA Moses Kim, M.D. \n02/20/2019 \nInterpretation \nThe information contained in this medical record document is considered private and confidential patient information. This information can only be used for the medical \ndiagnosis and/or medical services that are being provided by the patient's selected caregivers. This information can only be distributed outside of the patient's care if the patient \nagrees and signs waivers of authorization for this information to be sent to an outside source or route. \nKim, Male MRN: HTR10000011 Printed: 06/24/2025 7:25 PM Page 1 of 1 ",
+        "contentType": "application/pdf",
+        "creation": "2025-07-03T00:26:34+00:00"
+      },
+      {
+        "title": "officevisit_6:2:25.pdf",
+        "content_base64": "OFFICE VISIT REPORT 06/02/2025 \nMale Kim \nMRN: HTR10000011 PRIMARY CARE: \nDOB: 02/12/1946, 79 year old Male \nSSN: REFERRING: \nPROVIDER: Moses Kim, M.D. \nCC: \nALLERGIES: \nMEDICATIONS: \nGU PSH: \nNON-GU PSH: \nGU PMH: \nNON-GUPMH: \nFAMILY HISTORY: \nSOCIAL HISTORY: \nREVIEW OF SYSTEMS: None \nAmpicillin -Itching \nCeclor -Nausea \nCeftin -Hyperactivity \nLisinopril \nPenicillin -Hives, Nausea, Vomiting \nSeptra SUPERVISING: Moses Kim, M.D. \nTREATING: Taralyn Johnson \nLOCATION: Client -Orange County Urology Associates, Inc -32639 \nIbuprofen 200 MG Tablet 1 tablet PO Daily \nKeflex 1 capsule PO TIO \nLisinopril \nMetformin Hcl \nProscar 5 MG Tablet \nAmlodipine Besilate \nAtenolol \nXanax \nNotes: 2/20 pt does have updated list \nNo GU PSH \nPSH Notes: 12/13/17: left hip replacement \n03/05/16: right shoulder joint \nColonoscopy -about 2017 \nCongenital chordee -2023 \nGross hematuria -2023 \nMalignant neoplasm of prostate -2023 \nPMH Notes: Diabetes type 2 \nEssential (primary) hypertension \nHyperlipidemia, unspecified \nAnemia -Runs in Family, Aunt \nAnxiety -Mother, Father \nBone Marrow Disease -Runs in Family \nBrain Tumor -Mother, Father \nHypertension -Grandfather, Grandmother \nKidney Cancer -Mother \nStroke -Father \nMarital Status: Married \nEthnicity: Not Hispanic Or Latino; Race: White \nCurrent Smoking Status: Patient smokes occasionally. Has smoked since 05/01/2003. Smokes 1 pack per day. \nTobacco Use Assessment Completed: Used Tobacco in last 30 days? \nUses smokeless tobacco. \nSocial Drinker. \nDrinks 2 caffeinated drinks per day. \nConstitutional: Patient denies fever, chills, weight loss, fatigue, and loss of appetite. \nKim, Male MRN: HTRlO0000ll Printed: 06/10/2025 12:31 PM Page 1 of 3 Eyes: Patient denies blurry vision, double vision, cataracts, and poor vision. \nEars, Nose, Mouth, Throat: Patient denies hearing loss, nasal stuffiness, sore throat, ringing in the ears, nose bleeds, nasal \nobstruction, dentures, and hearing aids. \nCardiovascular: \nRespiratory: \nGastrointestinal: \nGenitourinary: \nMusculoskeletal: \nIntegumentary / Skin: \nNeurological: Patient denies chest pains, swollen ankles, irregular heartbeat, angina, and trouble sleeping w/1 \npillow. \nPatient denies shortness of breath, wheezing, and chronic cough. \nPatient denies abdominal pain, nausea/vomiting, change in bowels, jaundice, bloody/black stool, \npancreatitis, and peptic ulcers. \nPatient denies incontinence, painful urination, and blood in urine. \nPatient denies chronic back pain, chronic neck pain, and sore muscles. \nPatient denies skin cancer history, rash, and persistent itching. \nHematologic/ Lymphatic: Patient denies numbness, tingling, dizziness, headaches, tremors, and fainting. \nPatient denies swollen glands, abnormal bleeding, and transfusion history. \nEndocrine: \nPsychiatric: \nAllergic/Immunologic: Patient denies hot flashes, excessive thirst, excessive sweating, and hot or cold intolerance. \nPatient denies nervousness, hallucinations, anxiety, and depression. \nPatient denies rash and hives. \nVITAL SIGNS: None \nGU PHYSICAL EXAMINATION: \nAnus and Perineum: \nScrotum: \nEpididymides: \nTestes: \nUrethral Meatus: \nPenis: \nProstate: \nSeminal Vesicles: \nSphincter Tone: No hemorrhoids. No anal stenosis. No rectal fissure, no anal fissure. No edema, no dimple, no perinea! \ntenderness, no anal tenderness. \nNo lesions. No edema. No cysts. No warts. \nRight: no spermatocele, no masses, no cysts, no tenderness, no induration, no enlargement. Left: no \nspermatocele, no masses, no cysts, no tenderness, no induration, no enlargement. \nNo tenderness, no swelling, no enlargement left testes. No tenderness, no swelling, no enlargement right \ntestes. Normal location left testes. Normal location right testes. No mass, no cyst, no varicocele, no \nhydrocele left testes. No mass, no cyst, no varicocele, no hydrocele right testes. \nNormal size. No lesion, no wart, no discharge, no polyp. Normal location. \nCircumcised, no warts, no cracks. No dorsal Peyronie's plaques, no left corporal Peyronie's plaques, no right \ncorporal Peyronie's plaques, no scarring, no warts. No balanitis, no meatal stenosis. \n40 gram or 2+ size. Left lobe normal consistency, right lobe normal consistency. Symmetrical lobes. No \nprostate nodule. Left lobe no tenderness, right lobe no tenderness. \nNonpalpable. \nNormal sphincter. No rectal tenderness. No rectal mass. \nMULTI-SYSTEM PHYSICAL EXAMINATION: \nConstitutional: \nNeck: \nRespiratory: \nCardiovascular: \nLymphatic: \nSkin: \nNeurologic / Psychiatric: \nGastrointestinal: \nEyes: \nEars, Nose, Mouth, and Throat: \nMusculoskeletal: \nPAST DATA REVIEW: None \nPROCEDURES: None \nASSESSMENT: \nICD-9 \nGU: \nPLAN: Well-nourished. No physical deformities. Normally developed. Good grooming. \nNeck symmetrical, not swollen. Normal tracheal position. \nNo labored breathing, no use of accessory muscles. \nNormal temperature, normal extremity pulses, no swelling, no varicosities. \nNo enlargement of neck, axillae, groin. \nNo paleness, no jaundice, no cyanosis. No lesion, no ulcer, no rash. \nOriented to time, oriented to place, oriented to person. No depression, no anxiety, no \nagitation. \nNo mass, no tenderness, no rigidity, non obese abdomen. \nNormal conjunctivae. Normal eyelids. \nLeft ear no scars, no lesions, no masses. Right ear no scars, no lesions, no masses. Nose no \nscars, no lesions, no masses. Normal hearing. Normal lips. \nNormal gait and station of head and neck. \nICD-10 Details \nOther dorsalgia -M54.89 \nDocument \nLetter(s): Created for Patient: Clinical Summary \nCreated for Patient: Clinical Summary \nKim, Male MRN: HTRlO0000ll Printed: 06/10/2025 12:31 PM Page 2 of 3 CARE TEAM: Taralyn Johnson \nThe information contained in this medical record document is considered private and confidential patient information. This information can only be used for the medical \ndiagnosis and/or medical services that are being provided by the patient's selected caregivers. This information can only be distributed outside of the patient's care if the patient \nagrees and signs waivers of authorization for this information to be sent to an outside source or route. \nKim, Male MRN: HTRlO0000ll Printed: 06/10/2025 12:31 PM Page 3 of 3 ",
+        "contentType": "application/pdf",
+        "creation": "2025-07-03T00:27:03+00:00"
+      },
+      {
+        "title": "chatnote_2:20:19.pdf",
+        "content_base64": "CHART NOTE 2/20/2019 AT 3:18 PM \nMale Kim \nMRN: HTR10000011 \nDOB: 02/12/1946, 73 year old Male \nSSN: PRIMARY CARE: \nREFERRING: \nPROVIDER: Moses Kim, M.D. \nLOCATION: Client -Orange County Urology Associates, Inc -32639 \nRegarding: Culture results \nDiscussion Occurred With: Patient (Male Kim) \nMessage: \nPt requesting results of culture \n**** Signed by Trang Pham on 02/20/19 at 3:18 PM (PST)**** \nAPPENDED NOTES: \nresults received, pt notified \n**** Signed by Trang Pham on 02/20/19 at 3:20 PM (PST)**** \nThe information contained in this medical record document is considered private and confidential patient information. This information can only be used for the medical \ndiagnosis and/or medical services that are being provided by the patient's selected caregivers. This information can only be distributed outside of the patient's care if the patient \nagrees and signs waivers of authorization for this information to be sent to an outside source or route. \nKim, Male MRN: HTRlO0000ll Printed: 06/24/2025 7:24 PM Page 1 of 1 ",
+        "contentType": "application/pdf",
+        "creation": "2025-07-03T00:27:40+00:00"
+      },
+      {
+        "title": "chartnote_5:29:19.pdf",
+        "content_base64": "CHART NOTE 5/29/2019 AT 3:36 PM \nMale Kim \nMRN: HTR10000011 \nDOB: 02/12/1946, 73 year old Male \nSSN: PRIMARY CARE: \nREFERRING: \nPROVIDER: Moses Kim, M.D. \nLOCATION: Client -Orange County Urology Associates, Inc -32639 \nRegarding: CS results \nDiscussion Occurred With: Patient (Male Kim) \nMessage: \nPlease call pt for results even if negative \n**** Signed by Trang Pham on OS/29/19 at 3:36 PM (PDT)**** \nAPPENDED NOTES: \ncalled pt,notified results negative \n**** Signed by Trang Pham on 05/29/19 at 3:38 PM (PDT)**** \nThe information contained in this medical record document is considered private and confidential patient information. This information can only be used for the medical \ndiagnosis and/or medical services that are being provided by the patient's selected caregivers. This information can only be distributed outside of the patient's care if the patient \nagrees and signs waivers of authorization for this information to be sent to an outside source or route. \nKim, Male MRN: HTRlO0000ll Printed: 06/24/2025 7:21 PM Page 1 of 1 ",
+        "contentType": "application/pdf",
+        "creation": "2025-07-03T00:27:58+00:00"
+      },
+      {
+        "title": "laborder_12:14:15.pdf",
+        "content_base64": "LAB ORDER FORM \nMale Kim \nMRN: HTR10000011 \nDOB: 02/12/1946, 69 year old Male \nSSN: \nPATIENT INFO: \nCA \nUnited States \nLabs CPT \nCode \nPSA 84153 \n% Free PSA 84154 12/14/2015 \nDiagnosis ICD-9 \nCode \nProstate Cancer 185 \nProstate Cancer 185 PRIMARY CARE: \nREFERRING: \nProvider: Moses Kim, M.D. \nLOCATION: Client -Orange County Urology Associates, Inc \nHome Phone: \nWork Phone: \nCell Phone: \nICD-10 Code Time-\nPriority \nMalignant neoplasm of Today -\nprostate -C61 Routine \nMalignant neoplasm of Today -\nprostate -C61 Routine \n**** Signed by Marissa Link on 12/14/15 at 9:32 AM (PST}**** \nThe information contained in this medical record document is considered private and confidential patient information. This information can only be used for the medical \ndiagnosis and/or medical services that are being provided by the patient's selected caregivers. This information can only be distributed outside of the patient's care if the patient \nagrees and signs waivers of authorization for this information to be sent to an outside source or route. \nKim, Male MRN: HTRlO0000ll Printed: 06/24/2025 7:26 PM Page 1 of 1 ",
+        "contentType": "application/pdf",
+        "creation": "2025-07-03T00:28:57+00:00"
+      },
+      {
+        "title": "laborder_11:19:15.pdf",
+        "content_base64": "LAB ORDER FORM \nMale Kim \nMRN: HTR10000011 \nDOB: 02/12/1946, 69 year old Male \nSSN: \nPATIENT INFO: \nCA \nUnited States \n24 Hour Urine Stone \nRisk \nNotes: \ntest CPT \nCode 11/19/2015 \nDiagnosis \nProstate Cancer ICD-9 \nCode \n185 PRIMARY CARE: \nREFERRING: \nProvider: \nLOCATION: \nICD-10 Code Moses Kim, M.D. \nClient -Orange County Urology Associates, Inc \nHome Phone: \nWork Phone: \nCell Phone: \nTime\u00ad\nPriority \nMalignant neoplasm of Today -\nprostate -C61 Routine \n**** Signed by Amber L. Rigsbee on 11/19/15 at 9:05 AM (PST)**** \nThe information contained in this medical record document is considered private and confidential patient information. This information can only be used for the medical \ndiagnosis and/or medical services that are being provided by the patient's selected caregivers. This information can only be distributed outside of the patient's care if the patient \nagrees and signs waivers of authorization for this information to be sent to an outside source or route. \nKim, Male MRN: HTRlO0000ll Printed: 06/24/2025 7:26 PM Page 1 of 1 ",
+        "contentType": "application/pdf",
+        "creation": "2025-07-03T00:29:11+00:00"
       }
     ]
   }

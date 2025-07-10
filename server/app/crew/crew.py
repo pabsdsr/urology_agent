@@ -17,7 +17,6 @@ class Ai():
         super().__init__()
         self.llm= LLM(
             model=os.getenv("MODEL"),
-            api_key=os.getenv("GEMINI_API_KEY"),
             temperature=0 # this is supposed to make the output deterministic but it doesn't work
         )
 

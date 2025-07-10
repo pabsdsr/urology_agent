@@ -33,29 +33,33 @@ def load_file_tool(id: str, prev_id: str):
     if id == prev_id:
         return "Id matched previous id"
 
-    dirpath = os.path.join(knowledge_path, id)
-    if not os.path.exists(dirpath):
-        return "No files for this patient found"
+    path = os.path.join(knowledge_path, f"{id}.json")
+    if not os.path.exists(path):
+        return "No data for this patient found"
 
-    for filename in os.listdir(dirpath):
-        path = os.path.join(dirpath, filename)
-        rag_tool.add(source=path)
+    rag_tool.add(source=path)
     
     return f"Successfully loaded {id} to database"
 
+llm = os.getenv("MODEL", "")
+provider, llm_model = llm.split("/", 1)
+if provider == "bedrock":
+    provider = "aws_bedrock"
+embedding_model = os.getenv("EMBEDDING_MODEL", "")
 
 rag_tool = RagTool(
     config={
         "llm": {
-            "provider": "google",
+            "provider": provider,
             "config": {
-                "model": "gemini-2.0-flash-exp"
+                "model": llm_model,
+                "temperature": 0.0
             }
         },
         "embedding_model": {
-            "provider": "google",
+            "provider": provider,
             "config": {
-                "model": "text-embedding-004"
+                "model": embedding_model
             }
         },
         "vectordb": {
