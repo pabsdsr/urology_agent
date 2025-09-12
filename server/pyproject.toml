@@ -14,8 +14,8 @@ dependencies = [
     "pydantic>=2.11.5",
     "qdrant-client>=1.14.2",
     "uvicorn>=0.34.3",
-    "weaviate>=0.1.2",
-    "weaviate-client>=4.15.1",
+    "PyPDF2==3.0.1",
+    "xmltodict==0.14.2"
 ]
 [tool.uv]
 package = true

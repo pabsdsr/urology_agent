@@ -15,6 +15,8 @@ class CrewInput(BaseModel):
 @router.post("")
 async def run_crew(req: CrewInput):
 
+    await get_patient_info(req.id)
+
     from app.main import run
 
     try:
