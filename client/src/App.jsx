@@ -8,10 +8,11 @@ function App() {
   const [searchTerm, setSearchTerm] = useState("");
   const [filteredPatients, setFilteredPatients] = useState([]);
   const [showResults, setShowResults] = useState(false);
-  const [query, setQuery] = useState("");
-  const [response, setResponse] = useState("");
+  const [messages, setMessages] = useState([]);
+  const [inputMessage, setInputMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const searchRef = useRef(null);
+  const messagesEndRef = useRef(null);
 
   // ✅ Correct API route: localhost:8080
   useEffect(() => {
@@ -70,246 +71,250 @@ function App() {
     }
   };
 
+  // Auto-scroll to bottom when new messages arrive
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
   const handleSubmit = async () => {
-    if (!selectedId || !query) {
-      setResponse("Please select a patient and enter a query.");
+    if (!selectedId || !inputMessage.trim()) {
       return;
     }
 
+    const userMessage = {
+      id: Date.now(),
+      type: "user",
+      content: inputMessage,
+      timestamp: new Date(),
+    };
+
+    setMessages(prev => [...prev, userMessage]);
+    setInputMessage("");
     setLoading(true);
-    setResponse("");
 
     try {
       const res = await axios.post("http://localhost:8080/run_crew", {
         id: selectedId,
-        query,
+        query: inputMessage,
       });
-      setResponse(res.data.result || res.data.error || "No response.");
+      
+      const aiMessage = {
+        id: Date.now() + 1,
+        type: "ai",
+        content: res.data.result || res.data.error || "No response.",
+        timestamp: new Date(),
+      };
+      
+      setMessages(prev => [...prev, aiMessage]);
     } catch (err) {
       console.error("Error during request:", err);
-      setResponse("An error occurred. Check console.");
+      const errorMessage = {
+        id: Date.now() + 1,
+        type: "ai",
+        content: "An error occurred. Please try again.",
+        timestamp: new Date(),
+      };
+      setMessages(prev => [...prev, errorMessage]);
     } finally {
       setLoading(false);
     }
   };
 
+  const handleKeyPress = (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmit();
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 p-6">
-      <div className="max-w-2xl mx-auto">
-        <div className="bg-white p-6 rounded-lg shadow space-y-5">
-          <h1 className="text-2xl font-bold text-center">
-            🩺 Patient AI Assistant
-          </h1>
-
-          {/* Search */}
-          <div className="relative" ref={searchRef}>
-            <label className="block text-sm font-semibold text-gray-700 mb-3">
-              Search Patient
-            </label>
-            <div className="relative">
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={handleSearchChange}
-                className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-gray-50 focus:bg-white"
-                placeholder="Type patient name to search..."
-                onFocus={() => {
-                  if (filteredPatients.length > 0) {
-                    setShowResults(true);
-                  }
-                }}
-              />
-              <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
-                <svg
-                  className="h-5 w-5 text-gray-400"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                  />
-                </svg>
-              </div>
+    <div className="h-screen bg-white flex flex-col">
+        {/* Header */}
+        <div className="bg-white border-b border-gray-100 px-6 py-4">
+          <div className="max-w-4xl mx-auto">
+            <div className="text-center mb-2">
+              <h1 className="text-2xl font-semibold text-gray-900">
+                🩺 Patient AI Assistant
+              </h1>
             </div>
-
-            {showResults && filteredPatients.length > 0 && (
-              <div className="absolute z-50 w-full mt-2 bg-white border border-gray-200 rounded-xl shadow-2xl max-h-60 overflow-y-auto">
-                {filteredPatients.map((patient) => (
-                  <div
-                    key={patient.id}
-                    onClick={() => handlePatientSelect(patient)}
-                    className="p-4 hover:bg-blue-50 cursor-pointer border-b border-gray-100 last:border-b-0 transition-colors duration-150"
-                  >
-                    <div className="font-semibold text-gray-900">
-                      {patient.givenName} {patient.familyName}
+            
+            {/* Patient Search */}
+            <div className="max-w-2xl mx-auto">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Select Patient
+              </label>
+              <div className="relative" ref={searchRef}>
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={handleSearchChange}
+                  className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 bg-gray-50 focus:bg-white transition-colors"
+                  placeholder="Search patient by name..."
+                  onFocus={() => {
+                    if (filteredPatients.length > 0) {
+                      setShowResults(true);
+                    }
+                  }}
+                />
+                {showResults && filteredPatients.length > 0 && (
+                  <div className="absolute z-50 w-full mt-2 bg-white border border-gray-200 rounded-xl shadow-xl max-h-60 overflow-y-auto">
+                    {filteredPatients.map((patient) => (
+                      <div
+                        key={patient.id}
+                        onClick={() => handlePatientSelect(patient)}
+                        className="p-4 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0"
+                      >
+                        <div className="font-medium text-gray-900">
+                          {patient.givenName} {patient.familyName}
+                        </div>
+                        <div className="text-sm text-gray-500 mt-1">
+                          ID: {patient.id}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              
+              {selectedPatient && (
+                <div className="mt-4 p-4 bg-orange-50 border border-orange-200 rounded-xl">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
+                    <div>
+                      <span className="font-medium text-orange-900">
+                        Selected: {selectedPatient.givenName} {selectedPatient.familyName}
+                      </span>
+                      <span className="text-sm text-orange-700 ml-2">
+                        (ID: {selectedPatient.id})
+                      </span>
                     </div>
-                    <div className="text-sm text-gray-500 mt-1">
-                      Patient ID: {patient.id}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Messages Area */}
+        <div className="flex-1 overflow-y-auto">
+          <div className="w-full px-6 py-8">
+            {messages.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-full">
+                <div className="text-center mb-8">
+                  <h3 className="text-xl font-medium text-gray-900 mb-3">Start a conversation</h3>
+                  <p className="text-gray-600 text-lg">Select a patient above and ask me anything about their medical history.</p>
+                </div>
+                
+                {/* Input Area - moved here for empty state */}
+                <div className="w-full max-w-4xl">
+                  <div className="relative">
+                    <textarea
+                      value={inputMessage}
+                      onChange={(e) => setInputMessage(e.target.value)}
+                      onKeyPress={handleKeyPress}
+                      placeholder={selectedPatient ? "Ask me anything about this patient..." : "Select a patient first..."}
+                      disabled={!selectedPatient || loading}
+                      className="w-full px-6 py-4 pr-14 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 resize-none bg-gray-50 focus:bg-white transition-colors text-base"
+                      rows="1"
+                      style={{ minHeight: '60px', maxHeight: '200px' }}
+                    />
+                    <button
+                      onClick={handleSubmit}
+                      disabled={!selectedPatient || !inputMessage.trim() || loading}
+                      className={`absolute right-3 top-3 p-3 rounded-xl transition-all ${
+                        !selectedPatient || !inputMessage.trim() || loading
+                          ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                          : 'bg-orange-500 text-white hover:bg-orange-600 shadow-sm'
+                      }`}
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-8">
+                {messages.map((message) => (
+                  <div
+                    key={message.id}
+                    className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}
+                  >
+                    <div className={`max-w-4xl ${
+                      message.type === 'user' ? 'ml-32' : 'mr-32'
+                    }`}>
+                      <div className={`px-6 py-4 rounded-2xl ${
+                        message.type === 'user'
+                          ? 'bg-orange-500 text-white'
+                          : 'bg-gray-50 border border-gray-200'
+                      }`}>
+                        <div className="whitespace-pre-wrap text-base leading-relaxed">
+                          {message.content}
+                        </div>
+                      </div>
                     </div>
                   </div>
                 ))}
               </div>
             )}
-
-            {showResults &&
-              searchTerm.trim() !== "" &&
-              filteredPatients.length === 0 && (
-                <div className="absolute z-50 w-full mt-2 bg-white border border-gray-200 rounded-xl shadow-2xl p-4 text-gray-500 text-center">
-                  <div className="flex items-center justify-center space-x-2">
-                    <svg
-                      className="h-5 w-5 text-gray-400"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M9.172 16.172a4 4 0 015.656 0M9 12h6m-6-4h6m2 5.291A7.962 7.962 0 0112 15c-2.34 0-4.47-.881-6.08-2.33M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                      />
-                    </svg>
-                    <span>No patients found matching "{searchTerm}"</span>
-                  </div>
-                </div>
-              )}
-
-            {selectedPatient && (
-              <div className="mt-3 p-4 bg-green-50 border border-green-200 rounded-xl">
-                <div className="flex items-center space-x-2">
-                  <svg
-                    className="h-5 w-5 text-green-600"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M5 13l4 4L19 7"
-                    />
-                  </svg>
-                  <div>
-                    <span className="text-green-800 font-semibold">
-                      Patient Selected:{" "}
-                    </span>
-                    <span className="text-green-700 font-medium">
-                      {selectedPatient.givenName} {selectedPatient.familyName}
-                    </span>
-                    <span className="text-green-600 text-sm ml-2">
-                      (ID: {selectedPatient.id})
-                    </span>
+            
+            {loading && (
+              <div className="flex justify-start">
+                <div className="mr-32">
+                  <div className="bg-gray-50 border border-gray-200 px-6 py-4 rounded-2xl">
+                    <div className="flex items-center space-x-3">
+                      <div className="flex space-x-1">
+                        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+                        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
+                        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
+                      </div>
+                      <span className="text-sm text-gray-600">AI is thinking...</span>
+                    </div>
                   </div>
                 </div>
               </div>
             )}
+            
+            <div ref={messagesEndRef} />
           </div>
+        </div>
 
-          {/* Query */}
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-3">
-              Enter Query
-            </label>
+        {/* Input Area - only show when there are messages */}
+        {messages.length > 0 && (
+          <div className="bg-white border-t border-gray-100 px-6 py-6">
+          <div className="w-full">
             <div className="relative">
               <textarea
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-gray-50 focus:bg-white resize-none"
-                placeholder="e.g. Summarize patient history, analyze symptoms, provide treatment recommendations..."
-                rows="3"
+                value={inputMessage}
+                onChange={(e) => setInputMessage(e.target.value)}
+                onKeyPress={handleKeyPress}
+                placeholder={selectedPatient ? "Ask me anything about this patient..." : "Select a patient first..."}
+                disabled={!selectedPatient || loading}
+                className="w-full px-6 py-4 pr-14 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 resize-none bg-gray-50 focus:bg-white transition-colors text-base"
+                rows="1"
+                style={{ minHeight: '60px', maxHeight: '200px' }}
               />
-              <div className="absolute bottom-3 right-3 text-xs text-gray-400">
-                {query.length}/500
-              </div>
+              <button
+                onClick={handleSubmit}
+                disabled={!selectedPatient || !inputMessage.trim() || loading}
+                className={`absolute right-3 top-3 p-3 rounded-xl transition-all ${
+                  !selectedPatient || !inputMessage.trim() || loading
+                    ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                    : 'bg-orange-500 text-white hover:bg-orange-600 shadow-sm'
+                }`}
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                </svg>
+              </button>
             </div>
           </div>
-
-          {/* Button */}
-          <button
-            onClick={handleSubmit}
-            disabled={!selectedId || !query || loading}
-            className={`w-full py-4 px-6 rounded-xl font-semibold text-white transition-all duration-200 transform ${
-              !selectedId || !query || loading
-                ? "bg-gray-300 cursor-not-allowed"
-                : "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 hover:scale-[1.02] active:scale-[0.98] shadow-lg hover:shadow-xl"
-            }`}
-          >
-            {loading ? (
-              <div className="flex items-center justify-center space-x-2">
-                <svg
-                  className="animate-spin h-5 w-5 text-white"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                >
-                  <circle
-                    className="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                  ></circle>
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                  ></path>
-                </svg>
-                <span>Processing...</span>
-              </div>
-            ) : (
-              <div className="flex items-center justify-center space-x-2">
-                <svg
-                  className="h-5 w-5"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M13 10V3L4 14h7v7l9-11h-7z"
-                  />
-                </svg>
-                <span>Run AI Analysis</span>
-              </div>
-            )}
-          </button>
-
-          {/* Response */}
-          {response && (
-            <div className="bg-gradient-to-br from-gray-50 to-blue-50 border border-gray-200 rounded-2xl p-6 shadow-lg">
-              <div className="flex items-center space-x-2 mb-4">
-                <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
-                <h2 className="text-lg font-semibold text-gray-800">
-                  AI Response
-                </h2>
-              </div>
-              <div className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm">
-                <div className="whitespace-pre-wrap text-gray-700 leading-relaxed">
-                  {response}
-                </div>
-              </div>
-              <div className="mt-4 flex justify-end">
-                <button
-                  onClick={() => setResponse("")}
-                  className="px-4 py-2 text-sm text-gray-500 hover:text-gray-700 transition-colors duration-200"
-                >
-                  Clear Response
-                </button>
-              </div>
-            </div>
-          )}
         </div>
-      </div>
+        )}
     </div>
   );
 }
 
 export default App;
+
