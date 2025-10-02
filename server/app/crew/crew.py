@@ -2,7 +2,7 @@ from crewai import Agent, Crew, Process, Task
 from crewai.project import CrewBase, agent, crew, task
 from crewai.agents.agent_builder.base_agent import BaseAgent
 from typing import List
-from app.crew.tools.tools import qdrant_tool
+# No global qdrant_tool import needed - using user-specific tools
 
 # Patch Bedrock LLM to handle llama4
 from crewai import LLM as BaseLLM
@@ -26,59 +26,39 @@ class PatchedBedrockLLM(BaseLLM):
 
 crew_llm = PatchedBedrockLLM(
     model=os.getenv("MODEL"),
-    temperature=0.2
+    temperature=0.1,  # Lower temperature for faster, more deterministic responses
+    max_tokens=1024   # Limit token generation for faster responses
 )
 
 
 @CrewBase
-class Ai():
-    """Ai crew"""
+class ClinicalAssistantCrew():
+    """Clinical Assistant Crew for healthcare provider queries"""
 
     agents: List[BaseAgent]
     tasks: List[Task]  
 
     @agent
-    def query_agent(self) -> Agent:
+    def clinical_assistant_agent(self) -> Agent:
+        # Use user's specific qdrant tool if available, otherwise create a placeholder
+        user_qdrant_tool = getattr(self, 'user_qdrant_tool', None)
+        
+        # If no user tool is set, we'll update it later before crew execution
+        tools_list = [user_qdrant_tool] if user_qdrant_tool else []
+        
         return Agent(
-            config=self.agents_config['query_agent'],
+            config=self.agents_config['clinical_assistant_agent'],
             verbose=True,
+            tools=tools_list,
             llm=crew_llm
-        )
-
-    @agent
-    def rag_agent(self) -> Agent:
-        return Agent(
-            config=self.agents_config['rag_agent'],
-            verbose=True,
-            tools=[qdrant_tool],
-            llm=crew_llm
-        )
-    
-    # @agent
-    # def llm_agent(self) -> Agent:
-    #     return Agent(
-    #         config=self.agents_config['llm_agent'],
-    #         verbose=True
-    #     )
-    
-    @task
-    def query_task(self) -> Task:
-        return Task(
-            config=self.tasks_config['query_task'],
-            verbose=True
         )
     
     @task
-    def rag_task(self) -> Task:
+    def clinical_assistant_task(self) -> Task:
         return Task(
-            config=self.tasks_config['rag_task']
+            config=self.tasks_config['clinical_assistant_task'],
+            verbose=True 
         )
-    
-    # @task
-    # def llm_task(self) -> Task:
-    #     return Task(
-    #         config=self.tasks_config['llm_task']
-    #     )
 
     @crew
     def crew(self) -> Crew:
@@ -88,5 +68,7 @@ class Ai():
             agents=self.agents,
             tasks=self.tasks,
             process=Process.sequential,
-            verbose=True
+            verbose=True,   # Enabled to see crew execution details
+            memory=False,   # Disabled for speed (if you don't need conversation memory)
+            max_rpm=None    # Remove rate limiting for maximum speed
         )

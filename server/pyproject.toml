@@ -15,7 +15,9 @@ dependencies = [
     "qdrant-client>=1.14.2",
     "uvicorn>=0.34.3",
     "PyPDF2==3.0.1",
-    "xmltodict==0.14.2"
+    "xmltodict==0.14.2",
+    "python-jose[cryptography]>=3.5.0",
+    "python-multipart>=0.0.20",
 ]
 [tool.uv]
 package = true

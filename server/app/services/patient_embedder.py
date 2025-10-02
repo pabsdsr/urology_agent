@@ -1,6 +1,7 @@
 import os
 import uuid
 import json
+import logging
 from typing import Dict, List, Any
 import boto3
 from langchain.text_splitter import RecursiveCharacterTextSplitter
@@ -8,6 +9,8 @@ from langchain.docstore.document import Document
 from qdrant_client import QdrantClient
 from qdrant_client.models import PointStruct
 from concurrent.futures import ThreadPoolExecutor, as_completed
+
+logger = logging.getLogger(__name__)
 
 class PatientDataEmbedder:
     def __init__(self, qdrant_url: str, qdrant_api_key: str = None, aws_region: str = "us-west-2"):
@@ -41,26 +44,6 @@ class PatientDataEmbedder:
 
         self.embedding_model = "amazon.titan-embed-text-v2:0"
         self.vector_size = 1024
-        self._create_patient_indices()
-    
-    def _create_patient_indices(self):
-        from qdrant_client.models import PayloadSchemaType
-
-        try:
-            self.qdrant_client.create_payload_index(
-                collection_name="uropmsandbox460",
-                field_name="patient_hash",
-                field_schema=PayloadSchemaType.KEYWORD
-            )
-
-            self.qdrant_client.create_payload_index(
-                collection_name="uropmsandbox460",
-                field_name="patient_id",
-                field_schema=PayloadSchemaType.KEYWORD
-            )
-            print("DEBUG: Indices on patient_id and patient_hash created successfully")
-        except Exception as e:
-            print(f"DEBUG: Error creating hashed patient indices (may already exist): {e}")
 
     def _json_to_text(self, patient_data):
         """
@@ -107,8 +90,6 @@ class PatientDataEmbedder:
         )
 
         chunks = self.text_splitter.split_documents([doc])
-        print(f"DEBUG: Created {len(chunks)} chunks from patient data")
-        # print(chunks)
         
         return chunks
 
@@ -136,11 +117,14 @@ class PatientDataEmbedder:
             return embedding
             
         except Exception as e:
-            print(f"ERROR: Error creating embedding: {e}")
+            logger.error(f"Error creating embedding: {e}")
             return []
 
-    def chunk_and_embed(self, patient_data, patient_section, patient_id, patient_hash):
+    def chunk_and_embed(self, patient_data, patient_section, patient_id, patient_hash, collection_name: str):
             """Chunking and embedding process with debug output"""
+            # Use practice-specific collection name (required)
+            target_collection = collection_name
+            
             chunks = self._chunk(patient_data)
             points = []
 
@@ -162,18 +146,16 @@ class PatientDataEmbedder:
                     )
                     points.append(point)
                 else:
-                    print(f"ERROR: Failed to create embedding for chunk {i+1}")
+                    logger.error(f"Failed to create embedding for chunk {i+1}")
 
-            print(f"DEBUG: Successfully created {len(points)} embeddings out of {len(chunks)} chunks")
 
             if points:
                 try:
                     self.qdrant_client.upsert(
-                        collection_name="uropmsandbox460",
+                        collection_name=target_collection,
                         points=points
                     )
-                    print(f"DEBUG: Successfully stored {len(points)} points in Qdrant")
                 except Exception as e:
-                    print(f"ERROR: Error storing points in Qdrant: {e}")
+                    logger.error(f"Error storing points in Qdrant: {e}")
             else:
-                print("ERROR: No points to store - all embeddings failed")
+                logger.error("No points to store - all embeddings failed")

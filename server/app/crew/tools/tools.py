@@ -3,7 +3,10 @@ from pydantic import BaseModel, Field
 import os
 import boto3
 import json
+import logging
 from typing import Any, Callable, Optional, Type, List
+
+logger = logging.getLogger(__name__)
 
 
 try:
@@ -60,8 +63,8 @@ class QdrantVectorSearchTool(BaseTool):
     query: Optional[str] = None
     filter_by: Optional[str] = None
     filter_value: Optional[str] = None
-    collection_name: Optional[str] = "uropmsandbox460"
-    hashed_collection_name: Optional[str] = "uropmsandbox460"
+    collection_name: str
+    hashed_collection_name: Optional[str] = None
     limit: Optional[int] = Field(default=5)
     score_threshold: float = Field(default=0.2)
     qdrant_url: str = Field(
@@ -115,6 +118,9 @@ class QdrantVectorSearchTool(BaseTool):
         if not self.qdrant_url:
             raise ValueError("QDRANT_URL is not set")
 
+        # Use the collection name configured for this tool instance
+        target_collection = self.collection_name
+
         try:
             # Create search filter if needed
             search_filter = None
@@ -134,14 +140,13 @@ class QdrantVectorSearchTool(BaseTool):
             
             # Check if embedding was successful
             if not query_vector:
-                print("Failed to create embedding for query")
+                logger.error("Failed to create embedding for query")
                 return json.dumps([])
 
-            print(f"🔍 DEBUG: Using filter: {filter_by}={filter_value}" if filter_by else "🔍 DEBUG: No filter applied")
 
             # Use search method instead of query_points
             search_results = self.client.search(
-                collection_name=self.collection_name,
+                collection_name=target_collection,
                 query_vector=query_vector,
                 query_filter=search_filter,
                 limit=100,
@@ -150,7 +155,6 @@ class QdrantVectorSearchTool(BaseTool):
                 with_payload=True
             )
 
-            print(f"🔍 DEBUG: Found {len(search_results)} results")
 
             # Process results correctly
             results = []
@@ -162,15 +166,14 @@ class QdrantVectorSearchTool(BaseTool):
                     "distance": point.score,
                     "patient_id": point.payload.get("patient_id", "")
                 }
-                print(f"result: {result}")
                 results.append(result)
 
             return json.dumps(results, indent=2)
             
         except Exception as e:
-            print(f"ERROR: Error in _run method: {e}")
+            logger.error(f"Error in _run method: {e}")
             import traceback
-            print(f"TRACEBACK: {traceback.format_exc()}")
+            logger.debug(f"Traceback: {traceback.format_exc()}")
             return json.dumps([])
     
     def delete_points_by_patient_hash(self, patient_hash : str):
@@ -188,7 +191,6 @@ class QdrantVectorSearchTool(BaseTool):
             points_selector = delete_selector
         )
 
-        print(f"DEBUG: Patient data deleted with response: {delete_response}")
     
     def delete_all_points(self):
         from qdrant_client.http.models import Filter, FilterSelector
@@ -202,7 +204,6 @@ class QdrantVectorSearchTool(BaseTool):
             points_selector=delete_selector
         )
 
-        print(f"DEBUG: Deleted all points from '{self.collection_name}': {response}")
     
     def find_hash_embedding(self, patient_hash: str):
         """
@@ -215,7 +216,7 @@ class QdrantVectorSearchTool(BaseTool):
         )
 
         search_result = self.client.scroll(
-            collection_name="uropmsandbox460",
+            collection_name=self.collection_name,
             scroll_filter=search_filter,
             limit=1
         )
@@ -236,7 +237,6 @@ class QdrantVectorSearchTool(BaseTool):
             list[float]: The vectorized query
         """
         try:
-            print(f"🔍 DEBUG: Creating embedding for query: '{query[:50]}...'")
             
             bedrock_client = boto3.client(
                 service_name='bedrock-runtime',
@@ -262,14 +262,8 @@ class QdrantVectorSearchTool(BaseTool):
             return embedding
             
         except Exception as e:
-            print(f"ERROR: Error creating embedding: {e}")
+            logger.error(f"Error creating embedding: {e}")
             import traceback
-            print(f"ERROR: Traceback: {traceback.format_exc()}")
+            logger.debug(f"Traceback: {traceback.format_exc()}")
             return []
 
-qdrant_tool = QdrantVectorSearchTool(
-    collection_name="uropmsandbox460",
-    limit=5,
-    qdrant_url= os.getenv("QDRANT_URL"),
-    qdrant_api_key= os.getenv("QDRANT_API_KEY")
-)

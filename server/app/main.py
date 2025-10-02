@@ -3,15 +3,27 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 import warnings
+import logging
 from app.services.client_service import client
-from app.crew.crew import Ai
+from app.crew.crew import ClinicalAssistantCrew
 from app.routes import run_crew
 from app.routes import all_patients
-from app.services import patient_info_service
+from app.routes import auth
 
 warnings.filterwarnings("ignore", category=SyntaxWarning, module="pysbd")
 
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(),  # Console output
+        logging.FileHandler('app.log')  # File output
+    ]
+)
 
+# Create logger instance
+logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -34,9 +46,9 @@ def create_app():
         allow_headers=["*"],
     )
 
+    app.include_router(auth.router)
     app.include_router(run_crew.router)
     app.include_router(all_patients.router)
-    app.include_router(patient_info_service.router)
 
     @app.get("/")
     def read_root():
@@ -44,28 +56,43 @@ def create_app():
 
     return app
 
-def run(query: str, id: str):
-    inputs = {"query": query, "id": id}
+def run(query: str, id: str, practice_url: str = None, user_qdrant_tool = None):
+    inputs = {"query": query, "id": id, "practice_url": practice_url}
 
     try:
-        result = Ai().crew().kickoff(inputs=inputs)
+        # Create clinical assistant crew instance
+        crew_instance = ClinicalAssistantCrew()
+        
+        # Set user's qdrant tool if provided
+        if user_qdrant_tool:
+            crew_instance.user_qdrant_tool = user_qdrant_tool
+        
+        # Get the crew and execute
+        crew = crew_instance.crew()
+        
+        # Update agent tools after crew creation
+        if user_qdrant_tool:
+            for agent in crew.agents:
+                if hasattr(agent, 'tools'):
+                    agent.tools = [user_qdrant_tool]
+        
+        result = crew.kickoff(inputs=inputs)
     except Exception as e:
         raise Exception(f"An error occurred while running the crew: {e}")
 
     result_dict = result.model_dump()
 
     token_usage = result_dict.get("token_usage", {})
-    print(token_usage)
 
     tasks_output = result_dict.get("tasks_output", [])
     for task in tasks_output:
-        if task.get("agent", "").strip() == "RAG Specialist":
+        if task.get("agent", "").strip() == "Clinical Assistant Specialist":
             final_answer = task.get("raw", "No final answer found.")
-            print(final_answer)
+            logger.info(f"Final answer: {final_answer}")
             return final_answer
 
 
-    return "No relevant output found from LLM Expert."
+    return "No relevant output found from Clinical Assistant Specialist."
 
     
 def main():

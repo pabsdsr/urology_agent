@@ -9,11 +9,12 @@ import xmltodict
 import copy
 from io import BytesIO
 from PyPDF2 import PdfReader
-from app.services.token_service import token_service
 from app.services.client_service import client
-from app.crew.tools.tools import qdrant_tool
 from app.services.patient_embedder import PatientDataEmbedder
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
+import logging
+
+logger = logging.getLogger(__name__)
 
 def parse_base64_pdf(base64_string):
     """Parse base64 encoded PDF string and extract text"""
@@ -102,20 +103,33 @@ router = APIRouter(
 
 
 @router.post("")
-async def get_patient_info(id: str):
+async def get_patient_info(id: str, modmed_token: str = None, practice_url: str = None, practice_api_key: str = None, user_qdrant_tool = None):
     """
     Fetch patient information from Modmed endpoints and process for embedding storage.
+    Requires user authentication - no fallback to service credentials.
     """
     try:
-        token = await token_service.get_token()
+        # Require user-provided token, practice URL, API key, and qdrant tool
+        if not modmed_token:
+            logger.warning("Missing ModMed token for patient info request", extra={"patient_id": id})
+            raise HTTPException(status_code=401, detail="Authentication required")
+        if not practice_url:
+            logger.warning("Missing practice URL for patient info request", extra={"patient_id": id})
+            raise HTTPException(status_code=400, detail="Practice URL is required")
+        if not practice_api_key:
+            logger.warning("Missing practice API key for patient info request", extra={"patient_id": id})
+            raise HTTPException(status_code=400, detail="Practice API key is required")
+        if not user_qdrant_tool:
+            logger.warning("Missing user qdrant tool for patient info request", extra={"patient_id": id})
+            raise HTTPException(status_code=400, detail="User session invalid")
+            
         headers = {
-            "x-api-key": os.environ.get("modmed_api_key"),
-            "Authorization": f"Bearer {token}"
+            "x-api-key": practice_api_key,
+            "Authorization": f"Bearer {modmed_token}"
         }
 
-        prefix = os.environ.get("modmed_url_prefix")
-        base_url = f"https://stage.ema-api.com/ema-dev/firm/{prefix}/ema/fhir/v2"
-
+        base_url = f"https://stage.ema-api.com/ema-dev/firm/{practice_url}/ema/fhir/v2"
+        
         section_urls = {
             "patient": f"{base_url}/Patient/{id}",
             "encounters": f"{base_url}/Encounter?patient={id}",
@@ -125,7 +139,7 @@ async def get_patient_info(id: str):
             "family_history": f"{base_url}/FamilyMemberHistory?patient={id}",
             "diagnostic_reports": f"{base_url}/DiagnosticReport?patient={id}",
             "tasks": f"{base_url}/Task?code=PMRECALL&patient={id}",
-            "document_references": f"{base_url}/DocumentReference?patient={id}",  # Added this!
+            "document_references": f"{base_url}/DocumentReference?patient={id}",
         }
 
         # --- Parallel fetch all sections using global client ---
@@ -137,6 +151,8 @@ async def get_patient_info(id: str):
 
         for name, resp in zip(tasks.keys(), responses):
             if isinstance(resp, Exception) or resp.status_code != 200:
+                if name == "document_references":
+                    logger.error(f"DocumentReference API Error: {resp.status_code if hasattr(resp, 'status_code') else 'Exception'} - {resp.text[:200] if hasattr(resp, 'text') else str(resp)[:200]}")
                 continue
 
             if name == "document_references":
@@ -206,7 +222,7 @@ async def get_patient_info(id: str):
             qdrant_api_key=os.getenv("QDRANT_API_KEY")
         )
 
-        qdrant_tool.delete_all_points()
+        # qdrant_tool.delete_all_points(practice_url)
         
         all_sections_to_embed = []
 
@@ -218,30 +234,36 @@ async def get_patient_info(id: str):
                 for doc in section_data:
                     section_list = [{doc["title"]: doc}]
                     current_hash = hash_patient_data(section_list)
-                    previous_hash = qdrant_tool.find_hash_embedding(current_hash)
+                    previous_hash = user_qdrant_tool.find_hash_embedding(current_hash)
 
                     if not previous_hash or previous_hash != current_hash:
                         if previous_hash:
-                            qdrant_tool.delete_points_by_patient_hash(previous_hash)
+                            user_qdrant_tool.delete_points_by_patient_hash(previous_hash)
                         all_sections_to_embed.append((section_list, doc["title"], current_hash))
             else:
                 section_list = [{section_name: section_data}]
                 current_hash = hash_patient_data([results[section_name]])
-                previous_hash = qdrant_tool.find_hash_embedding(current_hash)
+                previous_hash = user_qdrant_tool.find_hash_embedding(current_hash)
 
                 if not previous_hash or previous_hash != current_hash:
                     if previous_hash:
-                        qdrant_tool.delete_points_by_patient_hash(previous_hash)
+                        user_qdrant_tool.delete_points_by_patient_hash(previous_hash)
                     all_sections_to_embed.append((section_list, section_name, current_hash))
 
-        # Now embed everything in parallel
+        # Now embed everything in parallel using practice-specific collection
         await asyncio.gather(*[
-            asyncio.to_thread(embedder.chunk_and_embed, section_list, name, id, h)
+            asyncio.to_thread(embedder.chunk_and_embed, section_list, name, id, h, practice_url)
             for section_list, name, h in all_sections_to_embed
         ])
 
+        logger.info("Patient information processed successfully", 
+                   extra={"patient_id": id, "practice_url": practice_url, "sections_embedded": len(all_sections_to_embed)})
         return True
 
+    except HTTPException:
+        # Re-raise HTTP exceptions (already properly formatted)
+        raise
     except Exception as e:
-        print(f"ERROR: Error in get_patient_info for patient {id}: {e}")
-        return False
+        logger.exception("Failed to process patient information", 
+                        extra={"patient_id": id, "practice_url": practice_url, "error": str(e)})
+        raise HTTPException(status_code=500, detail="Failed to process patient data")
