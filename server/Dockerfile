@@ -14,7 +14,8 @@ RUN touch README.md
 
 
 RUN uv venv && \
-    uv sync
+    uv sync && \
+    rm -rf /root/.cache/uv
 
 FROM python:3.11-slim-bookworm AS runtime
 
@@ -24,5 +25,7 @@ ENV VIRTUAL_ENV=/app/.venv \
 COPY --from=builder ${VIRTUAL_ENV} ${VIRTUAL_ENV}
 
 COPY app ./app
+
+EXPOSE 8080
 
 ENTRYPOINT ["python", "-m", "app.main"]

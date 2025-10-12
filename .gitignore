@@ -152,3 +152,8 @@ cython_debug/
 
 # Elastic Beanstalk deployment artifacts
 .elasticbeanstalk/
+
+# Elastic Beanstalk Files
+.elasticbeanstalk/*
+!.elasticbeanstalk/*.cfg.yml
+!.elasticbeanstalk/*.global.yml

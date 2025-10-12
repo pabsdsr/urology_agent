@@ -87,6 +87,8 @@ class QdrantVectorSearchTool(BaseTool):
             self.client = QdrantClient(
                 url=self.qdrant_url,
                 api_key=self.qdrant_api_key if self.qdrant_api_key else None,
+                https=True,  # Enforce TLS encryption for HIPAA compliance
+                timeout=30
             )
         else:
             raise ImportError(

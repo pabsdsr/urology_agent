@@ -28,6 +28,7 @@ export const AuthProvider = ({ children }) => {
         } catch (error) {
           console.error('Auth check failed:', error);
           // Token invalid, clear it (apiClient handles this automatically)
+          localStorage.removeItem('session_token');
           setToken(null);
           setUser(null);
         }

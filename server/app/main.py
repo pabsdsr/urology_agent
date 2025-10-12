@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 import warnings
 import logging
+import os
 from app.services.client_service import client
 from app.crew.crew import ClinicalAssistantCrew
 from app.routes import run_crew
@@ -34,13 +35,33 @@ async def lifespan(app: FastAPI):
 
 def create_app():
     app = FastAPI(
-        title="Urology Agent Backend"
+        title="UroAssist Backend"
     )
+
+    # HTTPS enforcement for production
+    allowed_origins = []
+    
+    if os.getenv('ENVIRONMENT') == 'production':
+        # Production domains - using actual deployed domains
+        allowed_origins = [
+            # Backend domain
+            "https://api.uroassist.net",
+            "https://uroassist.net",
+            # Allow localhost for testing during deployment
+            "http://localhost:3000",
+            "http://localhost:5173",
+        ]
+    else:
+        # Allow HTTP for local development
+        allowed_origins = [
+            "http://localhost:3000",
+            "http://localhost:5173",
+            "http://localhost:8080"
+        ]
 
     app.add_middleware(
         CORSMiddleware,
-        # we have to adjust this origin to our frontend url once it is hosted
-        allow_origins=["*"],
+        allow_origins=allowed_origins,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -53,6 +74,11 @@ def create_app():
     @app.get("/")
     def read_root():
         return {"Hello": "World"}
+    
+    @app.get("/health")
+    def health_check():
+        """Health check endpoint for AWS load balancer"""
+        return {"status": "healthy", "service": "UroAssist-backend"}
 
     return app
 

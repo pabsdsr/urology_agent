@@ -28,10 +28,12 @@ class PatientDataEmbedder:
             region_name=aws_region
         )
         
-        # Initialize Qdrant client
+        # Initialize Qdrant client with HTTPS/TLS enforcement
         self.qdrant_client = QdrantClient(
             url=qdrant_url or os.getenv("QDRANT_URL"),
-            api_key=qdrant_api_key or os.getenv("QDRANT_API_KEY")
+            api_key=qdrant_api_key or os.getenv("QDRANT_API_KEY"),
+            https=True,  # Enforce TLS encryption for HIPAA compliance
+            timeout=30
         )
         
         # Initialize text splitter for JSON content
