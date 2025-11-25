@@ -1,0 +1,107 @@
+name: Deploy Frontend to S3 + CloudFront
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'client/**'
+      - '.github/workflows/deploy-frontend.yml'
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  deploy:
+    name: Build and Deploy to S3 + CloudFront
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: './client/package-lock.json'
+      
+      - name: Install dependencies
+        working-directory: ./client
+        run: npm ci
+      
+      - name: Create production environment file
+        working-directory: ./client
+        run: |
+          echo "VITE_API_URL=${{ secrets.VITE_API_URL }}" > .env.production
+      
+      - name: Build React app
+        working-directory: ./client
+        run: npm run build
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+      
+      - name: Sync files to S3 (except index.html)
+        working-directory: ./client
+        run: |
+          aws s3 sync dist/ s3://${{ secrets.S3_BUCKET }} \
+            --delete \
+            --cache-control "public,max-age=31536000,immutable" \
+            --exclude "index.html"
+      
+      - name: Upload index.html with no-cache
+        working-directory: ./client
+        run: |
+          aws s3 cp dist/index.html s3://${{ secrets.S3_BUCKET }}/index.html \
+            --cache-control "no-cache,no-store,must-revalidate" \
+            --metadata-directive REPLACE
+      
+      - name: Invalidate CloudFront cache
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }} \
+            --paths "/*"
+      
+      - name: Wait for CloudFront invalidation
+        run: |
+          echo "Waiting for CloudFront invalidation to complete..."
+          INVALIDATION_ID=$(aws cloudfront list-invalidations \
+            --distribution-id ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }} \
+            --query 'InvalidationList.Items[0].Id' \
+            --output text)
+          
+          aws cloudfront wait invalidation-completed \
+            --distribution-id ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }} \
+            --id "$INVALIDATION_ID" \
+            --max-attempts 30 \
+            --delay 10
+      
+      - name: Verify deployment
+        run: |
+          echo "Testing frontend..."
+          curl -I https://uroassist.net | grep "200 OK" || exit 1
+          echo "✅ Frontend deployment successful!"
+      
+      - name: Deployment summary
+        run: |
+          echo "🚀 Frontend deployed successfully!"
+          echo "📦 Bucket: ${{ secrets.S3_BUCKET }}"
+          echo "🌐 URL: https://uroassist.net"
+          echo "☁️ CloudFront: ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }}"
+      
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "❌ Frontend deployment failed!"
+          echo "Check the logs above for details."
+
+
+
+
+
+
+

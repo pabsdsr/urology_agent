@@ -1,0 +1,81 @@
+name: Run Tests
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  test-backend:
+    name: Test Backend
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        working-directory: ./server
+        run: |
+          pip install uv
+          uv sync
+      
+      - name: Run linter (optional)
+        working-directory: ./server
+        run: |
+          echo "Add linting commands here (ruff, flake8, etc.)"
+          # uv run ruff check .
+      
+      - name: Run tests (optional)
+        working-directory: ./server
+        run: |
+          echo "Add test commands here (pytest, etc.)"
+          # uv run pytest
+
+  test-frontend:
+    name: Test Frontend
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: './client/package-lock.json'
+      
+      - name: Install dependencies
+        working-directory: ./client
+        run: npm ci
+      
+      - name: Run linter
+        working-directory: ./client
+        run: npm run lint
+      
+      - name: Build (test if build succeeds)
+        working-directory: ./client
+        run: |
+          echo "VITE_API_URL=https://api.uroassist.net" > .env.production
+          npm run build
+      
+      - name: Run tests (optional)
+        working-directory: ./client
+        run: |
+          echo "Add test commands here (vitest, jest, etc.)"
+          # npm run test
+
+
+
+
+
+
+
