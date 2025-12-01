@@ -48,15 +48,12 @@ def create_app():
             "https://api.uroassist.net",
             "https://uroassist.net",
             # Allow localhost for testing during deployment
-            "http://localhost:3000",
-            "http://localhost:5173",
+            # "http://localhost:5173",
         ]
     else:
         # Allow HTTP for local development
         allowed_origins = [
-            "http://localhost:3000",
             "http://localhost:5173",
-            "http://localhost:8080"
         ]
 
     app.add_middleware(

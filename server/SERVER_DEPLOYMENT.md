@@ -170,7 +170,7 @@ def create_app():
 # Initialize EB
 cd /path/to/server
 eb init
-# Select: us-west-2, Docker platform, application name
+# Select: us-west-2, Docker platform, application name "UroAssist-backend"
 
 # Create environment
 eb create production --instance-type t3.small
@@ -206,16 +206,32 @@ Verify DNS:
 nslookup api.uroassist.net
 ```
 
-## Step 5: Configure Security Groups
+## Step 5: Configure Load Balancer HTTPS Listener
+
+After the initial deployment, you need to manually configure the HTTPS listener:
+
+1. **EC2 → Load Balancers** → Select your EB load balancer (e.g., `awseb--AWSEB-...`)
+2. **Listeners tab** → **Add listener**
+3. Configure:
+   - **Protocol**: HTTPS
+   - **Port**: 443
+   - **Default action**: Forward to (select the same target group as HTTP:80)
+   - **Security policy**: `ELBSecurityPolicy-2016-08`
+   - **SSL certificate**: Select your `*.uroassist.net` certificate from ACM
+4. **Add**
+
+> **Why manual?** Adding the HTTPS listener to `.ebextensions` can cause "listener already exists" errors on subsequent deployments. Manual configuration is more reliable.
+
+## Step 6: Configure Security Groups
 
 ### Load Balancer Security Group
 
-Find: **EC2 → Load Balancers → Select your LB → Security tab**
+Find: **EC2 → Security Groups** (search for security group attached to your load balancer)
 
-**Inbound Rules**:
-- HTTP (80) from 0.0.0.0/0
-- HTTPS (443) from 0.0.0.0/0
-- HTTPS (443) from ::/0
+**Inbound Rules** (must include both IPv4 and IPv6):
+- HTTP (80) from 0.0.0.0/0 (IPv4)
+- HTTPS (443) from 0.0.0.0/0 (IPv4) ⚠️ **Critical - often missing**
+- HTTPS (443) from ::/0 (IPv6)
 
 **Outbound Rules**:
 - All traffic to 0.0.0.0/0
@@ -231,7 +247,31 @@ Find: **EC2 → Security Groups** (search for `AWSEBSecurityGroup`)
 **Outbound Rules**:
 - All traffic to 0.0.0.0/0 (required for external API calls)
 
-## Step 6: Verify Deployment
+## Step 7: Set Environment Variables
+
+Set all required environment variables for your application:
+
+```bash
+cd /path/to/server
+
+# Set environment variables
+eb setenv \
+  MODEL="bedrock/us.meta.llama4-maverick-17b-instruct-v1:0" \
+  EMBEDDING_MODEL="amazon.titan-embed-text-v2:0" \
+  QDRANT_URL="https://your-cluster.qdrant.io" \
+  QDRANT_API_KEY="your-qdrant-key" \
+  JWT_SECRET_KEY="your-super-secret-jwt-key" \
+  AWS_REGION="us-west-2" \
+  "PRACTICE_uropmsandbox460=fhir_WpKHZ,uropmsandbox460,83529f51-4952-4749-8fb9-31c2170cdf0b"
+```
+
+**Environment Variable Format**:
+- `PRACTICE_<firm_name>=<username>,<firm_name>,<api_key>`
+- Example: `PRACTICE_uropmsandbox460=fhir_WpKHZ,uropmsandbox460,83529f51-4952-4749-8fb9-31c2170cdf0b`
+
+> **Important**: Environment variables must be set using `eb setenv`, not just in local `.env` files. Elastic Beanstalk doesn't automatically load `.env` files.
+
+## Step 8: Verify Deployment
 
 ```bash
 # Check status
@@ -241,10 +281,31 @@ eb status  # Should show: Status: Ready, Health: Green
 curl https://api.uroassist.net/health
 # Expected: {"status":"healthy","service":"UroAssist-backend"}
 
-# Test authentication
+# Test authentication with ModMed
 curl -X POST https://api.uroassist.net/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"username":"test","password":"test"}'
+  -d '{
+    "practice_id": "PRACTICE_uropmsandbox460",
+    "username": "fhir_WpKHZ",
+    "password": "Urd6RwiU3c"
+  }'
+# Expected: {"success":true,"session_token":"...","username":"fhir_WpKHZ",...}
+```
+
+## Step 9: Test ModMed API Directly (Optional)
+
+Verify ModMed API credentials are working:
+
+```bash
+curl --request POST \
+     --url https://stage.ema-api.com/ema-dev/firm/uropmsandbox460/ema/ws/oauth2/grant \
+     --header 'accept: application/json' \
+     --header 'content-type: application/x-www-form-urlencoded' \
+     --header 'x-api-key: 83529f51-4952-4749-8fb9-31c2170cdf0b' \
+     --data grant_type=password \
+     --data username=fhir_WpKHZ \
+     --data password=Urd6RwiU3c
+# Expected: {"scope":"uropmsandbox460","token_type":"Bearer","access_token":"..."}
 ```
 
 ## Common Commands
@@ -260,17 +321,30 @@ eb ssh                 # SSH into instance
 ## Troubleshooting
 
 **Deployment fails - "No space left on device"**:
-- Ensure `.ebextensions/03-disk-size.config` sets `RootVolumeSize: 20`
+- Ensure `.ebextensions/04-disk-size.config` sets `RootVolumeSize: 20`
 - Ensure Dockerfile includes `rm -rf /root/.cache/uv`
 
-**HTTPS not working**:
-- Verify security groups allow port 443
-- Check certificate is in us-west-2
+**HTTPS connection timeout**:
+- ⚠️ **Most common issue**: Load Balancer security group missing IPv4 rule for port 443
+- Check security group has HTTPS (443) from 0.0.0.0/0 (not just IPv6)
+- Use the CLI command in Step 6 to add the rule
+- Verify HTTPS listener is configured (Step 5)
+- Check certificate is in us-west-2 and attached to listener
 - Verify DNS propagation: `nslookup api.uroassist.net`
 
-**Can't connect to external APIs**:
+**ModMed authentication fails - "Invalid ModMed credentials"**:
+- Check environment variable format: `PRACTICE_<firm>=<username>,<firm>,<api_key>`
+- Verify the second field is the **firm name**, not the password
+- Test ModMed API directly (Step 9) to verify credentials
+- Check logs: `eb logs --all`
+
+**"practice URL parsing bug"**:
+- Ensure environment variable format: `username,firm_name,api_key`
+- The firm name should match the URL segment in ModMed API endpoint
+
+**Can't connect to external APIs (ModMed, Qdrant, Bedrock)**:
 - Ensure `.ebextensions/03-vpc-network.config` sets `AssociatePublicIpAddress: true`
-- Check EC2 security group allows outbound traffic
+- Check EC2 security group allows outbound traffic (all traffic to 0.0.0.0/0)
 
 **Health check failing**:
 ```bash
@@ -278,13 +352,14 @@ eb logs --all  # Check for errors
 eb ssh         # SSH and check: curl localhost:8080/health
 ```
 
-**CORS errors**:
-- Verify frontend domain in `allowed_origins`
+**CORS errors from frontend**:
+- Verify frontend domain in `allowed_origins` in `app/main.py`
+- Ensure `ENVIRONMENT=production` is set
 - Redeploy: `eb deploy`
 
 **"Listener already exists" error**:
-- Delete HTTPS listener from EC2 → Load Balancers → Listeners tab
-- Then deploy again
+- This is why we configure HTTPS listener manually (Step 5)
+- Don't include listener config in `.ebextensions/`
 
 ## Cost Estimate
 
