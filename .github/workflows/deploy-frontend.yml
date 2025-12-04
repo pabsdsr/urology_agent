@@ -74,11 +74,12 @@ jobs:
             --query 'InvalidationList.Items[0].Id' \
             --output text)
           
-          aws cloudfront wait invalidation-completed \
+          echo "Invalidation ID: $INVALIDATION_ID"
+          
+          # Wait for invalidation (with timeout fallback)
+          timeout 300 aws cloudfront wait invalidation-completed \
             --distribution-id ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }} \
-            --id "$INVALIDATION_ID" \
-            --max-attempts 30 \
-            --delay 10
+            --id "$INVALIDATION_ID" || echo "Invalidation still in progress (continuing anyway)"
       
       - name: Verify deployment
         run: |
