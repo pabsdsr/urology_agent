@@ -45,7 +45,7 @@ jobs:
           # Initialize EB (if not already initialized)
           if [ ! -d ".elasticbeanstalk" ]; then
             eb init ${{ secrets.EB_APPLICATION_NAME }} \
-              --region ${{ secrets.AWS_REGION }} \
+              --region ${{ secrets.AWS_DEFAULT_REGION }} \
               --platform docker
           fi
           

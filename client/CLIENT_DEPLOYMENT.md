@@ -605,13 +605,6 @@ aws cloudfront update-distribution \
   --logging-prefix cloudfront/
 ```
 
-### Analytics
-
-Consider adding:
-- Google Analytics
-- AWS CloudWatch RUM (Real User Monitoring)
-- Error tracking (Sentry)
-
 ## Summary
 
 **Production URL**: https://uroassist.net

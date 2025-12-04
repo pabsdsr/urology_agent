@@ -363,7 +363,7 @@ eb ssh         # SSH and check: curl localhost:8080/health
 
 ## Cost Estimate
 
-- EC2 t3.small: ~$15/month
+- EC2 t3.small: ~$14/month
 - Load Balancer: ~$22/month  
 - EBS 20GB: ~$2/month
 - Domain: ~$17/year
