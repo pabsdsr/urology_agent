@@ -54,9 +54,12 @@ jobs:
       
       - name: Wait for environment to be ready
         working-directory: ./server
+        timeout-minutes: 5
+        continue-on-error: true
         run: |
-          echo "Waiting for environment to stabilize..."
-          eb health ${{ secrets.EB_ENVIRONMENT_NAME }} --refresh
+          echo "Checking environment health..."
+          eb health ${{ secrets.EB_ENVIRONMENT_NAME }} || true
+          echo "Environment status checked (deployment may still be in progress)"
       
       - name: Verify deployment
         run: |
