@@ -21,7 +21,8 @@ async def all_patients(current_user: SessionUser = Depends(get_current_user)):
     prefix = current_user.practice_url
 
     patients = []
-    url = f"https://stage.ema-api.com/ema-dev/firm/{prefix}/ema/fhir/v2/Patient"
+    # url = f"https://stage.ema-api.com/ema-dev/firm/{prefix}/ema/fhir/v2/Patient"
+    url = f"https://mmapi.ema-api.com/ema-prod/firm/{prefix}/ema/fhir/v2/Patient"
 
     try:
         async with httpx.AsyncClient() as client:

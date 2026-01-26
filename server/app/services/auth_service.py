@@ -147,7 +147,8 @@ class AuthService:
             "password": password
         }
         
-        oauth_url = f"https://stage.ema-api.com/ema-dev/firm/{practice_url}/ema/ws/oauth2/grant"
+        # oauth_url = f"https://stage.ema-api.com/ema-dev/firm/{practice_url}/ema/ws/oauth2/grant"
+        oauth_url = f"https://mmapi.ema-api.com/ema-prod/firm/{practice_url}/ema/ws/oauth2/grant"
         
         try:
             # Increase timeout for ModMed API calls
@@ -235,7 +236,8 @@ class AuthService:
             "refresh_token": session_user.modmed_refresh_token
         }
         
-        oauth_url = f"https://stage.ema-api.com/ema-dev/firm/{session_user.practice_url}/ema/ws/oauth2/grant"
+        # oauth_url = f"https://stage.ema-api.com/ema-dev/firm/{session_user.practice_url}/ema/ws/oauth2/grant"
+        oauth_url = f"https://mmapi.ema-api.com/ema-prod/firm/{session_user.practice_url}/ema/ws/oauth2/grant"
         
         try:
             async with httpx.AsyncClient() as client:

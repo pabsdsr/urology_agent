@@ -128,7 +128,8 @@ async def get_patient_info(id: str, modmed_token: str = None, practice_url: str 
             "Authorization": f"Bearer {modmed_token}"
         }
 
-        base_url = f"https://stage.ema-api.com/ema-dev/firm/{practice_url}/ema/fhir/v2"
+        # base_url = f"https://stage.ema-api.com/ema-dev/firm/{practice_url}/ema/fhir/v2"
+        base_url = f"https://mmapi.ema-api.com/ema-prod/firm/{practice_url}/ema/fhir/v2"
         
         section_urls = {
             "patient": f"{base_url}/Patient/{id}",

@@ -298,7 +298,7 @@ Verify ModMed API credentials are working:
 
 ```bash
 curl --request POST \
-     --url https://stage.ema-api.com/ema-dev/firm/uropmsandbox460/ema/ws/oauth2/grant \
+     --url https://mmapi.ema-api.com/ema-prod/firm/uropmsandbox460/ema/ws/oauth2/grant \
      --header 'accept: application/json' \
      --header 'content-type: application/x-www-form-urlencoded' \
      --header 'x-api-key: 83529f51-4952-4749-8fb9-31c2170cdf0b' \

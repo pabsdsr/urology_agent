@@ -158,7 +158,6 @@ def main():
         print(f"   1. Your urology agent is now ready for practice: {practice_url}")
         print(f"   2. Users can login with practice URL: {practice_url}")
         print(f"   3. Patient data will be stored in collection: {practice_url}")
-        print(f"   4. Make sure to set environment variable: MODMED_API_KEY_{practice_url.upper()}")
     else:
         print(f"\n❌ Collection creation failed for practice: {practice_url}")
         sys.exit(1)
