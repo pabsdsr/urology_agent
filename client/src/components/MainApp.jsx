@@ -33,22 +33,26 @@ function MainApp() {
     fetchPatients();
   }, []);
 
-  // Filter patients based on search term
+  // Server-side search for patients
   useEffect(() => {
-    if (searchTerm.trim() === "") {
-      setFilteredPatients([]);
-      setShowResults(false);
-      return;
-    }
-
-    const filtered = patients.filter((patient) => {
-      const fullName = `${patient.givenName} ${patient.familyName}`.toLowerCase();
-      return fullName.includes(searchTerm.toLowerCase());
-    });
-
-    setFilteredPatients(filtered);
-    setShowResults(true);
-  }, [searchTerm, patients]);
+    const fetchSearchedPatients = async () => {
+      if (searchTerm.trim() === "") {
+        setFilteredPatients([]);
+        setShowResults(false);
+        return;
+      }
+      try {
+        const data = await patientService.getAllPatients(searchTerm);
+        setFilteredPatients(data);
+        setShowResults(true);
+      } catch (error) {
+        setFilteredPatients([]);
+        setShowResults(false);
+        console.error("Failed to search patients:", error);
+      }
+    };
+    fetchSearchedPatients();
+  }, [searchTerm]);
 
   // Close search results when clicking outside
   useEffect(() => {
