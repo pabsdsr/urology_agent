@@ -67,6 +67,8 @@ def create_app():
     app.include_router(auth.router)
     app.include_router(run_crew.router)
     app.include_router(all_patients.router)
+    from app.routes import patients
+    app.include_router(patients.router)
 
     @app.get("/")
     def read_root():

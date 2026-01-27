@@ -33,16 +33,16 @@ function MainApp() {
     fetchPatients();
   }, []);
 
-  // Server-side search for patients
+  // Server-side typeahead search for patients
   useEffect(() => {
     const fetchSearchedPatients = async () => {
-      if (searchTerm.trim() === "") {
+      if (searchTerm.trim().length < 2) {
         setFilteredPatients([]);
         setShowResults(false);
         return;
       }
       try {
-        const data = await patientService.getAllPatients(searchTerm);
+        const data = await patientService.searchPatients(searchTerm);
         setFilteredPatients(data);
         setShowResults(true);
       } catch (error) {
@@ -51,7 +51,9 @@ function MainApp() {
         console.error("Failed to search patients:", error);
       }
     };
-    fetchSearchedPatients();
+    // Debounce input
+    const timeout = setTimeout(fetchSearchedPatients, 250);
+    return () => clearTimeout(timeout);
   }, [searchTerm]);
 
   // Close search results when clicking outside
