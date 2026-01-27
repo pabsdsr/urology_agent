@@ -52,10 +52,12 @@ async def search_patients(
                 family_name = name_obj.get("family", "")
                 given_names = name_obj.get("given", [""])
                 given_name = given_names[0] if given_names else ""
+                dob = resource.get("birthDate", "")
                 patients.append({
                     "id": id,
                     "familyName": family_name,
-                    "givenName": given_name
+                    "givenName": given_name,
+                    "dob": dob
                 })
             return patients
     except HTTPException:

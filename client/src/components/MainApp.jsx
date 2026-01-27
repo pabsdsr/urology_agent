@@ -208,6 +208,12 @@ function MainApp() {
                           </div>
                           <div className="text-sm text-gray-500">
                             ID: {patient.id}
+                            {patient.dob && (
+                              <>
+                                {" | DOB: "}
+                                {patient.dob}
+                              </>
+                            )}
                           </div>
                         </div>
                       ))
