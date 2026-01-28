@@ -119,7 +119,7 @@ const LoginPage = () => {
                 required
                 value={credentials.password}
                 onChange={handleInputChange}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg text-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white"
                 placeholder=""
               />
             </div>

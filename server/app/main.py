@@ -8,7 +8,6 @@ import os
 from app.services.client_service import client
 from app.crew.crew import ClinicalAssistantCrew
 from app.routes import run_crew
-from app.routes import all_patients
 from app.routes import auth
 
 warnings.filterwarnings("ignore", category=SyntaxWarning, module="pysbd")
@@ -66,7 +65,6 @@ def create_app():
 
     app.include_router(auth.router)
     app.include_router(run_crew.router)
-    app.include_router(all_patients.router)
     from app.routes import patients
     app.include_router(patients.router)
 

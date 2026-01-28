@@ -168,40 +168,77 @@ async def get_patient_info(id: str, modmed_token: str = None, practice_url: str 
             doc_responses = await asyncio.gather(*doc_tasks, return_exceptions=True)
 
             all_file_info = []
+            doc_jsons = []
             for doc_resp in doc_responses:
                 if not isinstance(doc_resp, httpx.Response) or doc_resp.status_code != 200:
                     continue
                 doc_json = doc_resp.json()
+                doc_jsons.append(doc_json)
                 contents = doc_json.get("content", [])
                 for content in contents:
                     attachment = content.get("attachment", {})
                     file_url = attachment.get("url")
                     if file_url:
-                        all_file_info.append((file_url, attachment))
+                        all_file_info.append((file_url, attachment, doc_json))
 
             if all_file_info:
-                all_file_tasks = [limited_get(client, url) for url, _ in all_file_info]
+                all_file_tasks = [limited_get(client, url) for url, _, _ in all_file_info]
                 all_file_responses = await asyncio.gather(*all_file_tasks, return_exceptions=True)
 
                 files = []
-                for (url, attachment), file_resp in zip(all_file_info, all_file_responses):
+                for (url, attachment, doc_json), file_resp in zip(all_file_info, all_file_responses):
                     if not isinstance(file_resp, httpx.Response) or file_resp.status_code != 200:
+                        # Use robust title fallback
+                        title = (
+                            attachment.get("title") or
+                            next((id_obj.get("value") for id_obj in doc_json.get("identifier", []) if id_obj.get("system") == "filename"), None) or
+                            doc_json.get("description") or
+                            doc_json.get("id") or
+                            "file"
+                        )
                         files.append({
-                            "title": attachment.get("title", "file"),
+                            "title": title,
                             "error": f"Failed to fetch {url}"
                         })
                         continue
 
-                    content_type = attachment.get("contentType", "")
-                    title = attachment.get("title", "file")
+                    # Robust content type detection
+                    content_type = (
+                        attachment.get("contentType") or
+                        attachment.get("type") or
+                        attachment.get("mimeType") or
+                        doc_json.get("type", {}).get("text") or
+                        None
+                    )
+                    # Fallback: infer from filename
+                    if not content_type:
+                        filename = (
+                            next((id_obj.get("value") for id_obj in doc_json.get("identifier", []) if id_obj.get("system") == "filename"), None) or
+                            ""
+                        )
+                        if filename.lower().endswith(".pdf"):
+                            content_type = "application/pdf"
+                        elif filename.lower().endswith(".xml"):
+                            content_type = "application/xml"
+                        elif filename.lower().endswith(".png"):
+                            content_type = "image/png"
+
+                    # Robust title fallback
+                    title = (
+                        attachment.get("title") or
+                        next((id_obj.get("value") for id_obj in doc_json.get("identifier", []) if id_obj.get("system") == "filename"), None) or
+                        doc_json.get("description") or
+                        doc_json.get("id") or
+                        "file"
+                    )
 
                     if content_type == "application/pdf":
                         file_bytes = file_resp.content
-                        file_b64 = base64.b64encode(file_bytes).decode("utf-8")
-                        file_b64_parsed = await asyncio.to_thread(parse_base64_pdf, file_b64)
+                        # Use raw bytes for PDF parsing
+                        file_text = await asyncio.to_thread(lambda: parse_base64_pdf(base64.b64encode(file_bytes).decode("utf-8")))
                         files.append({
                             "title": title,
-                            "content_base64": file_b64_parsed,
+                            "content_text": file_text,
                             "contentType": content_type,
                             "creation": attachment.get("creation")
                         })
@@ -223,9 +260,10 @@ async def get_patient_info(id: str, modmed_token: str = None, practice_url: str 
             qdrant_api_key=os.getenv("QDRANT_API_KEY")
         )
 
-        # qdrant_tool.delete_all_points(practice_url)
+        user_qdrant_tool.delete_all_points()
         
         all_sections_to_embed = []
+
 
         for section_name, section_data in results.items():
             if not section_data:
@@ -233,7 +271,8 @@ async def get_patient_info(id: str, modmed_token: str = None, practice_url: str 
 
             if section_name == "documents":
                 for doc in section_data:
-                    section_list = [{doc["title"]: doc}]
+                    doc_title = doc.get("title") or "document"
+                    section_list = [{doc_title: doc}]
                     current_hash = hash_patient_data(section_list)
                     previous_hash = user_qdrant_tool.find_hash_embedding(current_hash)
 

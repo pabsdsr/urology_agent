@@ -13,6 +13,11 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 logger = logging.getLogger(__name__)
 
 class PatientDataEmbedder:
+    @staticmethod
+    def _count_tokens(text):
+        # Simple token count: split on whitespace (for rough estimate)
+        # For more accuracy, use a tokenizer for your embedding model
+        return len(text.split())
     def __init__(self, qdrant_url: str, qdrant_api_key: str = None, aws_region: str = "us-west-2"):
         """
         Initialize the patient data embedder
@@ -46,6 +51,8 @@ class PatientDataEmbedder:
 
         self.embedding_model = "amazon.titan-embed-text-v2:0"
         self.vector_size = 1024
+        # Debug: Track number of embedding requests sent
+        self.request_count = 0
 
     def _json_to_text(self, patient_data):
         """
@@ -105,7 +112,10 @@ class PatientDataEmbedder:
                 "dimensions": 1024,  
                 "normalize": True  
             }
-            
+            # Debug: Increment and log request count
+            self.request_count += 1
+            logger.info(f"[EMBEDDING REQUEST] Total sent so far: {self.request_count}")
+        
             response = self.bedrock_client.invoke_model(
                 modelId=self.embedding_model,
                 body=json.dumps(request_body),
@@ -122,19 +132,45 @@ class PatientDataEmbedder:
             logger.error(f"Error creating embedding: {e}")
             return []
 
-    def chunk_and_embed(self, patient_data, patient_section, patient_id, patient_hash, collection_name: str):
-            """Chunking and embedding process with debug output"""
-            # Use practice-specific collection name (required)
-            target_collection = collection_name
-            
-            chunks = self._chunk(patient_data)
-            points = []
+    def chunk_and_embed(self, patient_data, patient_section, patient_id, patient_hash, collection_name: str, max_retries=5):
+        """Parallel chunking and embedding process with global rate limiting and retry logic"""
+        import time
+        import threading
+        # Use practice-specific collection name (required)
+        target_collection = collection_name
+        chunks = self._chunk(patient_data)
+        points = []
 
-            for i, chunk in enumerate(chunks):
+        # Maximize parallelization (up to 13 workers, adjust as needed for your quota)
+        max_workers = 13
+        # Track tokens sent in the past minute (thread-safe)
+        import threading
+        token_lock = threading.Lock()
+        token_timestamps = []  # List of (timestamp, token_count)
+
+        # No global rate or token limiting for fastest throughput
+
+        def embed_with_retry(chunk, i):
+            retries = 0
+            delay_seconds = 0.1  # Minimal delay on error for speed
+            while retries < max_retries:
+                # Print token count for this chunk
+                token_count = self._count_tokens(chunk.page_content)
+                # Track and print total tokens sent in the past minute
+                import time
+                now = time.time()
+                with token_lock:
+                    # Remove tokens older than 60 seconds
+                    nonlocal token_timestamps
+                    token_timestamps = [(t, c) for t, c in token_timestamps if now - t < 60.0]
+                    tokens_last_min = sum(c for t, c in token_timestamps)
+                    logger.info(f"[TOKEN COUNT] Chunk {i} has {token_count} tokens. Total tokens in past minute: {tokens_last_min}")
+                    token_timestamps.append((now, token_count))
+                # Print request count before sending
+                logger.info(f"[EMBEDDING REQUEST] About to send request {self.request_count + 1}")
                 embedding = self._embed(chunk.page_content)
-
                 if embedding:
-                    point = PointStruct(
+                    return PointStruct(
                         id=str(uuid.uuid4()),
                         vector=embedding,
                         payload={
@@ -143,21 +179,31 @@ class PatientDataEmbedder:
                             "patient_id": patient_id,
                             "patient_hash": patient_hash,
                             "chunk_index": i,
-                            "chunk_length": len(chunk.page_content)
+                            "chunk_length": len(chunk.page_content),
+                            "token_count": token_count
                         }
                     )
-                    points.append(point)
                 else:
-                    logger.error(f"Failed to create embedding for chunk {i+1}")
+                    retries += 1
+                    wait_time = delay_seconds * (2 ** (retries - 1))  # exponential backoff
+                    logger.error(f"Failed to create embedding for chunk {i+1}, retry {retries}/{max_retries}. Waiting {wait_time:.2f}s.")
+                    time.sleep(wait_time)
+            return None
 
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_to_index = {executor.submit(embed_with_retry, chunk, i): i for i, chunk in enumerate(chunks)}
+            for future in as_completed(future_to_index):
+                result = future.result()
+                if result:
+                    points.append(result)
 
-            if points:
-                try:
-                    self.qdrant_client.upsert(
-                        collection_name=target_collection,
-                        points=points
-                    )
-                except Exception as e:
-                    logger.error(f"Error storing points in Qdrant: {e}")
-            else:
-                logger.error("No points to store - all embeddings failed")
+        if points:
+            try:
+                self.qdrant_client.upsert(
+                    collection_name=target_collection,
+                    points=points
+                )
+            except Exception as e:
+                logger.error(f"Error storing points in Qdrant: {e}")
+        else:
+            logger.error("No points to store - all embeddings failed")

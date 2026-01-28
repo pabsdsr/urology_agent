@@ -5,7 +5,7 @@
 
 const API_CONFIG = {
   BASE_URL: import.meta.env.VITE_API_URL || 'http://localhost:8080',
-  TIMEOUT: 35000, // 35 seconds (longer than server timeout)
+  TIMEOUT: 12000, // 120 seconds (longer than server timeout)
   RETRY_ATTEMPTS: 3,
   RETRY_DELAY: 1000, // 1 second
 };

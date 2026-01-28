@@ -17,21 +17,7 @@ function MainApp() {
   
   const { logout } = useAuth();
 
-  // Fetch all patients on component mount
-  useEffect(() => {
-    const fetchPatients = async () => {
-      try {
-        const data = await patientService.getAllPatients();
-        console.log("Fetched patients:", data);
-        setPatients(data);
-      } catch (error) {
-        console.error("Failed to fetch patients:", error);
-        // Auth errors are handled automatically by apiClient
-      }
-    };
-
-    fetchPatients();
-  }, []);
+  // (Removed unused fetch all patients effect)
 
   // Server-side typeahead search for patients
   useEffect(() => {
@@ -238,6 +224,12 @@ function MainApp() {
                       </p>
                       <p className="text-sm text-teal-600">
                         ID: {selectedPatient.id}
+                        {selectedPatient.dob && (
+                          <>
+                            {" | DOB: "}
+                            {selectedPatient.dob}
+                          </>
+                        )}
                       </p>
                     </div>
                     <button
