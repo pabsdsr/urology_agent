@@ -43,9 +43,10 @@ def create_app():
     if os.getenv('ENVIRONMENT') == 'production':
         # Production domains - using actual deployed domains
         allowed_origins = [
-            # Backend domain
-            "https://api.uroassist.net",
+            # Frontend and backend domains
+            "https://www.uroassist.net",
             "https://uroassist.net",
+            "https://api.uroassist.net",
             # Allow localhost for testing during deployment
             # "http://localhost:5173",
         ]
