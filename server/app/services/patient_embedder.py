@@ -30,7 +30,8 @@ class PatientDataEmbedder:
         # Initialize AWS Bedrock client
         self.bedrock_client = boto3.client(
             service_name='bedrock-runtime',
-            region_name=aws_region
+            region_name=aws_region,
+            config=boto3.session.Config(max_pool_connections=100)
         )
         
         # Initialize Qdrant client with HTTPS/TLS enforcement

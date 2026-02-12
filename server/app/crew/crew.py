@@ -11,14 +11,19 @@ import os
 class PatchedBedrockLLM(BaseLLM):
     def call(self, prompt: str, **kwargs):
         if isinstance(prompt, str):
+            prompt_text = prompt
             messages = [{"role": "user", "content": prompt}]
         elif isinstance(prompt, list):
-            flattened_content = "\n\n".join(
+            prompt_text = "\n\n".join(
                 f"{msg.get('content', '')}" for msg in prompt
             )
-            messages = [{"role": "user", "content": flattened_content}]
+            messages = [{"role": "user", "content": prompt_text}]
         else:
             raise ValueError("Invalid prompt format passed to Bedrock model")
+        # Token counting (simple whitespace split, replace with model tokenizer if available)
+        token_count = len(prompt_text.split())
+        print(f"[LLM DEBUG] Prompt token count: {token_count}")
+        print(f"[LLM DEBUG] Prompt preview:\n{prompt_text[:500]}")  # Print first 500 chars
         kwargs.pop("prompt", None)
         kwargs["messages"] = messages
         return super().call(**kwargs)

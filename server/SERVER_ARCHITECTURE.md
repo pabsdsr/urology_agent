@@ -7,7 +7,7 @@ UroAssist backend is a FastAPI-based clinical assistant system that integrates w
 **Tech Stack**:
 - **Framework**: FastAPI (Python 3.11)
 - **AI Framework**: CrewAI 0.126.0
-- **LLM Provider**: AWS Bedrock (Claude 3.5 Sonnet)
+- **LLM Provider**: AWS Bedrock (Llama4 Maverick 17b)
 - **Vector Database**: Qdrant Cloud
 - **EHR Integration**: ModMed FHIR API
 - **Package Manager**: UV (fast Python installer)

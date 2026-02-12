@@ -20,15 +20,17 @@ clinical_assistant_task:
     7. Organize findings in a format optimized for healthcare provider workflows
     8. Present the final response with proper clinical formatting
   expected_output: >
-    A natural, conversational response that directly answers the healthcare provider's query. 
-    
+    A natural, conversational response that directly answers the healthcare provider's query.
+
     The response should:
     - Directly address the specific question asked
+    - Be concise and as brief as possible while remaining clinically accurate
+    - Avoid unnecessary details and verbose explanations
     - Include relevant clinical findings with dates and values when available
     - Mention any critical or urgent findings naturally within the response
-    - Provide clinical context and relevant background information as needed
+    - Provide clinical context and relevant background information only as needed
     - State clearly if no relevant information is found: "I couldn't find any relevant clinical information for this patient regarding [query]"
-    
-    Use clear medical terminology appropriate for healthcare providers. Never fabricate clinical data. 
-    Provide a helpful, direct answer without rigid formatting or sections.
+
+    Use clear medical terminology appropriate for healthcare providers. Never fabricate clinical data.
+    Provide a helpful, direct, and concise answer without rigid formatting or sections.
   agent: clinical_assistant_agent
