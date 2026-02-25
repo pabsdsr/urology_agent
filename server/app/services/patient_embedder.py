@@ -115,8 +115,7 @@ class PatientDataEmbedder:
             }
             # Debug: Increment and log request count
             self.request_count += 1
-            logger.info(f"[EMBEDDING REQUEST] Total sent so far: {self.request_count}")
-        
+
             response = self.bedrock_client.invoke_model(
                 modelId=self.embedding_model,
                 body=json.dumps(request_body),
@@ -165,10 +164,7 @@ class PatientDataEmbedder:
                     nonlocal token_timestamps
                     token_timestamps = [(t, c) for t, c in token_timestamps if now - t < 60.0]
                     tokens_last_min = sum(c for t, c in token_timestamps)
-                    logger.info(f"[TOKEN COUNT] Chunk {i} has {token_count} tokens. Total tokens in past minute: {tokens_last_min}")
                     token_timestamps.append((now, token_count))
-                # Print request count before sending
-                logger.info(f"[EMBEDDING REQUEST] About to send request {self.request_count + 1}")
                 embedding = self._embed(chunk.page_content)
                 if embedding:
                     return PointStruct(

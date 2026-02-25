@@ -20,10 +20,6 @@ class PatchedBedrockLLM(BaseLLM):
             messages = [{"role": "user", "content": prompt_text}]
         else:
             raise ValueError("Invalid prompt format passed to Bedrock model")
-        # Token counting (simple whitespace split, replace with model tokenizer if available)
-        token_count = len(prompt_text.split())
-        print(f"[LLM DEBUG] Prompt token count: {token_count}")
-        print(f"[LLM DEBUG] Prompt preview:\n{prompt_text[:500]}")  # Print first 500 chars
         kwargs.pop("prompt", None)
         kwargs["messages"] = messages
         return super().call(**kwargs)

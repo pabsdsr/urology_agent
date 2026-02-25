@@ -1,5 +1,4 @@
 import { useEffect, useState, useRef } from "react";
-import { useAuth } from "../context/AuthContext";
 import { patientService } from "../services/patientService.js";
 
 function MainApp() {
@@ -14,10 +13,6 @@ function MainApp() {
   const [loading, setLoading] = useState(false);
   const searchRef = useRef(null);
   const messagesEndRef = useRef(null);
-  
-  const { logout } = useAuth();
-
-  // (Removed unused fetch all patients effect)
 
   // Server-side typeahead search for patients
   useEffect(() => {
@@ -129,36 +124,8 @@ function MainApp() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 relative">
-      {/* Logo in top-left corner, aligned with UroAssist */}
-      <div className="absolute left-4 z-10">
-        <img 
-          src="/logo.png" 
-          alt="UroAssist Logo" 
-          className="w-20 h-20 object-contain"
-        />
-      </div>
-      {/* Header with logout */}
-      <header className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-5">
-            {/* UroAssist title */}
-            <h1 className="text-2xl font-bold text-gray-900">
-              UroAssist
-            </h1>
-            {/* Right side with logout button */}
-            <button
-              onClick={logout}
-              className="px-5 py-2.5 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-teal-600 hover:text-white rounded-md transition-colors"
-            >
-              Log out
-            </button>
-          </div>
-        </div>
-      </header>
-
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Patient Search */}
           <div className="lg:col-span-1">
             <div className="bg-white rounded-lg shadow p-6">
@@ -339,7 +306,6 @@ function MainApp() {
                 </div>
               </div>
             </div>
-          </div>
         </div>
       </div>
     </div>

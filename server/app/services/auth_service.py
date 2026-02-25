@@ -2,10 +2,13 @@ import httpx
 import jwt
 import os
 import logging
+import asyncio
+import pytz
 from datetime import datetime, timedelta
 from typing import Optional, Dict
 from app.models import LoginRequest, LoginResponse, SessionUser
 from app.crew.tools.tools import QdrantVectorSearchTool
+from app.services.appointment_service import _prewarm_schedule_cache, SCHEDULE_CACHE_WEEKS
 
 logger = logging.getLogger(__name__)
 
@@ -91,6 +94,31 @@ class AuthService:
             
             logger.info("User authenticated successfully", 
                        extra={"username": login_data.username, "practice_url": practice_url})
+
+            # Kick off background prewarm of the current 3‑week schedule cache window for this practice.
+            try:
+                pacific = pytz.timezone("US/Pacific")
+                today_pacific = datetime.now(pacific).date()
+                weekday = today_pacific.weekday()  # Monday=0
+                current_monday = today_pacific - timedelta(days=weekday)
+                window_start_dt = current_monday
+                window_end_dt = current_monday + timedelta(weeks=SCHEDULE_CACHE_WEEKS) - timedelta(days=1)
+                window_start = window_start_dt.strftime("%Y-%m-%d")
+                window_end = window_end_dt.strftime("%Y-%m-%d")
+                base_url = f"https://mmapi.ema-api.com/ema-prod/firm/{practice_url}/ema/fhir/v2"
+
+                asyncio.create_task(
+                    _prewarm_schedule_cache(
+                        base_url,
+                        session_user.modmed_access_token,
+                        practice_api_key,
+                        window_start,
+                        window_end,
+                        logger,
+                    )
+                )
+            except Exception as e:
+                logger.warning(f"[Schedule cache] Failed to start login prewarm for practice {practice_url}: {e}")
             
             return LoginResponse(
                 success=True,

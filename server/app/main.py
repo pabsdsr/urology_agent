@@ -7,8 +7,8 @@ import logging
 import os
 from app.services.client_service import client
 from app.crew.crew import ClinicalAssistantCrew
-from app.routes import run_crew
-from app.routes import auth
+from app.routes import auth, run_crew, patients, appointments
+
 
 warnings.filterwarnings("ignore", category=SyntaxWarning, module="pysbd")
 
@@ -21,6 +21,8 @@ logging.basicConfig(
         logging.FileHandler('app.log')  # File output
     ]
 )
+# Reduce httpx noise (every GET/POST logged at INFO)
+logging.getLogger("httpx").setLevel(logging.WARNING)
 
 # Create logger instance
 logger = logging.getLogger(__name__)
@@ -66,8 +68,8 @@ def create_app():
 
     app.include_router(auth.router)
     app.include_router(run_crew.router)
-    from app.routes import patients
     app.include_router(patients.router)
+    app.include_router(appointments.router)
 
     @app.get("/")
     def read_root():
@@ -112,7 +114,6 @@ def run(query: str, id: str, practice_url: str = None, user_qdrant_tool = None):
     for task in tasks_output:
         if task.get("agent", "").strip() == "Clinical Assistant Specialist":
             final_answer = task.get("raw", "No final answer found.")
-            logger.info(f"Final answer: {final_answer}")
             return final_answer
 
 
