@@ -32,6 +32,22 @@ function PractitionerSchedule() {
     return `${year}-${month}-${day}`;
   };
 
+  const addDays = (dateStr, delta) => {
+    const d = new Date(`${dateStr}T00:00:00`);
+    d.setDate(d.getDate() + delta);
+    return formatYMD(d);
+  };
+
+  const goToPrev = () => {
+    const step = viewMode === "week" ? 7 : 1;
+    setDate((prev) => addDays(prev, -step));
+  };
+
+  const goToNext = () => {
+    const step = viewMode === "week" ? 7 : 1;
+    setDate((prev) => addDays(prev, step));
+  };
+
   const getWorkWeekRange = (baseDateStr) => {
     const d = new Date(`${baseDateStr}T00:00:00`);
     const dayOfWeek = d.getDay(); // 0 = Sun, 1 = Mon, ...
@@ -206,19 +222,36 @@ function PractitionerSchedule() {
           <h2 className="text-lg font-bold">Schedule</h2>
         </div>
         <div className="flex flex-wrap items-center gap-4 mb-4">
-        <label>
-          Date:
-          <input
-            type="date"
-            value={date}
-            onChange={e => {
-              setDate(e.target.value);
-              // When changing the date, default back to day view
-              setViewMode("day");
-            }}
-            className="ml-2 border px-2 py-1 rounded"
-          />
-        </label>
+        <div className="flex items-center gap-2">
+          <label className="flex items-center gap-1">
+            <span className="text-sm text-gray-600">Date:</span>
+            <input
+              type="date"
+              value={date}
+              onChange={e => {
+                setDate(e.target.value);
+                setViewMode("day");
+              }}
+              className="border px-2 py-1 rounded"
+            />
+          </label>
+          <button
+            type="button"
+            onClick={goToPrev}
+            className="inline-flex items-center justify-center h-7 w-7 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-teal-600 hover:text-white rounded-md border border-gray-300 transition-colors"
+            title={viewMode === "week" ? "Previous week" : "Previous day"}
+          >
+            ←
+          </button>
+          <button
+            type="button"
+            onClick={goToNext}
+            className="inline-flex items-center justify-center h-7 w-7 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-teal-600 hover:text-white rounded-md border border-gray-300 transition-colors"
+            title={viewMode === "week" ? "Next week" : "Next day"}
+          >
+            →
+          </button>
+        </div>
         <div className="flex items-center gap-2">
           <span className="text-sm text-gray-600">View:</span>
           <button
@@ -240,43 +273,55 @@ function PractitionerSchedule() {
                 ? "bg-teal-600 text-white border-teal-600"
                 : "bg-white text-gray-700 border-gray-300"
             }`}
-          >
-            Work week
+            >
+            Week
           </button>
         </div>
       </div>
       {loading ? (
-        <div>Loading...</div>
+        <div className="flex items-center justify-center py-12 text-gray-500">
+          <div className="flex items-center gap-2">
+            <div className="animate-spin rounded-full h-5 w-5 border-2 border-gray-300 border-t-teal-600" />
+            <span>Loading schedule...</span>
+          </div>
+        </div>
       ) : error ? (
-        <div className="text-red-600">{error}</div>
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-red-700 text-sm">
+          {error}
+        </div>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="min-w-full border text-sm">
+        <div className="overflow-x-auto rounded-lg border border-gray-200">
+          <table className="min-w-full text-sm">
             <thead>
-              <tr>
-                <th className="border px-2 py-1 w-40">Practitioner</th>
+              <tr className="border-b border-gray-200 bg-gray-100">
+                <th className="px-4 py-3 text-left font-medium text-gray-900 w-40">
+                  Practitioner
+                </th>
                 {currentDays.map((day) => (
                   <th
                     key={day}
-                    className="border px-2 py-1 whitespace-nowrap w-32"
+                    className="border-l border-gray-200 px-4 py-3 text-center font-medium text-gray-900 whitespace-nowrap w-32"
                   >
                     {formatColumnDateLabel(day)}
                   </th>
                 ))}
               </tr>
             </thead>
-            <tbody>
-              {orderedPractitionerIds.map((practitionerId) => (
-                <tr key={practitionerId}>
-                  <td className="border px-2 py-1 align-top whitespace-nowrap w-40">
+            <tbody className="bg-white">
+              {orderedPractitionerIds.map((practitionerId, rowIndex) => (
+                <tr
+                  key={practitionerId}
+                  className={rowIndex % 2 === 0 ? "bg-white" : "bg-gray-50"}
+                >
+                  <td className="px-4 py-2.5 font-medium text-gray-900 align-top whitespace-nowrap border-r border-gray-100">
                     {displayPractitioner(practitionerId)}
                   </td>
                   {currentDays.map((day) => (
                     <td
                       key={day}
-                      className="border px-2 py-1 align-top w-32"
+                      className="border-l border-gray-200 px-4 py-2.5 align-top w-32 text-gray-700 text-sm"
                     >
-                      <div className="flex flex-col gap-1">
+                      <div className="flex flex-col gap-1.5">
                         <div className="whitespace-nowrap">
                           {getBlockDisplay(day, practitionerId, "AM")}
                         </div>

@@ -100,7 +100,7 @@ _practitioner_location_cache: dict = {}  # base_url -> { "practitioner_names": {
 #   "schedule": Dict[str, ...],
 #   "cached_at": float,
 # }
-SCHEDULE_CACHE_WEEKS = int(os.getenv("SCHEDULE_CACHE_WEEKS", 3))
+SCHEDULE_CACHE_WEEKS = int(os.getenv("SCHEDULE_CACHE_WEEKS", 4))
 SCHEDULE_CACHE_TTL = int(os.getenv("SCHEDULE_CACHE_TTL", 900))  # 15 minutes default
 _schedule_cache: dict = {}  # base_url -> cache_entry
 
