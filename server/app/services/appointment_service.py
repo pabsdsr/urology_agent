@@ -374,10 +374,10 @@ async def fetch_appointments_for_range(start_dt: datetime, end_dt: datetime, mod
                 resource = appt.get("resource", {})
                 start = resource.get("start")
                 end = resource.get("end")
-            # Skip cancelled appointments – they should not appear on the schedule grid
-            status = (resource.get("status") or "").lower()
-            if status == "cancelled":
-                continue
+                # Skip cancelled appointments – they should not appear on the schedule grid
+                status = (resource.get("status") or "").lower()
+                if status == "cancelled":
+                    continue
                 if not start_in_range(start):
                     continue
                 # Match full URLs for Practitioner, Location, Patient. Normalize practitioner id so it matches keys from Practitioner list/by-id.
