@@ -370,13 +370,16 @@ async def fetch_appointments_for_range(start_dt: datetime, end_dt: datetime, mod
                 except Exception:
                     return False
 
+            # Appointment status values we exclude from the schedule grid
+            EXCLUDED_STATUSES = {"cancelled", "proposed", "pending", "entered-in-error", "waitlist"}
+
             for appt in entry:
                 resource = appt.get("resource", {})
                 start = resource.get("start")
                 end = resource.get("end")
-                # Skip cancelled appointments – they should not appear on the schedule grid
+                # Skip appointments that should not appear on the schedule grid
                 status = (resource.get("status") or "").lower()
-                if status == "cancelled":
+                if status in EXCLUDED_STATUSES:
                     continue
                 if not start_in_range(start):
                     continue
