@@ -501,15 +501,18 @@ async def get_practitioner_schedule_by_date(start_date: str, end_date: str, modm
     if request_in_window:
         now = time.monotonic()
         cache_entry = _schedule_cache.get(base_url)
-        cache_valid = (
+        window_matches = (
             cache_entry
-            and (now - cache_entry["cached_at"] < SCHEDULE_CACHE_TTL)
             and cache_entry["window_start"] == window_start
             and cache_entry["window_end"] == window_end
         )
+        cache_fresh = (
+            window_matches
+            and (now - cache_entry["cached_at"] < SCHEDULE_CACHE_TTL)
+        )
 
-        if cache_valid:
-            # Serve entirely from warm cache.
+        if cache_fresh:
+            # Serve from fresh cache.
             appointments_all = cache_entry["appointments"]
             schedule_all = cache_entry["schedule"]
 
@@ -520,14 +523,31 @@ async def get_practitioner_schedule_by_date(start_date: str, end_date: str, modm
                 a for a in appointments_all if "start" in a and in_range(a["start"][:10])
             ]
             schedule = {d: v for d, v in schedule_all.items() if in_range(d)}
+        elif window_matches:
+            # Serve stale cache immediately, but refresh the window in the background.
+            appointments_all = cache_entry["appointments"]
+            schedule_all = cache_entry["schedule"]
+
+            def in_range(date_str: str) -> bool:
+                return start_date <= date_str <= end_date
+
+            appointments = [
+                a for a in appointments_all if "start" in a and in_range(a["start"][:10])
+            ]
+            schedule = {d: v for d, v in schedule_all.items() if in_range(d)}
+
+            asyncio.create_task(
+                _prewarm_schedule_cache(
+                    base_url, modmed_token, practice_api_key, window_start, window_end, logger
+                )
+            )
         else:
-            # Staged-load: fetch just the requested range for this response.
+            # No cache (or different window): fetch just the requested range, then warm full window in background.
             appointments = await get_appointments_by_date(
                 start_date, end_date, modmed_token, base_url, practice_api_key
             )
             schedule = aggregate_practitioner_schedule(appointments)
 
-            # Warm the 3‑week cache window in the background (non-blocking).
             asyncio.create_task(
                 _prewarm_schedule_cache(
                     base_url, modmed_token, practice_api_key, window_start, window_end, logger

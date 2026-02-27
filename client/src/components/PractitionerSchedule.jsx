@@ -113,33 +113,45 @@ function PractitionerSchedule() {
   const { schedule, practitioner_names, practitioner_roles, location_names } = data;
   // Surgery column key from backend (same as server SURGERY_COLUMN_KEY)
   const SURGERY_COLUMN_KEY = "Surgery";
-  // Only show selected practitioners on the schedule (match by practitioner name).
-  // Order is hard-coded: all MDs (alphabetical), then PAs (alphabetical), then NPs (alphabetical).
-  // Matching is done by token inclusion (ignoring credentials like MD/PA/NP and commas),
-  // so names with extra middle initials or suffixes still match.
-  const ALLOWED_PRACTITIONER_NAMES = [
-    // Physicians (MDs)
-    "Aaron Spitz",
-    "Daniel Su",
-    "Don Bui",
-    "James Meaglia",
-    "Josh Randall",
-    "Karan Singh",
-    "Leah Nakamura",
-    "Moses Kim",
-    "Neyssan Tebyani",
-    "Paul Oh",
-    "Poone Shoureshi",
-    "Tammy Ho",
-    // Physician Assistants (PAs)
-    "Daniel Cabanero",
-    "Jennifer Kim",
-    "Olivia Carr",
-    "Taralyn Johnson",
-    // Nurse Practitioners (NPs)
-    "Ashley Swanson",
-    "Michael Bui",
+  // Practitioner pods and desired display order within each pod.
+  const PODS = [
+    {
+      name: "North pod",
+      practitioners: [
+        "Don Bui",
+        "Leah Nakamura",
+        "Paul Oh",
+        "Tammy Ho",
+        "Ashley Swanson",
+        "Michael Bui",
+      ],
+    },
+    {
+      name: "Central pod",
+      practitioners: [
+        "Moses Kim",
+        "Daniel Su",
+        "Aaron Spitz",
+        "Neyssan Tebyani",
+        "Daniel Cabanero",
+        "Taralyn Johnson",
+      ],
+    },
+    {
+      name: "South pod",
+      practitioners: [
+        "Josh Randall",
+        "Poone Shoureshi",
+        "Karan Singh",
+        "James Meaglia",
+        "Olivia Carr",
+        "Jennifer Kim",
+      ],
+    },
   ];
+
+  // Flattened list of all practitioner display names we care about.
+  const ALLOWED_PRACTITIONER_NAMES = PODS.flatMap((pod) => pod.practitioners);
   const tokenizeName = (name) => {
     if (!name) return [];
     const credentialTokens = new Set(["md", "m.d.", "pa", "p.a.", "np", "n.p."]);
@@ -150,26 +162,26 @@ function PractitionerSchedule() {
       .filter(Boolean)
       .filter((t) => !credentialTokens.has(t));
   };
-  const ALLOWED_PRACTITIONER_NAME_TOKENS = ALLOWED_PRACTITIONER_NAMES.map((n) => ({
-    tokens: new Set(tokenizeName(n)),
-  }));
-  // Start from all known practitioners (so they show even with no schedule),
-  // then project them into the exact hard-coded order above.
   const allPractitionerIdsRaw = Object.keys(practitioner_names || {});
-  const orderedPractitionerIds = [];
-  for (const { tokens } of ALLOWED_PRACTITIONER_NAME_TOKENS) {
-    const matchId = allPractitionerIdsRaw.find((id) => {
+  const findPractitionerIdForName = (targetName) => {
+    const targetTokens = new Set(tokenizeName(targetName));
+    return allPractitionerIdsRaw.find((id) => {
       const name = practitioner_names[id] || id;
       const nameTokens = new Set(tokenizeName(name));
-      for (const t of tokens) {
+      for (const t of targetTokens) {
         if (!nameTokens.has(t)) return false;
       }
       return true;
     });
-    if (matchId && !orderedPractitionerIds.includes(matchId)) {
-      orderedPractitionerIds.push(matchId);
-    }
-  }
+  };
+
+  // Resolve practitioner IDs per pod, preserving the specified order.
+  const podsWithIds = PODS.map((pod) => ({
+    name: pod.name,
+    practitionerIds: pod.practitioners
+      .map((displayName) => findPractitionerIdForName(displayName))
+      .filter(Boolean),
+  }));
   const formatLocationLabel = (label) => {
     if (!label) return "";
     const lower = label.toLowerCase();
@@ -293,14 +305,14 @@ function PractitionerSchedule() {
         <div className="overflow-x-auto rounded-lg border border-gray-200">
           <table className="min-w-full text-sm">
             <thead>
-              <tr className="border-b border-gray-200 bg-gray-100">
-                <th className="px-4 py-3 text-left font-medium text-gray-900 w-40">
+              <tr className="border-b border-gray-200 bg-gray-200">
+                <th className="px-4 py-3 text-left font-semibold text-gray-900 w-40">
                   Practitioner
                 </th>
                 {currentDays.map((day) => (
                   <th
                     key={day}
-                    className="border-l border-gray-200 px-4 py-3 text-center font-medium text-gray-900 whitespace-nowrap w-32"
+                    className="border-l border-gray-200 px-4 py-3 text-center font-semibold text-gray-900 whitespace-nowrap w-32"
                   >
                     {formatColumnDateLabel(day)}
                   </th>
@@ -308,30 +320,42 @@ function PractitionerSchedule() {
               </tr>
             </thead>
             <tbody className="bg-white">
-              {orderedPractitionerIds.map((practitionerId, rowIndex) => (
-                <tr
-                  key={practitionerId}
-                  className={rowIndex % 2 === 0 ? "bg-white" : "bg-gray-50"}
-                >
-                  <td className="px-4 py-2.5 font-medium text-gray-900 align-top whitespace-nowrap border-r border-gray-100">
-                    {displayPractitioner(practitionerId)}
-                  </td>
-                  {currentDays.map((day) => (
+              {podsWithIds.map((pod) => (
+                <React.Fragment key={pod.name}>
+                  <tr>
                     <td
-                      key={day}
-                      className="border-l border-gray-200 px-4 py-2.5 align-top w-32 text-gray-700 text-sm"
+                      colSpan={1 + currentDays.length}
+                      className="bg-gray-100 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-800"
                     >
-                      <div className="flex flex-col gap-1.5">
-                        <div className="whitespace-nowrap">
-                          {getBlockDisplay(day, practitionerId, "AM")}
-                        </div>
-                        <div className="whitespace-nowrap">
-                          {getBlockDisplay(day, practitionerId, "PM")}
-                        </div>
-                      </div>
+                      {pod.name}
                     </td>
+                  </tr>
+                  {pod.practitionerIds.map((practitionerId, rowIndex) => (
+                    <tr
+                      key={practitionerId}
+                      className={rowIndex % 2 === 0 ? "bg-white" : "bg-gray-50"}
+                    >
+                      <td className="px-4 py-2.5 font-medium text-gray-900 align-top whitespace-nowrap border-r border-gray-100">
+                        {displayPractitioner(practitionerId)}
+                      </td>
+                      {currentDays.map((day) => (
+                        <td
+                          key={day}
+                          className="border-l border-gray-200 px-4 py-2.5 align-top w-32 text-gray-700 text-sm"
+                        >
+                          <div className="flex flex-col gap-1.5">
+                            <div className="whitespace-nowrap">
+                              {getBlockDisplay(day, practitionerId, "AM")}
+                            </div>
+                            <div className="whitespace-nowrap">
+                              {getBlockDisplay(day, practitionerId, "PM")}
+                            </div>
+                          </div>
+                        </td>
+                      ))}
+                    </tr>
                   ))}
-                </tr>
+                </React.Fragment>
               ))}
             </tbody>
           </table>
