@@ -15,15 +15,15 @@ function DashboardLayout() {
       {/* Top dashboard bar */}
       <header className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-4">
+          <div className="flex justify-between items-center py-1">
             {/* Left: logo + title */}
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
               <img
                 src="/logo.png"
                 alt="UroAssist Logo"
-                className="w-10 h-10 object-contain"
+                className="w-18 h-18 object-contain"
               />
-              <h1 className="text-xl font-bold text-gray-900">UroAssist</h1>
+              <h1 className="text-2xl font-bold text-gray-900">UroAssist</h1>
             </div>
 
             {/* Right: nav buttons + logout */}

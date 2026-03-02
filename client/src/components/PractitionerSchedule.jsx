@@ -244,7 +244,7 @@ function PractitionerSchedule() {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="bg-white rounded-lg shadow pt-6 px-6 pb-3">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-bold">Schedule</h2>
+          <h2 className="text-xl font-bold">Schedule</h2>
         </div>
         <div className="flex flex-wrap items-center gap-4 mb-4">
         <div className="flex items-center gap-2">
@@ -319,13 +319,13 @@ function PractitionerSchedule() {
           <table className="min-w-full text-sm">
             <thead>
               <tr className="border-b border-gray-200 bg-gray-200">
-                <th className="px-4 py-3 text-left font-semibold text-gray-900 w-40">
+                <th className="px-4 py-3 text-left font-semibold text-gray-900 w-40 text-[15px]">
                   Practitioner
                 </th>
                 {currentDays.map((day) => (
                   <th
                     key={day}
-                    className="border-l border-gray-200 px-4 py-3 text-center font-semibold text-gray-900 whitespace-nowrap w-32"
+                    className="border-l border-gray-200 px-4 py-3 text-center font-semibold text-gray-900 whitespace-nowrap w-32 text-[15px]"
                   >
                     {formatColumnDateLabel(day)}
                   </th>
@@ -336,7 +336,7 @@ function PractitionerSchedule() {
               {podsWithIds.map((pod) => (
                 <React.Fragment key={pod.name}>
                   <tr>
-                    <td className="bg-gray-100 px-4 py-3 text-sm font-semibold uppercase tracking-wide text-gray-800">
+                    <td className="bg-gray-100 px-4 py-3 text-[13px] font-semibold uppercase tracking-wide text-gray-800">
                       {pod.name}
                     </td>
                     {currentDays.map((day) => {
@@ -345,9 +345,9 @@ function PractitionerSchedule() {
                       return (
                         <td
                           key={day}
-                          className="bg-gray-100 border-l border-gray-200 px-4 py-3 align-top w-32 text-gray-900 text-xs"
+                          className="bg-gray-100 border-l border-gray-200 px-4 py-3 align-middle w-32 text-gray-900 text-[13px]"
                         >
-                          <div className="space-y-0.5">
+                          <div className="flex flex-col justify-center items-start space-y-0.5">
                             {entries.length > 0 && (
                               entries.map((entry, idx) => (
                                 <div
@@ -370,13 +370,13 @@ function PractitionerSchedule() {
                       key={practitionerId}
                       className={rowIndex % 2 === 0 ? "bg-white" : "bg-gray-50"}
                     >
-                      <td className="px-4 py-2.5 font-medium text-gray-900 align-top whitespace-nowrap border-r border-gray-100">
+                      <td className="px-4 py-2.5 font-medium text-gray-900 align-middle whitespace-nowrap border-r border-gray-100">
                         {displayPractitioner(practitionerId)}
                       </td>
                       {currentDays.map((day) => (
                         <td
                           key={day}
-                          className="border-l border-gray-200 px-4 py-2.5 align-top w-32 text-gray-700 text-sm"
+                          className="border-l border-gray-200 px-4 py-2.5 align-top w-32 text-gray-700 text-[13px]"
                         >
                           <div className="flex flex-col gap-1.5">
                             <div className="whitespace-nowrap">

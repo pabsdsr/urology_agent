@@ -487,12 +487,14 @@ async def get_practitioner_schedule_by_date(start_date: str, end_date: str, modm
     logger = logging.getLogger("app.services.appointment_service")
     pacific = pytz.timezone("US/Pacific")
 
-    # Fixed cache window: 3 weeks starting from Monday of the *current* work week (Pacific).
+    # Fixed cache window: 3 weeks starting from Sunday of the *current* week (Pacific).
     today_pacific = datetime.now(pacific).date()
-    weekday = today_pacific.weekday()  # Monday=0
-    current_monday = today_pacific - timedelta(days=weekday)
-    window_start_dt = current_monday
-    window_end_dt = current_monday + timedelta(weeks=SCHEDULE_CACHE_WEEKS) - timedelta(days=1)
+    weekday = today_pacific.weekday()  # Monday=0 ... Sunday=6
+    # Move back to Sunday of this week: 0 when Sunday, 1 when Monday, etc.
+    days_to_subtract = (weekday + 1) % 7
+    current_sunday = today_pacific - timedelta(days=days_to_subtract)
+    window_start_dt = current_sunday
+    window_end_dt = current_sunday + timedelta(weeks=SCHEDULE_CACHE_WEEKS) - timedelta(days=1)
     window_start = window_start_dt.strftime("%Y-%m-%d")
     window_end = window_end_dt.strftime("%Y-%m-%d")
 
