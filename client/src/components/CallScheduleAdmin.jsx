@@ -1,4 +1,11 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { createPortal } from "react-dom";
 import { callScheduleService } from "../services/callScheduleService";
 
 function formatYMD(d) {
@@ -67,8 +74,9 @@ export default function CallScheduleAdmin() {
         setOpenPractitionerPicker(null);
         return;
       }
-      const dropdownRoots =
-        containerRef.current.querySelectorAll('[data-dropdown-root="true"]');
+      const dropdownRoots = document.querySelectorAll(
+        '[data-dropdown-root="true"]'
+      );
       let insideDropdown = false;
       dropdownRoots.forEach((el) => {
         if (el.contains(event.target)) {
@@ -86,6 +94,50 @@ export default function CallScheduleAdmin() {
       document.removeEventListener("click", handleDocumentClick);
     };
   }, []);
+
+  const DropdownPortal = ({ open, anchorEl, children }) => {
+    const [style, setStyle] = useState(null);
+
+    useLayoutEffect(() => {
+      if (!open || !anchorEl) return;
+
+      const update = () => {
+        const rect = anchorEl.getBoundingClientRect();
+        const MENU_MAX_HEIGHT_PX = 192; // Tailwind max-h-48
+        const GAP_PX = 4;
+        const availableBelow = Math.max(80, window.innerHeight - rect.bottom - GAP_PX - 8);
+        const maxHeight = Math.min(MENU_MAX_HEIGHT_PX, availableBelow);
+
+        const nextStyle = {
+          position: "fixed",
+          top: rect.bottom + GAP_PX,
+          left: rect.left,
+          width: rect.width,
+          maxHeight,
+          overflow: "auto",
+        };
+
+        setStyle(nextStyle);
+      };
+
+      update();
+      window.addEventListener("resize", update);
+      window.addEventListener("scroll", update, true);
+      return () => {
+        window.removeEventListener("resize", update);
+        window.removeEventListener("scroll", update, true);
+      };
+    }, [open, anchorEl]);
+
+    if (!open || !anchorEl || !style) return null;
+
+    return createPortal(
+      <div data-dropdown-root="true" style={style} className="z-[99999]">
+        {children}
+      </div>,
+      document.body
+    );
+  };
 
   const handleWeekStartChange = (val) => {
     if (!val) return;
@@ -193,29 +245,21 @@ export default function CallScheduleAdmin() {
     );
   };
 
-  const allLocationOptions = useMemo(
-    () => [...new Set([...customLocations])],
-    [customLocations]
-  );
+  const allLocationOptions = useMemo(() => {
+    const unique = [...new Set(customLocations)];
+    return unique.sort((a, b) =>
+      a.toLowerCase().localeCompare(b.toLowerCase())
+    );
+  }, [customLocations]);
 
-  const allPractitionerOptions = useMemo(
-    () => [...new Set([...customPractitioners])],
-    [customPractitioners]
-  );
+  const allPractitionerOptions = useMemo(() => {
+    const unique = [...new Set(customPractitioners)];
+    return unique.sort((a, b) =>
+      a.toLowerCase().localeCompare(b.toLowerCase())
+    );
+  }, [customPractitioners]);
 
-  const renderPodCell = (row, rowIdx, podKey, label) => {
-    const isLocationMenuOpen = (entryIdx) =>
-      openLocationPicker &&
-      openLocationPicker.rowIdx === rowIdx &&
-      openLocationPicker.podKey === podKey &&
-      openLocationPicker.entryIdx === entryIdx;
-
-    const isPractitionerMenuOpen = (entryIdx) =>
-      openPractitionerPicker &&
-      openPractitionerPicker.rowIdx === rowIdx &&
-      openPractitionerPicker.podKey === podKey &&
-      openPractitionerPicker.entryIdx === entryIdx;
-
+  const renderPodCell = (row, rowIdx, podKey) => {
     return (
       <td className="px-4 py-2 align-top">
         <div className="space-y-1.5">
@@ -240,15 +284,20 @@ export default function CallScheduleAdmin() {
                       e.target.value
                     )
                   }
-                  onFocus={() => {
-                    setOpenLocationPicker({ rowIdx, podKey, entryIdx });
+                  onFocus={(e) => {
+                    setOpenLocationPicker({
+                      rowIdx,
+                      podKey,
+                      entryIdx,
+                      anchorEl: e.currentTarget,
+                    });
                     setOpenPractitionerPicker(null);
                   }}
                 />
                 <button
                   type="button"
                   className="absolute inset-y-0 right-0 px-1 text-gray-400 hover:text-gray-600 text-xs"
-                  onClick={() =>
+                  onClick={(e) =>
                     setOpenLocationPicker((prev) => {
                       const isSame =
                         prev &&
@@ -259,86 +308,16 @@ export default function CallScheduleAdmin() {
                         return null;
                       }
                       setOpenPractitionerPicker(null);
-                      return { rowIdx, podKey, entryIdx };
+                      const inputEl =
+                        e.currentTarget?.parentElement?.querySelector("input") ||
+                        null;
+                      return { rowIdx, podKey, entryIdx, anchorEl: inputEl };
                     })
                   }
                   tabIndex={-1}
                 >
                   ▾
                 </button>
-                {isLocationMenuOpen(entryIdx) && (
-                  <div className="absolute z-20 mt-1 w-full max-h-48 overflow-auto rounded-md border border-gray-200 bg-white shadow-lg text-xs">
-                    {allLocationOptions.map((opt) => {
-                      return (
-                        <button
-                          key={opt}
-                          type="button"
-                          className="block w-full text-left px-2 py-1 hover:bg-gray-100"
-                          onClick={() => {
-                            handleEntryChange(
-                              rowIdx,
-                              podKey,
-                              entryIdx,
-                              "location",
-                              opt
-                            );
-                            setOpenLocationPicker(null);
-                          }}
-                        >
-                          <div className="flex items-center justify-between gap-2">
-                            <span>{opt}</span>
-                            <button
-                              type="button"
-                              className="text-gray-400 hover:text-red-500 text-[10px] px-1"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setCustomLocations((prev) => {
-                                  const next = prev.filter((x) => x !== opt);
-                                  if (typeof window !== "undefined") {
-                                    window.localStorage.setItem(
-                                      "callScheduleCustomLocations",
-                                      JSON.stringify(next)
-                                    );
-                                  }
-                                  return next;
-                                });
-                              }}
-                              aria-label={`Delete ${opt} from locations`}
-                            >
-                              ×
-                            </button>
-                          </div>
-                        </button>
-                      );
-                    })}
-                    <button
-                      type="button"
-                      className="block w-full text-left px-2 py-1 border-t border-gray-200 text-teal-700 hover:bg-gray-50"
-                      onClick={() => {
-                        const value =
-                          (row[podKey]?.[entryIdx]?.location || "").trim();
-                        if (!value) return;
-                        setCustomLocations((prev) => {
-                          const next = Array.from(new Set([...prev, value]));
-                          if (typeof window !== "undefined") {
-                            window.localStorage.setItem(
-                              "callScheduleCustomLocations",
-                              JSON.stringify(next)
-                            );
-                          }
-                          return next;
-                        });
-                        setOpenLocationPicker(null);
-                      }}
-                    >
-                      + Add “
-                      {(
-                        row[podKey]?.[entryIdx]?.location || ""
-                      ).trim() || " "}
-                      ” as location
-                    </button>
-                  </div>
-                )}
               </div>
               <div className="relative flex-1 min-w-[140px] max-w-[180px]">
                 <input
@@ -355,15 +334,20 @@ export default function CallScheduleAdmin() {
                       e.target.value
                     )
                   }
-                  onFocus={() => {
-                    setOpenPractitionerPicker({ rowIdx, podKey, entryIdx });
+                  onFocus={(e) => {
+                    setOpenPractitionerPicker({
+                      rowIdx,
+                      podKey,
+                      entryIdx,
+                      anchorEl: e.currentTarget,
+                    });
                     setOpenLocationPicker(null);
                   }}
                 />
                 <button
                   type="button"
                   className="absolute inset-y-0 right-0 px-1 text-gray-400 hover:text-gray-600 text-xs"
-                  onClick={() =>
+                  onClick={(e) =>
                     setOpenPractitionerPicker((prev) => {
                       const isSame =
                         prev &&
@@ -374,84 +358,16 @@ export default function CallScheduleAdmin() {
                         return null;
                       }
                       setOpenLocationPicker(null);
-                      return { rowIdx, podKey, entryIdx };
+                      const inputEl =
+                        e.currentTarget?.parentElement?.querySelector("input") ||
+                        null;
+                      return { rowIdx, podKey, entryIdx, anchorEl: inputEl };
                     })
                   }
                   tabIndex={-1}
                 >
                   ▾
                 </button>
-                {isPractitionerMenuOpen(entryIdx) && (
-                  <div className="absolute z-20 mt-1 w-full max-h-48 overflow-auto rounded-md border border-gray-200 bg-white shadow-lg text-xs">
-                    {allPractitionerOptions.map((opt) => (
-                      <button
-                        key={opt}
-                        type="button"
-                        className="block w-full text-left px-2 py-1 hover:bg-gray-100"
-                        onClick={() => {
-                          handleEntryChange(
-                            rowIdx,
-                            podKey,
-                            entryIdx,
-                            "practitioner",
-                            opt
-                          );
-                          setOpenPractitionerPicker(null);
-                        }}
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <span>{opt}</span>
-                          <button
-                            type="button"
-                            className="text-gray-400 hover:text-red-500 text-[10px] px-1"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setCustomPractitioners((prev) => {
-                                const next = prev.filter((x) => x !== opt);
-                                if (typeof window !== "undefined") {
-                                  window.localStorage.setItem(
-                                    "callScheduleCustomPractitioners",
-                                    JSON.stringify(next)
-                                  );
-                                }
-                                return next;
-                              });
-                            }}
-                            aria-label={`Delete ${opt} from practitioners`}
-                          >
-                            ×
-                          </button>
-                        </div>
-                      </button>
-                    ))}
-                    <button
-                      type="button"
-                      className="block w-full text-left px-2 py-1 border-t border-gray-200 text-teal-700 hover:bg-gray-50"
-                      onClick={() => {
-                        const value =
-                          (row[podKey]?.[entryIdx]?.practitioner || "").trim();
-                        if (!value) return;
-                        setCustomPractitioners((prev) => {
-                          const next = Array.from(new Set([...prev, value]));
-                          if (typeof window !== "undefined") {
-                            window.localStorage.setItem(
-                              "callScheduleCustomPractitioners",
-                              JSON.stringify(next)
-                            );
-                          }
-                          return next;
-                        });
-                        setOpenPractitionerPicker(null);
-                      }}
-                    >
-                      + Add “
-                      {(
-                        row[podKey]?.[entryIdx]?.practitioner || ""
-                      ).trim() || " "}
-                      ” as practitioner
-                    </button>
-                  </div>
-                )}
               </div>
               <button
                 type="button"
@@ -492,11 +408,11 @@ export default function CallScheduleAdmin() {
   return (
     <div
       ref={containerRef}
-      className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8"
+      className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 overflow-visible"
     >
-      <div className="bg-white rounded-lg shadow p-6">
+      <div className="relative bg-white rounded-lg shadow p-6 overflow-visible">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-bold">Call Schedule (Admin)</h2>
+          <h2 className="text-xl font-bold">Call Schedule (Admin)</h2>
         </div>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="flex items-center gap-3">
@@ -514,7 +430,7 @@ export default function CallScheduleAdmin() {
             </span>
           </div>
 
-          <div className="overflow-x-auto rounded-lg border border-gray-200">
+          <div className="relative z-10 overflow-visible rounded-lg border border-gray-200">
             <table className="min-w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-200 bg-gray-100">
@@ -541,14 +457,180 @@ export default function CallScheduleAdmin() {
                     <td className="px-4 py-2 whitespace-nowrap text-gray-800">
                       {row.date}
                     </td>
-                    {renderPodCell(row, idx, "north", "North")}
-                    {renderPodCell(row, idx, "central", "Central")}
-                    {renderPodCell(row, idx, "south", "South")}
+                    {renderPodCell(row, idx, "north")}
+                    {renderPodCell(row, idx, "central")}
+                    {renderPodCell(row, idx, "south")}
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+
+          <DropdownPortal
+            open={!!openLocationPicker}
+            anchorEl={openLocationPicker?.anchorEl}
+          >
+            <div className="rounded-md border border-gray-200 bg-white shadow-lg text-xs">
+              {allLocationOptions.map((opt) => {
+                return (
+                  <button
+                    key={opt}
+                    type="button"
+                    className="block w-full text-left px-2 py-1 hover:bg-gray-100"
+                    onClick={() => {
+                      if (!openLocationPicker) return;
+                      handleEntryChange(
+                        openLocationPicker.rowIdx,
+                        openLocationPicker.podKey,
+                        openLocationPicker.entryIdx,
+                        "location",
+                        opt
+                      );
+                      setOpenLocationPicker(null);
+                    }}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span>{opt}</span>
+                      <button
+                        type="button"
+                        className="text-gray-400 hover:text-red-500 text-[10px] px-1"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setCustomLocations((prev) => {
+                            const next = prev.filter((x) => x !== opt);
+                            if (typeof window !== "undefined") {
+                              window.localStorage.setItem(
+                                "callScheduleCustomLocations",
+                                JSON.stringify(next)
+                              );
+                            }
+                            return next;
+                          });
+                        }}
+                        aria-label={`Delete ${opt} from locations`}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  </button>
+                );
+              })}
+              <button
+                type="button"
+                className="block w-full text-left px-2 py-1 border-t border-gray-200 text-teal-700 hover:bg-gray-50"
+                onClick={() => {
+                  if (!openLocationPicker) return;
+                  const value = (
+                    rows?.[openLocationPicker.rowIdx]?.[
+                      openLocationPicker.podKey
+                    ]?.[openLocationPicker.entryIdx]?.location || ""
+                  ).trim();
+                  if (!value) return;
+                  setCustomLocations((prev) => {
+                    const next = Array.from(new Set([...prev, value]));
+                    if (typeof window !== "undefined") {
+                      window.localStorage.setItem(
+                        "callScheduleCustomLocations",
+                        JSON.stringify(next)
+                      );
+                    }
+                    return next;
+                  });
+                  setOpenLocationPicker(null);
+                }}
+              >
+                + Add “
+                {(
+                  rows?.[openLocationPicker?.rowIdx]?.[
+                    openLocationPicker?.podKey
+                  ]?.[openLocationPicker?.entryIdx]?.location || ""
+                ).trim() || " "}
+                ” as location
+              </button>
+            </div>
+          </DropdownPortal>
+
+          <DropdownPortal
+            open={!!openPractitionerPicker}
+            anchorEl={openPractitionerPicker?.anchorEl}
+          >
+            <div className="rounded-md border border-gray-200 bg-white shadow-lg text-xs">
+              {allPractitionerOptions.map((opt) => (
+                <button
+                  key={opt}
+                  type="button"
+                  className="block w-full text-left px-2 py-1 hover:bg-gray-100"
+                  onClick={() => {
+                    if (!openPractitionerPicker) return;
+                    handleEntryChange(
+                      openPractitionerPicker.rowIdx,
+                      openPractitionerPicker.podKey,
+                      openPractitionerPicker.entryIdx,
+                      "practitioner",
+                      opt
+                    );
+                    setOpenPractitionerPicker(null);
+                  }}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span>{opt}</span>
+                    <button
+                      type="button"
+                      className="text-gray-400 hover:text-red-500 text-[10px] px-1"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setCustomPractitioners((prev) => {
+                          const next = prev.filter((x) => x !== opt);
+                          if (typeof window !== "undefined") {
+                            window.localStorage.setItem(
+                              "callScheduleCustomPractitioners",
+                              JSON.stringify(next)
+                            );
+                          }
+                          return next;
+                        });
+                      }}
+                      aria-label={`Delete ${opt} from practitioners`}
+                    >
+                      ×
+                    </button>
+                  </div>
+                </button>
+              ))}
+              <button
+                type="button"
+                className="block w-full text-left px-2 py-1 border-t border-gray-200 text-teal-700 hover:bg-gray-50"
+                onClick={() => {
+                  if (!openPractitionerPicker) return;
+                  const value = (
+                    rows?.[openPractitionerPicker.rowIdx]?.[
+                      openPractitionerPicker.podKey
+                    ]?.[openPractitionerPicker.entryIdx]?.practitioner || ""
+                  ).trim();
+                  if (!value) return;
+                  setCustomPractitioners((prev) => {
+                    const next = Array.from(new Set([...prev, value]));
+                    if (typeof window !== "undefined") {
+                      window.localStorage.setItem(
+                        "callScheduleCustomPractitioners",
+                        JSON.stringify(next)
+                      );
+                    }
+                    return next;
+                  });
+                  setOpenPractitionerPicker(null);
+                }}
+              >
+                + Add “
+                {(
+                  rows?.[openPractitionerPicker?.rowIdx]?.[
+                    openPractitionerPicker?.podKey
+                  ]?.[openPractitionerPicker?.entryIdx]?.practitioner || ""
+                ).trim() || " "}
+                ” as practitioner
+              </button>
+            </div>
+          </DropdownPortal>
 
           <div className="flex items-center justify-between">
             <button
