@@ -1,8 +1,16 @@
 import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { scheduleService } from "../services/scheduleService";
 
 function PractitionerSchedule() {
-  const [data, setData] = useState({ schedule: {}, practitioner_names: {}, practitioner_roles: {}, location_names: {} });
+  const navigate = useNavigate();
+  const [data, setData] = useState({
+    schedule: {},
+    practitioner_names: {},
+    practitioner_roles: {},
+    location_names: {},
+    call_schedule: {},
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [viewMode, setViewMode] = useState("day"); // "day" or "week"
@@ -51,12 +59,12 @@ function PractitionerSchedule() {
   const getWorkWeekRange = (baseDateStr) => {
     const d = new Date(`${baseDateStr}T00:00:00`);
     const dayOfWeek = d.getDay(); // 0 = Sun, 1 = Mon, ...
-    const diffToMonday = (dayOfWeek + 6) % 7; // 0 when Monday
-    const monday = new Date(d);
-    monday.setDate(d.getDate() - diffToMonday);
-    const friday = new Date(monday);
-    friday.setDate(monday.getDate() + 4);
-    return { start: formatYMD(monday), end: formatYMD(friday) };
+    // Move back to Sunday of this week
+    const sunday = new Date(d);
+    sunday.setDate(d.getDate() - dayOfWeek);
+    const saturday = new Date(sunday);
+    saturday.setDate(sunday.getDate() + 6);
+    return { start: formatYMD(sunday), end: formatYMD(saturday) };
   };
 
   const getDatesInRange = (startStr, endStr) => {
@@ -100,6 +108,7 @@ function PractitionerSchedule() {
           practitioner_names: res.practitioner_names || {},
           practitioner_roles: res.practitioner_roles || {},
           location_names: res.location_names || {},
+          call_schedule: res.call_schedule || {},
         });
       } catch (err) {
         setError("Failed to load schedule");
@@ -110,13 +119,14 @@ function PractitionerSchedule() {
     fetchSchedule();
   }, [date, viewMode]);
 
-  const { schedule, practitioner_names, practitioner_roles, location_names } = data;
+  const { schedule, practitioner_names, practitioner_roles, location_names, call_schedule } = data;
   // Surgery column key from backend (same as server SURGERY_COLUMN_KEY)
   const SURGERY_COLUMN_KEY = "Surgery";
   // Practitioner pods and desired display order within each pod.
   const PODS = [
     {
-      name: "North pod",
+      name: "North Pod",
+      callKey: "North pod",
       practitioners: [
         "Don Bui",
         "Leah Nakamura",
@@ -127,7 +137,8 @@ function PractitionerSchedule() {
       ],
     },
     {
-      name: "Central pod",
+      name: "Central Pod",
+      callKey: "Central pod",
       practitioners: [
         "Moses Kim",
         "Daniel Su",
@@ -138,7 +149,8 @@ function PractitionerSchedule() {
       ],
     },
     {
-      name: "South pod",
+      name: "South Pod",
+      callKey: "South pod",
       practitioners: [
         "Josh Randall",
         "Poone Shoureshi",
@@ -178,6 +190,7 @@ function PractitionerSchedule() {
   // Resolve practitioner IDs per pod, preserving the specified order.
   const podsWithIds = PODS.map((pod) => ({
     name: pod.name,
+    callKey: pod.callKey || pod.name,
     practitionerIds: pod.practitioners
       .map((displayName) => findPractitionerIdForName(displayName))
       .filter(Boolean),
@@ -229,7 +242,7 @@ function PractitionerSchedule() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <div className="bg-white rounded-lg shadow p-6">
+      <div className="bg-white rounded-lg shadow pt-6 px-6 pb-3">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-bold">Schedule</h2>
         </div>
@@ -323,12 +336,34 @@ function PractitionerSchedule() {
               {podsWithIds.map((pod) => (
                 <React.Fragment key={pod.name}>
                   <tr>
-                    <td
-                      colSpan={1 + currentDays.length}
-                      className="bg-gray-100 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-800"
-                    >
+                    <td className="bg-gray-100 px-4 py-3 text-sm font-semibold uppercase tracking-wide text-gray-800">
                       {pod.name}
                     </td>
+                    {currentDays.map((day) => {
+                      const key = pod.callKey || pod.name;
+                      const entries = (call_schedule?.[day]?.[key]) || [];
+                      return (
+                        <td
+                          key={day}
+                          className="bg-gray-100 border-l border-gray-200 px-4 py-3 align-top w-32 text-gray-900 text-xs"
+                        >
+                          <div className="space-y-0.5">
+                            {entries.length > 0 && (
+                              entries.map((entry, idx) => (
+                                <div
+                                  key={idx}
+                                  className="whitespace-nowrap font-semibold"
+                                >
+                                  {entry.location && entry.practitioner
+                                    ? `${entry.location}: ${entry.practitioner}`
+                                    : entry.location || entry.practitioner || "—"}
+                                </div>
+                              ))
+                            )}
+                          </div>
+                        </td>
+                      );
+                    })}
                   </tr>
                   {pod.practitionerIds.map((practitionerId, rowIndex) => (
                     <tr
@@ -361,6 +396,15 @@ function PractitionerSchedule() {
           </table>
         </div>
       )}
+      <div className="mt-3 flex justify-end">
+        <button
+          type="button"
+          onClick={() => navigate("/call-schedule-admin")}
+          className="px-3 py-1 text-xs bg-white text-gray-500 rounded-md hover:bg-gray-50 font-medium"
+        >
+          Edit call schedule
+        </button>
+      </div>
       </div>
     </div>
   );

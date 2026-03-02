@@ -7,7 +7,7 @@ import logging
 import os
 from app.services.client_service import client
 from app.crew.crew import ClinicalAssistantCrew
-from app.routes import auth, run_crew, patients, appointments
+from app.routes import auth, run_crew, patients, appointments, call_schedule
 
 
 warnings.filterwarnings("ignore", category=SyntaxWarning, module="pysbd")
@@ -70,6 +70,7 @@ def create_app():
     app.include_router(run_crew.router)
     app.include_router(patients.router)
     app.include_router(appointments.router)
+    app.include_router(call_schedule.router)
 
     @app.get("/")
     def read_root():

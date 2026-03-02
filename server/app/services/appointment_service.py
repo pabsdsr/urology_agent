@@ -106,6 +106,7 @@ _schedule_cache: dict = {}  # base_url -> cache_entry
 
 from typing import List, Tuple, Dict
 from app.services.client_service import client
+from app.services.call_schedule_service import get_call_schedule_range
 
 
 async def _prewarm_schedule_cache(base_url: str, modmed_token: str, practice_api_key: str, window_start: str, window_end: str, logger):
@@ -566,6 +567,7 @@ async def get_practitioner_schedule_by_date(start_date: str, end_date: str, modm
 
     surgery_loc_ids = get_surgery_location_ids(appointments)
     surgery_locations = [{"id": lid, "name": location_names.get(lid) or "(unknown)"} for lid in surgery_loc_ids]
+    call_schedule = get_call_schedule_range(start_date, end_date)
     return {
         "schedule": schedule,
         "practitioner_names": practitioner_names,
@@ -573,4 +575,5 @@ async def get_practitioner_schedule_by_date(start_date: str, end_date: str, modm
         "practitioner_types": practitioner_types,
         "location_names": location_names,
         "surgery_locations": surgery_locations,
+        "call_schedule": call_schedule,
     }
