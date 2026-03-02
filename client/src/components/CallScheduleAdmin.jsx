@@ -261,7 +261,7 @@ export default function CallScheduleAdmin() {
 
   const renderPodCell = (row, rowIdx, podKey) => {
     return (
-      <td className="px-4 py-2 align-top">
+      <td className="px-4 py-2.5 align-top text-[13px]">
         <div className="space-y-1.5">
           {(row[podKey] || []).map((entry, entryIdx) => (
             <div
@@ -272,7 +272,7 @@ export default function CallScheduleAdmin() {
               <div className="relative flex-1 min-w-[140px] max-w-[180px]">
                 <input
                   type="text"
-                  className="border rounded px-2 py-0.5 text-xs w-full"
+                  className="border rounded px-2 py-1 text-[13px] w-full"
                   placeholder="Location"
                   value={entry.location}
                   onChange={(e) =>
@@ -322,7 +322,7 @@ export default function CallScheduleAdmin() {
               <div className="relative flex-1 min-w-[140px] max-w-[180px]">
                 <input
                   type="text"
-                  className="border rounded px-2 py-0.5 text-xs w-full"
+                  className="border rounded px-2 py-1 text-[13px] w-full"
                   placeholder="Practitioner"
                   value={entry.practitioner}
                   onChange={(e) =>
@@ -415,35 +415,53 @@ export default function CallScheduleAdmin() {
           <h2 className="text-xl font-bold">Call Schedule (Admin)</h2>
         </div>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="flex items-center gap-3">
-            <label className="text-sm text-gray-700">
-              Week starting:
-              <input
-                type="date"
-                value={weekStart}
-                onChange={(e) => handleWeekStartChange(e.target.value)}
-                className="ml-2 border px-2 py-1 rounded"
-              />
-            </label>
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="flex items-center gap-2">
+              <label className="flex items-center gap-1">
+                <span className="text-sm text-gray-700">Week starting:</span>
+                <input
+                  type="date"
+                  value={weekStart}
+                  onChange={(e) => handleWeekStartChange(e.target.value)}
+                  className="border px-2 py-1 rounded"
+                />
+              </label>
+              <button
+                type="button"
+                onClick={() => setWeekStart((prev) => addDays(prev, -7))}
+                className="inline-flex items-center justify-center h-7 w-7 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-teal-600 hover:text-white rounded-md border border-gray-300 transition-colors"
+                title="Previous week"
+              >
+                ←
+              </button>
+              <button
+                type="button"
+                onClick={() => setWeekStart((prev) => addDays(prev, 7))}
+                className="inline-flex items-center justify-center h-7 w-7 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-teal-600 hover:text-white rounded-md border border-gray-300 transition-colors"
+                title="Next week"
+              >
+                →
+              </button>
+            </div>
             <span className="text-xs text-gray-500">
               (Will align to Sunday of that week)
             </span>
           </div>
 
           <div className="relative z-10 overflow-visible rounded-lg border border-gray-200">
-            <table className="min-w-full text-sm">
+            <table className="min-w-full text-[13px]">
               <thead>
                 <tr className="border-b border-gray-200 bg-gray-100">
-                  <th className="px-4 py-2 text-left font-semibold text-gray-900">
+                  <th className="px-4 py-3 text-left font-semibold text-gray-900 text-[15px]">
                     Date
                   </th>
-                  <th className="px-4 py-2 text-left font-semibold text-gray-900">
+                  <th className="px-4 py-3 text-left font-semibold text-gray-900 text-[15px]">
                     North Pod
                   </th>
-                  <th className="px-4 py-2 text-left font-semibold text-gray-900">
+                  <th className="px-4 py-3 text-left font-semibold text-gray-900 text-[15px]">
                     Central Pod
                   </th>
-                  <th className="px-4 py-2 text-left font-semibold text-gray-900">
+                  <th className="px-4 py-3 text-left font-semibold text-gray-900 text-[15px]">
                     South Pod
                   </th>
                 </tr>
@@ -454,7 +472,7 @@ export default function CallScheduleAdmin() {
                     key={row.date}
                     className={idx % 2 === 0 ? "bg-white" : "bg-gray-50"}
                   >
-                    <td className="px-4 py-2 whitespace-nowrap text-gray-800">
+                    <td className="px-4 py-2.5 whitespace-nowrap text-gray-800 text-sm font-medium">
                       {row.date}
                     </td>
                     {renderPodCell(row, idx, "north")}
