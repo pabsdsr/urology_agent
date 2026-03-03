@@ -10,10 +10,13 @@ function PractitionerSchedule() {
     practitioner_roles: {},
     location_names: {},
     call_schedule: {},
+    surgery_appointments: {},
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [viewMode, setViewMode] = useState("day"); // "day" or "week"
+  const [activeTab, setActiveTab] = useState("schedule"); // "schedule" or "surgeries"
+  const [selectedSurgery, setSelectedSurgery] = useState(null);
   // Get current date in US/Pacific time
   function getPacificDateString() {
     // Get the current time in Pacific, regardless of browser timezone
@@ -109,6 +112,7 @@ function PractitionerSchedule() {
           practitioner_roles: res.practitioner_roles || {},
           location_names: res.location_names || {},
           call_schedule: res.call_schedule || {},
+          surgery_appointments: res.surgery_appointments || {},
         });
       } catch (err) {
         setError("Failed to load schedule");
@@ -119,7 +123,7 @@ function PractitionerSchedule() {
     fetchSchedule();
   }, [date, viewMode]);
 
-  const { schedule, practitioner_names, practitioner_roles, location_names, call_schedule } = data;
+  const { schedule, practitioner_names, practitioner_roles, location_names, call_schedule, surgery_appointments } = data;
   // Surgery column key from backend (same as server SURGERY_COLUMN_KEY)
   const SURGERY_COLUMN_KEY = "Surgery";
   // Practitioner pods and desired display order within each pod.
@@ -164,6 +168,14 @@ function PractitionerSchedule() {
 
   // Flattened list of all practitioner display names we care about.
   const ALLOWED_PRACTITIONER_NAMES = PODS.flatMap((pod) => pod.practitioners);
+  const NON_SURGERY_PRACTITIONERS = [
+    "Olivia Carr",
+    "Daniel Cabanero",
+    "Taralyn Johnson",
+    "Jennifer Kim",
+    "Michael Bui",
+    "Ashley Swanson",
+  ];
   const tokenizeName = (name) => {
     if (!name) return [];
     const credentialTokens = new Set(["md", "m.d.", "pa", "p.a.", "np", "n.p."]);
@@ -240,6 +252,25 @@ function PractitionerSchedule() {
     return role ? `${name} (${role})` : name;
   };
 
+  const isSurgeryPractitioner = (id) => {
+    const name = practitioner_names[id] || id;
+    const nameTokens = new Set(tokenizeName(name));
+    for (const target of NON_SURGERY_PRACTITIONERS) {
+      const targetTokens = new Set(tokenizeName(target));
+      let allMatch = true;
+      for (const t of targetTokens) {
+        if (!nameTokens.has(t)) {
+          allMatch = false;
+          break;
+        }
+      }
+      if (allMatch && targetTokens.size > 0) {
+        return false;
+      }
+    }
+    return true;
+  };
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="bg-white rounded-lg shadow pt-6 px-6 pb-3">
@@ -277,30 +308,57 @@ function PractitionerSchedule() {
             →
           </button>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-gray-600">View:</span>
-          <button
-            type="button"
-            onClick={() => setViewMode("day")}
-            className={`px-3 py-1 text-sm rounded border ${
-              viewMode === "day"
-                ? "bg-teal-600 text-white border-teal-600"
-                : "bg-white text-gray-700 border-gray-300"
-            }`}
-          >
-            Day
-          </button>
-          <button
-            type="button"
-            onClick={() => setViewMode("week")}
-            className={`px-3 py-1 text-sm rounded border ${
-              viewMode === "week"
-                ? "bg-teal-600 text-white border-teal-600"
-                : "bg-white text-gray-700 border-gray-300"
-            }`}
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-gray-600">View:</span>
+            <button
+              type="button"
+              onClick={() => setViewMode("day")}
+              className={`px-3 py-1 text-sm rounded border ${
+                viewMode === "day"
+                  ? "bg-teal-600 text-white border-teal-600"
+                  : "bg-white text-gray-700 border-gray-300"
+              }`}
             >
-            Week
-          </button>
+              Day
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode("week")}
+              className={`px-3 py-1 text-sm rounded border ${
+                viewMode === "week"
+                  ? "bg-teal-600 text-white border-teal-600"
+                  : "bg-white text-gray-700 border-gray-300"
+              }`}
+            >
+              Week
+            </button>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-gray-600">Tab:</span>
+            <button
+              type="button"
+              onClick={() => setActiveTab("schedule")}
+              className={`px-3 py-1 text-sm rounded border ${
+                activeTab === "schedule"
+                  ? "bg-teal-600 text-white border-teal-600"
+                  : "bg-white text-gray-700 border-gray-300"
+              }`}
+            >
+              Grid
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("surgeries")}
+              className={`px-3 py-1 text-sm rounded border ${
+                activeTab === "surgeries"
+                  ? "bg-teal-600 text-white border-teal-600"
+                  : "bg-white text-gray-700 border-gray-300"
+              }`}
+            >
+              Surgeries
+            </button>
+          </div>
         </div>
       </div>
       {loading ? (
@@ -316,84 +374,162 @@ function PractitionerSchedule() {
         </div>
       ) : (
         <div className="overflow-x-auto rounded-lg border border-gray-200">
-          <table className="min-w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-200 bg-gray-200">
-                <th className="px-4 py-3 text-left font-semibold text-gray-900 w-40 text-[15px]">
-                  Practitioner
-                </th>
-                {currentDays.map((day) => (
-                  <th
-                    key={day}
-                    className="border-l border-gray-200 px-4 py-3 text-center font-semibold text-gray-900 whitespace-nowrap w-32 text-[15px]"
-                  >
-                    {formatColumnDateLabel(day)}
+          {activeTab === "schedule" ? (
+            <table className="min-w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-200 bg-gray-200">
+                  <th className="px-4 py-3 text-left font-semibold text-gray-900 w-40 text-[15px]">
+                    Practitioner
                   </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="bg-white">
-              {podsWithIds.map((pod) => (
-                <React.Fragment key={pod.name}>
-                  <tr>
-                    <td className="bg-gray-100 px-4 py-3 text-[13px] font-semibold uppercase tracking-wide text-gray-800">
-                      {pod.name}
-                    </td>
-                    {currentDays.map((day) => {
-                      const key = pod.callKey || pod.name;
-                      const entries = (call_schedule?.[day]?.[key]) || [];
-                      return (
-                        <td
-                          key={day}
-                          className="bg-gray-100 border-l border-gray-200 px-4 py-3 align-middle w-32 text-gray-900 text-[13px]"
-                        >
-                          <div className="flex flex-col justify-center items-start space-y-0.5">
-                            {entries.length > 0 && (
-                              entries.map((entry, idx) => (
-                                <div
-                                  key={idx}
-                                  className="whitespace-nowrap font-semibold"
-                                >
-                                  {entry.location && entry.practitioner
-                                    ? `${entry.location}: ${entry.practitioner}`
-                                    : entry.location || entry.practitioner || "—"}
-                                </div>
-                              ))
-                            )}
-                          </div>
-                        </td>
-                      );
-                    })}
-                  </tr>
-                  {pod.practitionerIds.map((practitionerId, rowIndex) => (
-                    <tr
-                      key={practitionerId}
-                      className={rowIndex % 2 === 0 ? "bg-white" : "bg-gray-50"}
+                  {currentDays.map((day) => (
+                    <th
+                      key={day}
+                      className="border-l border-gray-200 px-4 py-3 text-center font-semibold text-gray-900 whitespace-nowrap w-32 text-[15px]"
                     >
-                      <td className="px-4 py-2.5 font-medium text-gray-900 align-middle whitespace-nowrap border-r border-gray-100">
-                        {displayPractitioner(practitionerId)}
+                      {formatColumnDateLabel(day)}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="bg-white">
+                {podsWithIds.map((pod) => (
+                  <React.Fragment key={pod.name}>
+                    <tr>
+                      <td className="bg-gray-100 px-4 py-3 text-[13px] font-semibold uppercase tracking-wide text-gray-800">
+                        {pod.name}
+                      </td>
+                      {currentDays.map((day) => {
+                        const key = pod.callKey || pod.name;
+                        const entries = (call_schedule?.[day]?.[key]) || [];
+                        return (
+                          <td
+                            key={day}
+                            className="bg-gray-100 border-l border-gray-200 px-4 py-3 align-middle w-32 text-gray-700 text-[13px]"
+                          >
+                            <div className="flex flex-col justify-center items-start space-y-0.5">
+                              {entries.length > 0 &&
+                                entries.map((entry, idx) => (
+                                  <div
+                                    key={idx}
+                                    className="whitespace-nowrap"
+                                  >
+                                    {entry.location && entry.practitioner
+                                      ? `${entry.location}: ${entry.practitioner}`
+                                      : entry.location || entry.practitioner || "—"}
+                                  </div>
+                                ))}
+                            </div>
+                          </td>
+                        );
+                      })}
+                    </tr>
+                    {pod.practitionerIds.map((practitionerId, rowIndex) => (
+                      <tr
+                        key={practitionerId}
+                        className={rowIndex % 2 === 0 ? "bg-white" : "bg-gray-50"}
+                      >
+                        <td className="px-4 py-2.5 font-medium text-gray-900 align-middle whitespace-nowrap border-r border-gray-100">
+                          {displayPractitioner(practitionerId)}
+                        </td>
+                        {currentDays.map((day) => (
+                          <td
+                            key={day}
+                            className="border-l border-gray-200 px-4 py-2.5 align-top w-32 text-gray-700 text-[13px]"
+                          >
+                            <div className="flex flex-col gap-1.5">
+                              <div className="whitespace-nowrap">
+                                {getBlockDisplay(day, practitionerId, "AM")}
+                              </div>
+                              <div className="whitespace-nowrap">
+                                {getBlockDisplay(day, practitionerId, "PM")}
+                              </div>
+                            </div>
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </React.Fragment>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <table className="min-w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-200 bg-gray-200">
+                  <th className="px-4 py-3 text-left font-semibold text-gray-900 w-40 text-[15px]">
+                    Practitioner
+                  </th>
+                  {currentDays.map((day) => (
+                    <th
+                      key={day}
+                      className="border-l border-gray-200 px-4 py-3 text-center font-semibold text-gray-900 whitespace-nowrap w-40 text-[15px]"
+                    >
+                      {formatColumnDateLabel(day)}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="bg-white">
+                {podsWithIds.map((pod) => (
+                  <React.Fragment key={pod.name}>
+                    <tr>
+                      <td className="bg-gray-100 px-4 py-3 text-[13px] font-semibold uppercase tracking-wide text-gray-800">
+                        {pod.name}
                       </td>
                       {currentDays.map((day) => (
                         <td
                           key={day}
-                          className="border-l border-gray-200 px-4 py-2.5 align-top w-32 text-gray-700 text-[13px]"
-                        >
-                          <div className="flex flex-col gap-1.5">
-                            <div className="whitespace-nowrap">
-                              {getBlockDisplay(day, practitionerId, "AM")}
-                            </div>
-                            <div className="whitespace-nowrap">
-                              {getBlockDisplay(day, practitionerId, "PM")}
-                            </div>
-                          </div>
-                        </td>
+                          className="bg-gray-100 border-l border-gray-200 px-4 py-3 align-middle w-40 text-gray-900 text-[13px]"
+                        />
                       ))}
                     </tr>
-                  ))}
-                </React.Fragment>
-              ))}
-            </tbody>
-          </table>
+                    {pod.practitionerIds.filter(isSurgeryPractitioner).map((practitionerId, rowIndex) => (
+                      <tr
+                        key={practitionerId}
+                        className={rowIndex % 2 === 0 ? "bg-white" : "bg-gray-50"}
+                      >
+                        <td className="px-4 py-2.5 font-medium text-gray-900 align-middle whitespace-nowrap border-r border-gray-100">
+                          {displayPractitioner(practitionerId)}
+                        </td>
+                        {currentDays.map((day) => {
+                          const dayData = surgery_appointments?.[day] || {};
+                          const surgeriesForPractitioner = dayData[practitionerId] || [];
+                          return (
+                            <td
+                              key={day}
+                              className="border-l border-gray-200 px-4 py-2.5 align-top w-40 text-gray-700 text-[13px]"
+                            >
+                              <div className="flex flex-col gap-1.5">
+                                {surgeriesForPractitioner.map((sx, idx) => (
+                                  <button
+                                    key={idx}
+                                    type="button"
+                                    onClick={() =>
+                                      setSelectedSurgery({
+                                        time: sx.time,
+                                        locationName: sx.location_name,
+                                        procedureType: sx.procedure_type || "Surgery",
+                                        patientId: sx.patient_id || "",
+                                        practitionerName: displayPractitioner(practitionerId),
+                                        date: day,
+                                      })
+                                    }
+                                    className="whitespace-nowrap text-left hover:underline"
+                                  >
+                                    {`${sx.time} ${sx.location_name}`}
+                                  </button>
+                                ))}
+                              </div>
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </React.Fragment>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       )}
       <div className="mt-3 flex justify-end">
@@ -406,6 +542,46 @@ function PractitionerSchedule() {
         </button>
       </div>
       </div>
+      {selectedSurgery && (
+        <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/30">
+          <div className="bg-white rounded-lg shadow-lg max-w-md w-full mx-4 p-4">
+            <div className="flex justify-between items-center mb-2">
+              <h3 className="text-sm font-semibold text-gray-900">Surgery details</h3>
+              <button
+                type="button"
+                onClick={() => setSelectedSurgery(null)}
+                className="text-gray-400 hover:text-gray-600 text-sm"
+              >
+                ×
+              </button>
+            </div>
+            <div className="space-y-1 text-sm text-gray-800">
+              <div><span className="font-semibold">Practitioner:</span> {selectedSurgery.practitionerName}</div>
+              <div><span className="font-semibold">Date:</span> {selectedSurgery.date}</div>
+              <div><span className="font-semibold">Time:</span> {selectedSurgery.time}</div>
+              <div><span className="font-semibold">Location:</span> {selectedSurgery.locationName}</div>
+              {selectedSurgery.patientId && (
+                <div>
+                  <span className="font-semibold">Patient:</span>{" "}
+                  {selectedSurgery.patientId}
+                </div>
+              )}
+              {selectedSurgery.procedureType && (
+                <div><span className="font-semibold">Procedure:</span> {selectedSurgery.procedureType}</div>
+              )}
+            </div>
+            <div className="mt-3 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setSelectedSurgery(null)}
+                className="px-3 py-1 text-xs rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

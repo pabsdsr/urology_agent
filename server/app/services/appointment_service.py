@@ -274,7 +274,6 @@ async def fetch_appointments_for_range(start_dt: datetime, end_dt: datetime, mod
         params = [
             ("date", f"ge{start_dt.strftime('%Y-%m-%dT%H:%M:%S.000Z')}"),
             ("date", f"le{end_dt.strftime('%Y-%m-%dT%H:%M:%S.999Z')}"),
-            # No _include for Patient — schedule view only needs IDs and timing, which are on Appointment itself.
             ("_count", 50),  # Set to 50, the true max allowed
         ]
         headers = {
@@ -343,8 +342,17 @@ async def fetch_appointments_for_range(start_dt: datetime, end_dt: datetime, mod
             page_starts = []  # For range check to stop pagination
             for appt in entry:
                 resource = appt.get("resource", {})
+                if resource.get("resourceType") != "Appointment":
+                    continue
                 start = resource.get("start")
-                patient_ref = next((p["actor"]["reference"].split("/")[-1] for p in resource.get("participant", []) if "/Patient/" in p["actor"]["reference"]), None)
+                patient_ref = next(
+                    (
+                        p["actor"]["reference"].split("Patient/")[-1].split("/")[-1]
+                        for p in resource.get("participant", [])
+                        if "Patient/" in (p.get("actor", {}).get("reference") or "")
+                    ),
+                    None,
+                )
                 if start and patient_ref:
                     current_keys.add((start, patient_ref))
                     try:
@@ -377,6 +385,8 @@ async def fetch_appointments_for_range(start_dt: datetime, end_dt: datetime, mod
 
             for appt in entry:
                 resource = appt.get("resource", {})
+                if resource.get("resourceType") != "Appointment":
+                    continue
                 start = resource.get("start")
                 end = resource.get("end")
                 # Skip appointments that should not appear on the schedule grid
@@ -394,11 +404,15 @@ async def fetch_appointments_for_range(start_dt: datetime, end_dt: datetime, mod
                     if "/Location/" in p["actor"]["reference"]
                 ]
                 patient_ref = next(
-                    (p["actor"]["reference"].split("/")[-1]
-                     for p in resource.get("participant", [])
-                     if "/Patient/" in p["actor"]["reference"]),
-                    None
+                    (
+                        p["actor"]["reference"].split("Patient/")[-1].split("/")[-1]
+                        for p in resource.get("participant", [])
+                        if "Patient/" in (p.get("actor", {}).get("reference") or "")
+                    ),
+                    None,
                 )
+                # Free-text description for the appointment (often used for surgery case description)
+                description = resource.get("description") or ""
                 # Extract appointment type (code and display for surgery detection)
                 appt_type = None
                 appt_type_display = None
@@ -418,6 +432,7 @@ async def fetch_appointments_for_range(start_dt: datetime, end_dt: datetime, mod
                     "location_ids": location_refs,
                     "appointment_type": appt_type,
                     "appointment_type_display": appt_type_display or "",
+                    "description": description,
                 })
 
             # Stop pagination if this page's appointments are all past our end_dt (avoids infinite loop when API ignores date filter)
@@ -484,6 +499,7 @@ async def get_appointments_by_date(start_date: str, end_date: str, modmed_token:
 async def get_practitioner_schedule_by_date(start_date: str, end_date: str, modmed_token: str, base_url: str, practice_api_key: str):
     """
     Returns practitioner schedule grid by date/location/AMPM/practitioner, plus id→name maps for practitioners and locations.
+    Also returns a surgery-only view grouped by date and practitioner with time, location, and procedure type.
     """
     logger = logging.getLogger("app.services.appointment_service")
     pacific = pytz.timezone("US/Pacific")
@@ -505,6 +521,13 @@ async def get_practitioner_schedule_by_date(start_date: str, end_date: str, modm
     if request_in_window:
         now = time.monotonic()
         cache_entry = _schedule_cache.get(base_url)
+        # If cached appointments do not include the newer "description" field,
+        # treat cache as missing so we refetch with full data for surgeries.
+        if cache_entry:
+            appts = cache_entry.get("appointments") or []
+            if appts and "description" not in appts[0]:
+                cache_entry = None
+
         window_matches = (
             cache_entry
             and cache_entry["window_start"] == window_start
@@ -568,6 +591,41 @@ async def get_practitioner_schedule_by_date(start_date: str, end_date: str, modm
         base_url, modmed_token, practice_api_key, logger
     )
 
+    # Build a surgery-only appointment view grouped by date and practitioner.
+    surgery_appointments: dict = {}
+    for appt in appointments:
+        if not _is_surgery_appointment(appt):
+            continue
+        start_str = appt.get("start")
+        if not start_str:
+            continue
+        try:
+            dt = datetime.fromisoformat(start_str.replace("Z", "+00:00"))
+            if dt.tzinfo is None:
+                dt = pytz.utc.localize(dt)
+            pacific_dt = dt.astimezone(pacific)
+        except Exception:
+            continue
+        date_str = pacific_dt.strftime("%Y-%m-%d")
+        time_str = pacific_dt.strftime("%I:%M").lstrip("0")
+        practitioner_id = (appt.get("practitioner_ids") or ["Unknown"])[0]
+        loc_id = (appt.get("location_ids") or ["Unknown"])[0]
+        loc_name = location_names.get(loc_id) or str(loc_id)
+        # Prefer the free-text description for surgeries; fall back to appointment type display.
+        procedure_type = appt.get("description") or appt.get("appointment_type_display") or ""
+
+        by_date = surgery_appointments.setdefault(date_str, {})
+        by_prac = by_date.setdefault(practitioner_id, [])
+        by_prac.append(
+            {
+                "time": time_str,
+                "location_id": loc_id,
+                "location_name": loc_name,
+                "procedure_type": procedure_type,
+                "patient_id": appt.get("patient_id"),
+            }
+        )
+
     surgery_loc_ids = get_surgery_location_ids(appointments)
     surgery_locations = [{"id": lid, "name": location_names.get(lid) or "(unknown)"} for lid in surgery_loc_ids]
     call_schedule = get_call_schedule_range(start_date, end_date)
@@ -579,4 +637,5 @@ async def get_practitioner_schedule_by_date(start_date: str, end_date: str, modm
         "location_names": location_names,
         "surgery_locations": surgery_locations,
         "call_schedule": call_schedule,
+        "surgery_appointments": surgery_appointments,
     }
