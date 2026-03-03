@@ -166,8 +166,6 @@ function PractitionerSchedule() {
     },
   ];
 
-  // Flattened list of all practitioner display names we care about.
-  const ALLOWED_PRACTITIONER_NAMES = PODS.flatMap((pod) => pod.practitioners);
   const NON_SURGERY_PRACTITIONERS = [
     "Olivia Carr",
     "Daniel Cabanero",
@@ -345,7 +343,7 @@ function PractitionerSchedule() {
                   : "bg-white text-gray-700 border-gray-300"
               }`}
             >
-              Grid
+              General
             </button>
             <button
               type="button"
@@ -356,7 +354,7 @@ function PractitionerSchedule() {
                   : "bg-white text-gray-700 border-gray-300"
               }`}
             >
-              Surgeries
+              Surgery
             </button>
           </div>
         </div>
@@ -395,7 +393,7 @@ function PractitionerSchedule() {
                 {podsWithIds.map((pod) => (
                   <React.Fragment key={pod.name}>
                     <tr>
-                      <td className="bg-gray-100 px-4 py-3 text-[13px] font-semibold uppercase tracking-wide text-gray-800">
+                      <td className="bg-gray-100 px-4 py-3 text-[13.5px] font-semibold uppercase tracking-wide text-gray-800">
                         {pod.name}
                       </td>
                       {currentDays.map((day) => {
@@ -411,7 +409,7 @@ function PractitionerSchedule() {
                                 entries.map((entry, idx) => (
                                   <div
                                     key={idx}
-                                    className="whitespace-nowrap"
+                                    className="whitespace-nowrap font-semibold"
                                   >
                                     {entry.location && entry.practitioner
                                       ? `${entry.location}: ${entry.practitioner}`
@@ -462,7 +460,7 @@ function PractitionerSchedule() {
                   {currentDays.map((day) => (
                     <th
                       key={day}
-                      className="border-l border-gray-200 px-4 py-3 text-center font-semibold text-gray-900 whitespace-nowrap w-40 text-[15px]"
+                      className="border-l border-gray-200 px-4 py-3 text-center font-semibold text-gray-900 whitespace-nowrap w-32 text-[15px]"
                     >
                       {formatColumnDateLabel(day)}
                     </th>
@@ -479,7 +477,7 @@ function PractitionerSchedule() {
                       {currentDays.map((day) => (
                         <td
                           key={day}
-                          className="bg-gray-100 border-l border-gray-200 px-4 py-3 align-middle w-40 text-gray-900 text-[13px]"
+                          className="bg-gray-100 border-l border-gray-200 px-4 py-3 align-middle w-32 text-gray-900 text-[14px]"
                         />
                       ))}
                     </tr>
@@ -497,7 +495,7 @@ function PractitionerSchedule() {
                           return (
                             <td
                               key={day}
-                              className="border-l border-gray-200 px-4 py-2.5 align-top w-40 text-gray-700 text-[13px]"
+                              className="border-l border-gray-200 px-4 py-2.5 align-top w-32 text-gray-700 text-[13.5px]"
                             >
                               <div className="flex flex-col gap-1.5">
                                 {surgeriesForPractitioner.map((sx, idx) => (

@@ -3,7 +3,7 @@ import apiClient from './apiClient.js';
 export const callScheduleService = {
   /**
    * Save or update on-call schedule for a single week.
-   * @param {string} weekStart - Monday of the week (YYYY-MM-DD)
+   * @param {string} weekStart - start of the week (YYYY-MM-DD, aligned to Sunday)
    * @param {Array<{
    *   date: string,
    *   north: Array<{ location: string, practitioner: string }>,

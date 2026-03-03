@@ -91,8 +91,8 @@ def update_week(week_start: str, days: Dict[str, Dict[str, Any]]) -> Dict[str, D
     """
     Update (or create) call schedule entries for a single week.
 
-    week_start: ISO date string (YYYY-MM-DD) for Monday of the week.
-    days: mapping of date string -> { "North pod": name, "Central pod": name, "South pod": name }.
+    week_start: ISO date string (YYYY-MM-DD) for the start of the week (currently Sunday).
+    days: mapping of date string -> { "North pod": [...entries...], "Central pod": [...], "South pod": [...] }.
     """
     schedule = _load_call_schedule()
     for date_str, pods in days.items():
