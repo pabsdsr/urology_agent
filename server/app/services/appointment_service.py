@@ -371,8 +371,9 @@ async def fetch_appointments_for_range(start_dt: datetime, end_dt: datetime, mod
                 except Exception:
                     return False
 
-            # Appointment status values we exclude from the schedule grid
-            EXCLUDED_STATUSES = {"cancelled", "proposed", "pending", "entered-in-error", "waitlist"}
+            # Appointment status values we exclude from the schedule grid.
+            # We KEEP "pending" so future surgeries (often left pending) still appear.
+            EXCLUDED_STATUSES = {"cancelled", "proposed", "entered-in-error", "waitlist"}
 
             for appt in entry:
                 resource = appt.get("resource", {})
