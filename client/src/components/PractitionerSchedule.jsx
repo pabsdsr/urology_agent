@@ -81,8 +81,9 @@ function PractitionerSchedule() {
     return dates;
   };
 
-  const currentDays = viewMode === "week"
-    ? getDatesInRange(getWorkWeekRange(date).start, getWorkWeekRange(date).end)
+  const weekRange = viewMode === "week" ? getWorkWeekRange(date) : null;
+  const currentDays = weekRange
+    ? getDatesInRange(weekRange.start, weekRange.end)
     : [date];
 
   const formatColumnDateLabel = (dayStr) => {
@@ -130,7 +131,7 @@ function PractitionerSchedule() {
   const PODS = [
     {
       name: "North Pod",
-      callKey: "North pod",
+      callKey: "North Pod",
       practitioners: [
         "Don Bui",
         "Leah Nakamura",
@@ -142,7 +143,7 @@ function PractitionerSchedule() {
     },
     {
       name: "Central Pod",
-      callKey: "Central pod",
+      callKey: "Central Pod",
       practitioners: [
         "Moses Kim",
         "Daniel Su",
@@ -154,7 +155,7 @@ function PractitionerSchedule() {
     },
     {
       name: "South Pod",
-      callKey: "South pod",
+      callKey: "South Pod",
       practitioners: [
         "Josh Randall",
         "Poone Shoureshi",

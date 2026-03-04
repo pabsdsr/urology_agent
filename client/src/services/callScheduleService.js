@@ -1,4 +1,5 @@
 import apiClient from './apiClient.js';
+import API_CONFIG from '../config/api.js';
 
 export const callScheduleService = {
   /**
@@ -37,6 +38,55 @@ export const callScheduleService = {
   getCallSchedule: async (start, end) => {
     const response = await apiClient.get(`/call-schedule?start=${start}&end=${end}`);
     return response.data.call_schedule || {};
+  },
+
+  /**
+   * Upload a call schedule spreadsheet (CSV/XLSX) and import it.
+   * @param {File} file
+   */
+  uploadSchedule: async (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    const token = window.localStorage.getItem('session_token');
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 65000);
+
+    let response;
+    try {
+      response = await fetch(`${API_CONFIG.BASE_URL}/call-schedule/upload`, {
+        method: 'POST',
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: formData,
+        signal: controller.signal,
+      });
+    } catch (err) {
+      clearTimeout(timeoutId);
+      if (err?.name === 'AbortError') {
+        throw new Error('Upload timed out. Try a smaller file or check your connection');
+      }
+      throw err;
+    }
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      let detail = 'Failed to upload schedule';
+      try {
+        const data = await response.json();
+        if (data?.detail) {
+          detail = typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail);
+        }
+      } catch {
+        // ignore JSON parse errors
+      }
+      const err = new Error(detail);
+      throw err;
+    }
+
+    return response.json();
   },
 };
 

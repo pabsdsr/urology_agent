@@ -17,10 +17,8 @@ function formatYMD(d) {
 
 function startOfWeek(dateStr) {
   const d = new Date(`${dateStr}T00:00:00`);
-  const dayOfWeek = d.getDay(); // 0 = Sun, 1 = Mon
-  // Move back to Sunday of this week
-  const diffToSunday = dayOfWeek; // 0 when Sunday
-  d.setDate(d.getDate() - diffToSunday);
+  const dayOfWeek = d.getDay();
+  d.setDate(d.getDate() - dayOfWeek);
   return formatYMD(d);
 }
 
@@ -61,11 +59,16 @@ export default function CallScheduleAdmin() {
   const [openLocationPicker, setOpenLocationPicker] = useState(null); // { rowIdx, podKey } | null
   const [openPractitionerPicker, setOpenPractitionerPicker] = useState(null); // { rowIdx, podKey } | null
   const containerRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   const [weekStart, setWeekStart] = useState(startOfWeek(today));
   const [rows, setRows] = useState([]);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState(null);
+  const [uploadStatusError, setUploadStatusError] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     const handleDocumentClick = (event) => {
@@ -185,11 +188,16 @@ export default function CallScheduleAdmin() {
               practitioner: e.practitioner || "",
             }));
           };
+          const getPodEntries = (data, label) =>
+            data[label] ||
+            data[label.toLowerCase()] ||
+            data[label.replace(" Pod", " pod")] ||
+            [];
           return {
             date: row.date,
-            north: normalize(dayData["North pod"]),
-            central: normalize(dayData["Central pod"]),
-            south: normalize(dayData["South pod"]),
+            north: normalize(getPodEntries(dayData, "North Pod")),
+            central: normalize(getPodEntries(dayData, "Central Pod")),
+            south: normalize(getPodEntries(dayData, "South Pod")),
           };
         });
 
@@ -205,7 +213,32 @@ export default function CallScheduleAdmin() {
     return () => {
       isCancelled = true;
     };
-  }, [weekStart]);
+  }, [weekStart, reloadKey]);
+
+  const handleUpload = async (file) => {
+    if (!file) return;
+    setUploading(true);
+    setUploadStatus(null);
+    setUploadStatusError(false);
+    try {
+      const result = await callScheduleService.uploadSchedule(file);
+      const count = result?.updated_keys?.length ?? 0;
+      const label =
+        count > 0
+          ? `Call schedule successfully saved (${count} day${count === 1 ? "" : "s"} updated)`
+          : "Call schedule successfully saved";
+      setUploadStatus(label);
+      setMessage(label);
+      setReloadKey((k) => k + 1);
+    } catch (err) {
+      const detail =
+        err?.response?.data?.detail || err?.message || "Failed to upload schedule";
+      setUploadStatus(detail);
+      setUploadStatusError(true);
+    } finally {
+      setUploading(false);
+    }
+  };
 
   const handleEntryChange = (rowIdx, podKey, entryIdx, field, value) => {
     setRows((prev) =>
@@ -397,9 +430,30 @@ export default function CallScheduleAdmin() {
     setMessage("");
     try {
       await callScheduleService.saveWeek(weekStart, rows);
-      setMessage("Call schedule saved.");
+      setMessage("Call schedule successfully saved");
     } catch (err) {
-      setMessage(err?.message || "Failed to save call schedule.");
+      setMessage(err?.message || "Failed to save call schedule");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleClearWeek = async () => {
+    if (!weekStart || rows.length === 0) return;
+    setSaving(true);
+    setMessage("");
+    try {
+      const emptyRows = rows.map((row) => ({
+        date: row.date,
+        north: [],
+        central: [],
+        south: [],
+      }));
+      await callScheduleService.saveWeek(weekStart, emptyRows);
+      setRows(emptyRows.map((r) => ({ ...r, north: [{ location: "", practitioner: "" }], central: [{ location: "", practitioner: "" }], south: [{ location: "", practitioner: "" }] })));
+      setMessage("Call schedule cleared for this week");
+    } catch (err) {
+      setMessage(err?.message || "Failed to clear call schedule");
     } finally {
       setSaving(false);
     }
@@ -446,6 +500,43 @@ export default function CallScheduleAdmin() {
             <span className="text-xs text-gray-500">
               (Will align to Sunday of that week)
             </span>
+            <div className="flex items-center gap-2">
+              <label className="flex items-center gap-2">
+                <span className="text-sm text-gray-700">Upload (CSV/XLSX):</span>
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploading}
+                  className="inline-flex items-center justify-center h-7 px-3 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-teal-600 hover:text-white rounded-md border border-gray-300 disabled:bg-gray-200 disabled:text-gray-400 transition-colors"
+                >
+                  Choose file
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".csv,.xlsx"
+                  className="hidden"
+                  disabled={uploading}
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) handleUpload(f);
+                    e.target.value = "";
+                  }}
+                />
+              </label>
+              {uploading && (
+                <span className="text-xs text-gray-500">Importing…</span>
+              )}
+              {!uploading && uploadStatus && (
+                <span
+                  className={`text-xs ${
+                    uploadStatusError ? "text-red-600" : "text-teal-600"
+                  }`}
+                >
+                  {uploadStatus}
+                </span>
+              )}
+            </div>
           </div>
 
           <div className="relative z-10 overflow-visible rounded-lg border border-gray-200">
@@ -651,13 +742,23 @@ export default function CallScheduleAdmin() {
           </DropdownPortal>
 
           <div className="flex items-center justify-between">
-            <button
-              type="submit"
-              disabled={saving}
-              className="px-4 py-2 bg-teal-600 text-white rounded-md hover:bg-teal-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-sm font-medium"
-            >
-              {saving ? "Saving..." : "Save week"}
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="submit"
+                disabled={saving}
+                className="px-4 py-2 bg-teal-600 text-white rounded-md hover:bg-teal-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-sm font-medium"
+              >
+                {saving ? "Saving..." : "Save week"}
+              </button>
+              <button
+                type="button"
+                onClick={handleClearWeek}
+                disabled={saving}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 disabled:bg-gray-200 disabled:cursor-not-allowed"
+              >
+                Clear week
+              </button>
+            </div>
             {message && (
               <span className="text-sm text-gray-700">{message}</span>
             )}
