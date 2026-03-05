@@ -459,6 +459,64 @@ export default function CallScheduleAdmin() {
     }
   };
 
+  const handleCopyFromPreviousWeek = async () => {
+    if (!weekStart) return;
+    setSaving(true);
+    setMessage("");
+    try {
+      const prevWeekStart = addDays(weekStart, -7);
+      const prevWeekEnd = addDays(prevWeekStart, 6);
+      const prevData =
+        (await callScheduleService.getCallSchedule(prevWeekStart, prevWeekEnd)) ||
+        {};
+
+      const baseCurrent = new Date(`${weekStart}T00:00:00`);
+      const basePrev = new Date(`${prevWeekStart}T00:00:00`);
+
+      const normalize = (entries) => {
+        if (!Array.isArray(entries) || entries.length === 0) {
+          return [{ location: "", practitioner: "" }];
+        }
+        return entries.map((e) => ({
+          location: e.location || "",
+          practitioner: e.practitioner || "",
+        }));
+      };
+
+      const getPodEntries = (data, label) =>
+        data[label] ||
+        data[label.toLowerCase()] ||
+        data[label.replace(" Pod", " pod")] ||
+        [];
+
+      const nextRows = Array.from({ length: 7 }, (_, idx) => {
+        const curDay = new Date(baseCurrent);
+        curDay.setDate(baseCurrent.getDate() + idx);
+        const curDateStr = formatYMD(curDay);
+
+        const prevDay = new Date(basePrev);
+        prevDay.setDate(basePrev.getDate() + idx);
+        const prevDateStr = formatYMD(prevDay);
+
+        const dayData = prevData[prevDateStr] || {};
+
+        return {
+          date: curDateStr,
+          north: normalize(getPodEntries(dayData, "North Pod")),
+          central: normalize(getPodEntries(dayData, "Central Pod")),
+          south: normalize(getPodEntries(dayData, "South Pod")),
+        };
+      });
+
+      setRows(nextRows);
+      setMessage("Copied call schedule from previous week (not yet saved)");
+    } catch (err) {
+      setMessage(err?.message || "Failed to copy from previous week");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div
       ref={containerRef}
@@ -749,6 +807,14 @@ export default function CallScheduleAdmin() {
                 className="px-4 py-2 bg-teal-600 text-white rounded-md hover:bg-teal-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-sm font-medium"
               >
                 {saving ? "Saving..." : "Save week"}
+              </button>
+              <button
+                type="button"
+                onClick={handleCopyFromPreviousWeek}
+                disabled={saving}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 disabled:bg-gray-200 disabled:cursor-not-allowed"
+              >
+                Copy from previous week
               </button>
               <button
                 type="button"
