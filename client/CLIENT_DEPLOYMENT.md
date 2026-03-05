@@ -433,6 +433,14 @@ aws s3 ls s3://uroassist-frontend-logs/
   2. Rebuild: `npm run build`
   3. Check backend CORS allows `https://uroassist.net`
 
+### **Call schedule upload: "file not found" or 404 in production**
+- **Problem**: Upload works locally but production shows file not found / 404.
+- **Solution**:
+  1. Confirm **GitHub Actions secret** `VITE_API_URL` is exactly `https://api.uroassist.net` (no trailing slash; no `/api` unless your backend is mounted under that path).
+  2. Rebuild and redeploy the frontend so the correct API URL is baked into the bundle.
+  3. In the browser **Network** tab, check the upload request: URL should be `https://api.uroassist.net/call-schedule/upload` and method POST. If the URL is wrong, fix `VITE_API_URL` and redeploy.
+  4. If the backend is behind a reverse proxy with a path prefix (e.g. `/api`), set `VITE_API_URL` to include it (e.g. `https://api.uroassist.net/api`).
+
 ### **Assets not loading**
 - **Problem**: 404 for JS/CSS files
 - **Solution**: 

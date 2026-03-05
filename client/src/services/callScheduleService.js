@@ -49,12 +49,15 @@ export const callScheduleService = {
     formData.append('file', file);
     const token = window.localStorage.getItem('session_token');
 
+    const baseUrl = (API_CONFIG.BASE_URL || '').replace(/\/+$/, '');
+    const uploadUrl = `${baseUrl}/call-schedule/upload`;
+
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 65000);
 
     let response;
     try {
-      response = await fetch(`${API_CONFIG.BASE_URL}/call-schedule/upload`, {
+      response = await fetch(uploadUrl, {
         method: 'POST',
         headers: {
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -82,7 +85,13 @@ export const callScheduleService = {
       } catch {
         // ignore JSON parse errors
       }
+      if (response.status === 404) {
+        detail = `Upload endpoint not found (404). If this works locally, check that production API URL is correct (e.g. base URL or path prefix).`;
+      } else {
+        detail = `${detail} (${response.status} ${response.statusText || ''})`.trim();
+      }
       const err = new Error(detail);
+      err.response = { status: response.status, data: { detail } };
       throw err;
     }
 
