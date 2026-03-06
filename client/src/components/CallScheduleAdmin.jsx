@@ -509,7 +509,8 @@ export default function CallScheduleAdmin() {
       });
 
       setRows(nextRows);
-      setMessage("Copied call schedule from previous week (not yet saved)");
+      await callScheduleService.saveWeek(weekStart, nextRows);
+      setMessage("Call schedule copied from previous week");
     } catch (err) {
       setMessage(err?.message || "Failed to copy from previous week");
     } finally {
