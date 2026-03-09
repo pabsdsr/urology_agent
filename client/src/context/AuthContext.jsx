@@ -50,6 +50,25 @@ export const AuthProvider = ({ children }) => {
     };
   }, []);
 
+  const loginWithOutlookToken = async (sessionToken) => {
+    setLoading(true);
+    try {
+      localStorage.setItem('session_token', sessionToken);
+      setToken(sessionToken);
+      const userData = await authService.checkAuth();
+      setUser(userData);
+      return { success: true };
+    } catch (error) {
+      console.error('Outlook token login failed:', error);
+      localStorage.removeItem('session_token');
+      setToken(null);
+      setUser(null);
+      return { success: false, error: 'Outlook login failed. Please try again.' };
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const login = async (credentials) => {
     setLoading(true);
     try {
@@ -117,6 +136,7 @@ export const AuthProvider = ({ children }) => {
     user,
     token,
     login,
+    loginWithOutlookToken,
     logout,
     loading,
     isAuthenticated: !!user && !!token

@@ -1,4 +1,6 @@
-from fastapi import APIRouter, HTTPException, Depends, Header
+import os
+from fastapi import APIRouter, HTTPException, Depends, Header, Query
+from fastapi.responses import RedirectResponse
 from typing import Optional
 from app.models import LoginRequest, LoginResponse, SessionUser
 from app.services.auth_service import auth_service
@@ -68,5 +70,38 @@ async def get_current_user_info(current_user: SessionUser = Depends(get_current_
         "username": current_user.username,
         "practice_url": current_user.practice_url,
         "expires_at": current_user.expires_at,
-        "created_at": current_user.created_at
+        "created_at": current_user.created_at,
+        "auth_method": current_user.auth_method
     }
+
+@router.get("/outlook/authorize")
+async def outlook_authorize():
+    """
+    Redirect user to Microsoft OAuth2 login page
+    """
+    if not auth_service.OUTLOOK_CLIENT_ID:
+        raise HTTPException(status_code=500, detail="Outlook OAuth is not configured")
+    url = auth_service.get_outlook_authorize_url()
+    return RedirectResponse(url=url)
+
+@router.get("/outlook/callback")
+async def outlook_callback(code: str = Query(None), state: str = Query(None), error: str = Query(None)):
+    """
+    Handle Microsoft OAuth2 callback, then redirect to frontend with session token
+    """
+    # Determine frontend URL for redirects
+    frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173")
+
+    if error:
+        return RedirectResponse(url=f"{frontend_url}/login?error=outlook_denied")
+
+    if not code or not state:
+        return RedirectResponse(url=f"{frontend_url}/login?error=outlook_missing_params")
+
+    result = await auth_service.authenticate_outlook_user(code, state)
+
+    if not result.success:
+        return RedirectResponse(url=f"{frontend_url}/login?error={result.message}")
+
+    # Redirect to frontend with session token — frontend will pick it up
+    return RedirectResponse(url=f"{frontend_url}/login?outlook_token={result.session_token}")

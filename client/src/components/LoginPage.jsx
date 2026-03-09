@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { authService } from '../services/authService';
 
 const LoginPage = () => {
   const [credentials, setCredentials] = useState({
@@ -9,8 +10,31 @@ const LoginPage = () => {
   });
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const { login, loading } = useAuth();
+  const { login, loginWithOutlookToken, loading } = useAuth();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Handle Outlook OAuth callback token or error from URL
+  useEffect(() => {
+    const outlookToken = searchParams.get('outlook_token');
+    const outlookError = searchParams.get('error');
+
+    if (outlookToken) {
+      // Clear the URL params
+      setSearchParams({}, { replace: true });
+      // Complete login with the token from the backend
+      loginWithOutlookToken(outlookToken).then((result) => {
+        if (result.success) {
+          navigate('/');
+        } else {
+          setError(result.error);
+        }
+      });
+    } else if (outlookError) {
+      setSearchParams({}, { replace: true });
+      setError(decodeURIComponent(outlookError));
+    }
+  }, [searchParams]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -149,8 +173,8 @@ const LoginPage = () => {
                 type="submit"
                 disabled={loading}
                 className={`w-full py-2 px-6 rounded-full text-white font-medium text-lg transition-colors mt-2 ${
-                  loading 
-                    ? 'bg-gray-400 cursor-not-allowed' 
+                  loading
+                    ? 'bg-gray-400 cursor-not-allowed'
                     : 'bg-teal-600 hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2'
                 }`}
               >
@@ -165,6 +189,31 @@ const LoginPage = () => {
               ) : (
                 'Log in'
               )}
+              </button>
+            </div>
+
+            {/* Divider */}
+            <div className="flex items-center my-5">
+              <div className="flex-1 border-t border-gray-300"></div>
+              <span className="px-4 text-sm text-gray-500">or</span>
+              <div className="flex-1 border-t border-gray-300"></div>
+            </div>
+
+            {/* Outlook sign-in button */}
+            <div>
+              <button
+                type="button"
+                disabled={loading}
+                onClick={() => authService.loginWithOutlook()}
+                className="w-full py-2 px-6 rounded-full border border-gray-300 bg-white text-gray-700 font-medium text-lg transition-colors hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 flex items-center justify-center gap-3"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 23 23">
+                  <path fill="#f35325" d="M1 1h10v10H1z"/>
+                  <path fill="#81bc06" d="M12 1h10v10H12z"/>
+                  <path fill="#05a6f0" d="M1 12h10v10H1z"/>
+                  <path fill="#ffba08" d="M12 12h10v10H12z"/>
+                </svg>
+                Sign in with Microsoft
               </button>
             </div>
           </form>

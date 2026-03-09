@@ -4,6 +4,7 @@
  */
 
 import apiClient from './apiClient.js';
+import API_CONFIG from '../config/api.js';
 
 export const authService = {
   /**
@@ -14,6 +15,13 @@ export const authService = {
   login: async (credentials) => {
     const response = await apiClient.post('/auth/login', credentials);
     return response.data;
+  },
+
+  /**
+   * Redirect to Microsoft Outlook OAuth login
+   */
+  loginWithOutlook: () => {
+    window.location.href = `${API_CONFIG.BASE_URL}/auth/outlook/authorize`;
   },
 
   /**
