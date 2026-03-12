@@ -152,8 +152,12 @@ class AuthService:
     
     def _get_practice_config(self, username: str) -> Optional[tuple]:
         """
-        Get practice configuration (practice_url, api_key) for username from environment variables
-        Returns tuple of (practice_url, api_key) or None if not found
+        Get practice configuration (practice_url, api_key) for username from environment variables.
+
+        Expected env format (per practice):
+            PRACTICE_<practice_name>=username,password,api_key
+
+        Returns tuple of (practice_url, api_key) or None if not found.
         """
         # Look for PRACTICE_* environment variables
         for key, value in os.environ.items():
@@ -161,9 +165,11 @@ class AuthService:
                 try:
                     parts = value.split(',')
                     if len(parts) == 3:
-                        env_username, practice_url, api_key = parts
+                        env_username, _env_password, api_key = parts
                         if env_username.strip() == username:
-                            return practice_url.strip(), api_key.strip()
+                            # Practice URL is the suffix of the env var name after PRACTICE_
+                            practice_url = key[len("PRACTICE_") :].strip()
+                            return practice_url, api_key.strip()
                 except Exception as e:
                     logger.warning(f"Invalid PRACTICE_ config format for {key}: {e}")
                     continue
@@ -369,7 +375,11 @@ class AuthService:
     def _get_practice_modmed_credentials(self, practice_name: str) -> Optional[tuple]:
         """
         Look up a practice's ModMed FHIR credentials from PRACTICE_* env vars.
-        Returns (username, practice_url, api_key) or None.
+
+        Expected env format:
+            PRACTICE_<practice_name>=username,password,api_key
+
+        Returns (username, password, practice_url, api_key) or None.
         """
         env_key = f"PRACTICE_{practice_name}"
         value = os.getenv(env_key)
@@ -377,7 +387,11 @@ class AuthService:
             return None
         parts = value.split(",")
         if len(parts) == 3:
-            return parts[0].strip(), parts[1].strip(), parts[2].strip()
+            username = parts[0].strip()
+            password = parts[1].strip()
+            api_key = parts[2].strip()
+            practice_url = practice_name.strip()
+            return username, password, practice_url, api_key
         return None
 
     async def authenticate_outlook_user(self, code: str, state: str) -> Optional[LoginResponse]:
@@ -468,20 +482,17 @@ class AuthService:
         fhir_username = None
 
         if modmed_creds:
-            fhir_username, practice_url, practice_api_key = modmed_creds
-            # Auto-authenticate with ModMed using stored FHIR password
-            fhir_password = os.getenv(f"PRACTICE_FHIR_PASSWORD_{practice_name}", "")
-            if fhir_password:
-                mm_tokens = await self._authenticate_with_modmed(
-                    fhir_username, fhir_password, practice_url, practice_api_key
-                )
-                if mm_tokens:
-                    modmed_access_token = mm_tokens["access_token"]
-                    modmed_refresh_token = mm_tokens["refresh_token"]
-                    modmed_expires_at = datetime.utcnow() + timedelta(hours=2)
-                    logger.info(f"Auto-authenticated with ModMed for Outlook user {email}")
-                else:
-                    logger.warning(f"ModMed auto-auth failed for practice {practice_name}")
+            fhir_username, fhir_password, practice_url, practice_api_key = modmed_creds
+            mm_tokens = await self._authenticate_with_modmed(
+                fhir_username, fhir_password, practice_url, practice_api_key
+            )
+            if mm_tokens:
+                modmed_access_token = mm_tokens["access_token"]
+                modmed_refresh_token = mm_tokens["refresh_token"]
+                modmed_expires_at = datetime.utcnow() + timedelta(hours=2)
+                logger.info(f"Auto-authenticated with ModMed for Outlook user {email}")
+            else:
+                logger.warning(f"ModMed auto-auth failed for practice {practice_name}")
 
         # Generate session token
         expires_at = datetime.utcnow() + self.SESSION_DURATION

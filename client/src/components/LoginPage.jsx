@@ -64,7 +64,7 @@ const LoginPage = () => {
             type="button"
             disabled={loading}
             onClick={() => authService.loginWithOutlook()}
-            className="w-full mt-1 mb-4 py-2 px-6 rounded-full border border-slate-200 bg-white text-slate-800 font-medium text-base transition-colors hover:bg-slate-50 hover:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full mt-1 mb-2 py-2 px-6 rounded-full border border-slate-200 bg-white text-slate-800 font-medium text-base transition-colors hover:bg-slate-50 hover:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? (
               <svg className="animate-spin h-5 w-5 text-gray-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
