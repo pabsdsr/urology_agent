@@ -34,7 +34,7 @@ const LoginPage = () => {
       setSearchParams({}, { replace: true });
       setError(decodeURIComponent(outlookError));
     }
-  }, [searchParams]);
+  }, [searchParams, loginWithOutlookToken, navigate, setSearchParams]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;

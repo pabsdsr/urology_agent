@@ -344,16 +344,26 @@ class AuthService:
         """
         Check if an email is authorized and return its practice mapping.
         Reads OUTLOOK_AUTHORIZED_EMAILS env var.
-        Format: "email1@org.com:practice_name,email2@org.com:practice_name"
+        Format: "email1@org.com:practice_name,@domain.com:practice_name"
+        Entries starting with '@' match all emails from that domain.
         Returns (practice_name,) or None if not authorized.
         """
         authorized = os.getenv("OUTLOOK_AUTHORIZED_EMAILS", "")
+        email_lower = email.lower().strip()
         for entry in authorized.split(","):
             entry = entry.strip()
-            if ":" in entry:
-                allowed_email, practice_name = entry.rsplit(":", 1)
-                if allowed_email.strip().lower() == email.lower():
-                    return (practice_name.strip(),)
+            if ":" not in entry:
+                continue
+            pattern, practice_name = entry.rsplit(":", 1)
+            pattern = pattern.strip().lower()
+            practice_name = practice_name.strip()
+            # Domain wildcard: entries starting with '@' match the whole domain
+            if pattern.startswith("@"):
+                if email_lower.endswith(pattern):
+                    return (practice_name,)
+            else:
+                if email_lower == pattern:
+                    return (practice_name,)
         return None
 
     def _get_practice_modmed_credentials(self, practice_name: str) -> Optional[tuple]:

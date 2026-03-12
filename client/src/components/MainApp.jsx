@@ -2,7 +2,6 @@ import { useEffect, useState, useRef } from "react";
 import { patientService } from "../services/patientService.js";
 
 function MainApp() {
-  const [patients, setPatients] = useState([]);
   const [selectedId, setSelectedId] = useState("");
   const [selectedPatient, setSelectedPatient] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");

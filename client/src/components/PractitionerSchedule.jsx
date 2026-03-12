@@ -115,13 +115,14 @@ function PractitionerSchedule() {
           call_schedule: res.call_schedule || {},
           surgery_appointments: res.surgery_appointments || {},
         });
-      } catch (err) {
+      } catch {
         setError("Failed to load schedule");
       } finally {
         setLoading(false);
       }
     }
     fetchSchedule();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [date, viewMode]);
 
   const { schedule, practitioner_names, practitioner_roles, location_names, call_schedule, surgery_appointments } = data;
