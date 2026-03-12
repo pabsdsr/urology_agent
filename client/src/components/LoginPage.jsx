@@ -33,17 +33,11 @@ const LoginPage = () => {
     <div className="min-h-screen flex items-center justify-center px-4 bg-gray-50">
       <div className="w-full max-w-md">
         <div
-          className="bg-white rounded-3xl shadow-lg border border-gray-100 flex flex-col items-center justify-center"
-          style={{
-            paddingTop: '64px',
-            paddingBottom: '64px',
-            paddingLeft: '48px',
-            paddingRight: '48px',
-            minHeight: '420px',
-          }}
+          className="bg-white rounded-3xl shadow-lg border border-gray-100 flex flex-col items-center px-10 py-10"
+          style={{ minHeight: '520px' }}
         >
           {/* Logo */}
-          <div className="w-40 h-40 mb-4">
+          <div className="w-50 h-50 mt-[5px] mb-2">
             <img
               src="/logo.png"
               alt="UroAssist Logo"
@@ -51,13 +45,18 @@ const LoginPage = () => {
             />
           </div>
 
-          <h1 className="text-2xl font-semibold text-gray-800 mb-8">
-            Log in to UroAssist
-          </h1>
+          <div className="text-center mb-1">
+            <h1 className="text-2xl font-semibold text-slate-900">
+              Login To UroAssist
+            </h1>
+            <p className="mt-6 text-sm text-slate-500">
+              Use your organization&apos;s Microsoft account to continue.
+            </p>
+          </div>
 
           {error && (
-            <div className="w-full bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
-              <div className="text-sm text-red-800">{error}</div>
+            <div className="w-full bg-red-50/90 border border-red-200 rounded-lg px-4 py-3 mb-6">
+              <div className="text-sm text-red-700">{error}</div>
             </div>
           )}
 
@@ -65,7 +64,7 @@ const LoginPage = () => {
             type="button"
             disabled={loading}
             onClick={() => authService.loginWithOutlook()}
-            className="w-full py-2 px-6 rounded-full border border-gray-300 bg-white text-gray-700 font-medium text-lg transition-colors hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full mt-1 mb-4 py-2 px-6 rounded-full border border-slate-200 bg-white text-slate-800 font-medium text-base transition-colors hover:bg-slate-50 hover:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? (
               <svg className="animate-spin h-5 w-5 text-gray-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -82,6 +81,10 @@ const LoginPage = () => {
             )}
             {loading ? 'Signing in...' : 'Sign in with Microsoft'}
           </button>
+
+          <p className="mt-0 text-xs text-slate-400 text-center max-w-xs">
+            By signing in, you confirm you are authorized to access protected health information for your organization.
+          </p>
         </div>
       </div>
     </div>
