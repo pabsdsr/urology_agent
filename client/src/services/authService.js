@@ -21,7 +21,8 @@ export const authService = {
    * Redirect to Microsoft Outlook OAuth login
    */
   loginWithOutlook: () => {
-    window.location.href = `${API_CONFIG.BASE_URL}/auth/outlook/authorize`;
+    const baseUrl = (API_CONFIG.BASE_URL || '').replace(/\/+$/, '');
+    window.location.href = `${baseUrl}/auth/outlook/authorize`;
   },
 
   /**
