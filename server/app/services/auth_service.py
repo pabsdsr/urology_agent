@@ -15,6 +15,13 @@ from app.services.appointment_service import _prewarm_schedule_cache, SCHEDULE_C
 logger = logging.getLogger(__name__)
 
 class AuthService:
+    def _is_admin_email(self, email: str) -> bool:
+        """Check if email is in the ADMIN_EMAILS env var (comma-separated)."""
+        admin_emails = os.environ.get("ADMIN_EMAILS", "")
+        if not admin_emails:
+            return False
+        return email.lower().strip() in [e.strip().lower() for e in admin_emails.split(",") if e.strip()]
+
     def __init__(self):
         self.SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-secret-key-change-in-production")
         self.user_sessions: Dict[str, SessionUser] = {}  # In-memory storage
@@ -67,14 +74,16 @@ class AuthService:
                 )
             
             # Generate session token
+            is_admin = self._is_admin_email(login_data.username)
             expires_at = datetime.utcnow() + self.SESSION_DURATION
             session_payload = {
                 "username": login_data.username,
                 "practice_url": practice_url,
+                "is_admin": is_admin,
                 "exp": expires_at,
                 "iat": datetime.utcnow()
             }
-            
+
             session_token = jwt.encode(session_payload, self.SECRET_KEY, algorithm="HS256")
             
             # Create practice-specific qdrant tool for this user
@@ -90,6 +99,7 @@ class AuthService:
                 username=login_data.username,
                 practice_url=practice_url,
                 session_token=session_token,
+                is_admin=is_admin,
                 modmed_access_token=modmed_tokens["access_token"],
                 modmed_refresh_token=modmed_tokens["refresh_token"],
                 modmed_expires_at=datetime.utcnow() + timedelta(hours=2),  # ModMed tokens expire in 2 hours
@@ -135,7 +145,8 @@ class AuthService:
                 username=login_data.username,
                 practice_url=practice_url,
                 expires_at=expires_at,
-                message="Login successful"
+                message="Login successful",
+                is_admin=is_admin
             )
             
         except Exception as e:
@@ -334,7 +345,7 @@ class AuthService:
             "scope": "openid profile email User.Read",
             "state": state,
         }
-        base = f"https://login.microsoftonline.com/{self.OUTLOOK_TENANT_ID}/oauth2/v2.0/authorize"
+        base = f"https://login.microsoftonline.com/common/oauth2/v2.0/authorize"
         return f"{base}?{urlencode(params)}"
 
     def _validate_oauth_state(self, state: str) -> bool:
@@ -413,7 +424,7 @@ class AuthService:
             )
 
         # Exchange code for Microsoft tokens
-        token_url = f"https://login.microsoftonline.com/{self.OUTLOOK_TENANT_ID}/oauth2/v2.0/token"
+        token_url = f"https://login.microsoftonline.com/common/oauth2/v2.0/token"
         token_data = {
             "client_id": self.OUTLOOK_CLIENT_ID,
             "client_secret": self.OUTLOOK_CLIENT_SECRET,
@@ -495,11 +506,13 @@ class AuthService:
                 logger.warning(f"ModMed auto-auth failed for practice {practice_name}")
 
         # Generate session token
+        is_admin = self._is_admin_email(email)
         expires_at = datetime.utcnow() + self.SESSION_DURATION
         session_payload = {
             "username": email,
             "practice_url": practice_url,
             "auth_method": "outlook",
+            "is_admin": is_admin,
             "exp": expires_at,
             "iat": datetime.utcnow(),
         }
@@ -522,6 +535,7 @@ class AuthService:
             practice_url=practice_url,
             session_token=session_token,
             auth_method="outlook",
+            is_admin=is_admin,
             modmed_access_token=modmed_access_token,
             modmed_refresh_token=modmed_refresh_token,
             modmed_expires_at=modmed_expires_at,
@@ -557,6 +571,7 @@ class AuthService:
             practice_url=practice_url,
             expires_at=expires_at,
             message="Login successful",
+            is_admin=is_admin,
         )
 
 

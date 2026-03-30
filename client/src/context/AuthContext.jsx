@@ -81,7 +81,8 @@ export const AuthProvider = ({ children }) => {
         setUser({
           username: data.username,
           practice_url: data.practice_url,
-          expires_at: data.expires_at
+          expires_at: data.expires_at,
+          is_admin: data.is_admin || false
         });
         return { success: true };
       } else {

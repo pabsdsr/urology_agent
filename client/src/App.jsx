@@ -17,7 +17,7 @@ function App() {
           <Route path="/" element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
             <Route index element={<MainApp />} />
             <Route path="schedule" element={<PractitionerSchedule />} />
-            <Route path="call-schedule-admin" element={<CallScheduleAdmin />} />
+            <Route path="call-schedule-admin" element={<ProtectedRoute requireAdmin>{<CallScheduleAdmin />}</ProtectedRoute>} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
