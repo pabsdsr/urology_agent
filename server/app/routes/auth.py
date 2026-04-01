@@ -82,7 +82,15 @@ async def outlook_authorize():
     """
     if not auth_service.OUTLOOK_CLIENT_ID:
         raise HTTPException(status_code=500, detail="Outlook OAuth is not configured")
-    url = auth_service.get_outlook_authorize_url()
+    if not (auth_service.OUTLOOK_TENANT_ID or "").strip():
+        raise HTTPException(
+            status_code=500,
+            detail="Outlook OAuth tenant is not configured (OUTLOOK_TENANT_ID)",
+        )
+    try:
+        url = auth_service.get_outlook_authorize_url()
+    except ValueError as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
     return RedirectResponse(url=url)
 
 @router.get("/outlook/callback")

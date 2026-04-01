@@ -345,7 +345,12 @@ class AuthService:
             "scope": "openid profile email User.Read",
             "state": state,
         }
-        base = f"https://login.microsoftonline.com/common/oauth2/v2.0/authorize"
+        # Single-tenant apps cannot use /common (AADSTS50194). Use your Directory (tenant) ID.
+        # Multi-tenant apps may set OUTLOOK_TENANT_ID to "common" or "organizations".
+        tenant = (self.OUTLOOK_TENANT_ID or "").strip()
+        if not tenant:
+            raise ValueError("OUTLOOK_TENANT_ID is required for Outlook OAuth")
+        base = f"https://login.microsoftonline.com/{tenant}/oauth2/v2.0/authorize"
         return f"{base}?{urlencode(params)}"
 
     def _validate_oauth_state(self, state: str) -> bool:
@@ -423,8 +428,18 @@ class AuthService:
                 expires_at=datetime.utcnow(), message="Invalid OAuth state. Please try again."
             )
 
-        # Exchange code for Microsoft tokens
-        token_url = f"https://login.microsoftonline.com/common/oauth2/v2.0/token"
+        # Exchange code for Microsoft tokens (same tenant segment as authorize)
+        tenant = (self.OUTLOOK_TENANT_ID or "").strip()
+        if not tenant:
+            return LoginResponse(
+                success=False,
+                session_token="",
+                username="",
+                practice_url="",
+                expires_at=datetime.utcnow(),
+                message="Outlook OAuth tenant is not configured",
+            )
+        token_url = f"https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token"
         token_data = {
             "client_id": self.OUTLOOK_CLIENT_ID,
             "client_secret": self.OUTLOOK_CLIENT_SECRET,
