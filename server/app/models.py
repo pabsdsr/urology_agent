@@ -13,6 +13,7 @@ class LoginResponse(BaseModel):
     practice_url: str
     expires_at: datetime
     message: Optional[str] = None
+    is_admin: bool = False
 
 class SessionUser(BaseModel):
     model_config = {"arbitrary_types_allowed": True}
@@ -21,6 +22,7 @@ class SessionUser(BaseModel):
     practice_url: str
     session_token: str
     auth_method: str = "modmed"  # "modmed" or "outlook"
+    is_admin: bool = False
     modmed_access_token: Optional[str] = None
     modmed_refresh_token: Optional[str] = None
     modmed_expires_at: Optional[datetime] = None

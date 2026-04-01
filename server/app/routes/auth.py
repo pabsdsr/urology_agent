@@ -71,7 +71,8 @@ async def get_current_user_info(current_user: SessionUser = Depends(get_current_
         "practice_url": current_user.practice_url,
         "expires_at": current_user.expires_at,
         "created_at": current_user.created_at,
-        "auth_method": current_user.auth_method
+        "auth_method": current_user.auth_method,
+        "is_admin": current_user.is_admin
     }
 
 @router.get("/outlook/authorize")
