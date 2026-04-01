@@ -61,11 +61,23 @@ jobs:
           eb health ${{ secrets.EB_ENVIRONMENT_NAME }} || true
           echo "Environment status checked (deployment may still be in progress)"
       
+      # ALB often returns 502 briefly while new tasks start or old connections drain.
       - name: Verify deployment
         run: |
-          echo "Testing health endpoint..."
-          curl -f https://api.uroassist.net/health || exit 1
-          echo "✅ Backend deployment successful!"
+          set -e
+          url="https://api.uroassist.net/health"
+          echo "Testing health endpoint with retries (up to ~3 min)..."
+          for i in $(seq 1 18); do
+            if curl -sfS --max-time 20 "$url" >/dev/null; then
+              echo "✅ Backend deployment successful!"
+              exit 0
+            fi
+            echo "Attempt $i/18: not healthy yet (502/timeouts are common right after deploy); waiting 10s..."
+            sleep 10
+          done
+          echo "❌ Health check still failing after retries."
+          echo "Check EB: eb health, eb logs, and container stdout (app crash / missing env on startup)."
+          exit 1
       
       - name: Notify on failure
         if: failure()
