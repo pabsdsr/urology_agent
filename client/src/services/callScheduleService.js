@@ -41,6 +41,18 @@ export const callScheduleService = {
   },
 
   /**
+   * Admin-only: newest-first audit entries for call schedule changes.
+   * @param {number} [limit=100]
+   * @param {number} [offset=0]
+   */
+  getAuditLog: async (limit = 100, offset = 0) => {
+    const response = await apiClient.get('/call-schedule/audit', {
+      params: { limit, offset },
+    });
+    return response.data;
+  },
+
+  /**
    * Upload a call schedule spreadsheet (CSV/XLSX) and import it.
    * @param {File} file
    */

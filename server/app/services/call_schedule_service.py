@@ -1,7 +1,8 @@
+import copy
 import json
 import os
-from datetime import datetime, timedelta
-from typing import Dict, Any
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, Optional
 
 CALL_SCHEDULE_PATH = os.path.join(
     os.path.dirname(__file__),
@@ -87,24 +88,60 @@ def _save_call_schedule(data: Dict[str, Dict[str, str]]) -> None:
             json.dump(data, f, indent=2, sort_keys=True)
 
 
-def update_week(week_start: str, days: Dict[str, Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
+def update_week(
+    week_start: str,
+    days: Dict[str, Dict[str, Any]],
+    audit_meta: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Dict[str, Any]]:
     """
     Update (or create) call schedule entries for a single week.
 
     week_start: ISO date string (YYYY-MM-DD) for the start of the week (currently Sunday).
     days: mapping of date string -> { "North Pod": [...entries...], "Central Pod": [...], "South Pod": [...] }.
+    audit_meta: if set, append an audit row with user + before/after for touched dates.
     """
     schedule = _load_call_schedule()
+    norm_days: Dict[str, Dict[str, Any]] = {}
     for date_str, pods in days.items():
-        # Normalize date key
         try:
             dt = datetime.strptime(date_str, "%Y-%m-%d").date()
             norm_key = dt.strftime("%Y-%m-%d")
         except ValueError:
-            # Skip invalid dates rather than erroring out the whole request
             continue
+        norm_days[norm_key] = pods
+
+    previous_by_date: Dict[str, Any] = {}
+    if audit_meta and norm_days:
+        for k in norm_days:
+            prev = schedule.get(k)
+            previous_by_date[k] = copy.deepcopy(prev) if prev is not None else None
+
+    for norm_key, pods in norm_days.items():
         schedule[norm_key] = pods
+
     _save_call_schedule(schedule)
+
+    if audit_meta and norm_days:
+        from app.services.call_schedule_audit import append_audit_entry
+
+        updated_by_date = {k: copy.deepcopy(schedule[k]) for k in norm_days}
+        outlook_email = audit_meta.get("outlook_email")
+        append_audit_entry(
+            {
+                "at": datetime.now(timezone.utc).isoformat(),
+                "outlook_email": outlook_email,
+                "auth_method": audit_meta.get("auth_method") or "",
+                "practice_url": audit_meta.get("practice_url") or "",
+                "is_admin": bool(audit_meta.get("is_admin")),
+                "source": audit_meta.get("source") or "unknown",
+                "upload_filename": audit_meta.get("upload_filename"),
+                "week_start": week_start,
+                "affected_dates": sorted(norm_days.keys()),
+                "previous_by_date": previous_by_date,
+                "updated_by_date": updated_by_date,
+            }
+        )
+
     return schedule
 
 

@@ -22,6 +22,8 @@ class SessionUser(BaseModel):
     practice_url: str
     session_token: str
     auth_method: str = "modmed"  # "modmed" or "outlook"
+    # Microsoft sign-in address; set only for Outlook OAuth. ModMed-only sessions use shared service usernames.
+    outlook_email: Optional[str] = None
     is_admin: bool = False
     modmed_access_token: Optional[str] = None
     modmed_refresh_token: Optional[str] = None

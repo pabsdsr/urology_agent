@@ -1,12 +1,13 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
 from pydantic import BaseModel, Field
 import asyncio
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from app.models import SessionUser
-from app.routes.auth import get_current_user
+from app.routes.auth import get_current_user, require_admin
 from app.services.call_schedule_service import update_week, get_call_schedule_range
 from app.services.call_schedule_import import parse_call_schedule_upload
+from app.services.call_schedule_audit import get_audit_entries
 
 
 router = APIRouter(
@@ -67,7 +68,15 @@ async def save_call_schedule_week(
             "South Pod": normalize_entries(raw_day.get("south")),
         }
 
-    update_week(payload.week_start, day_mapping)
+    audit_meta = {
+        "outlook_email": current_user.outlook_email,
+        "auth_method": current_user.auth_method,
+        "practice_url": current_user.practice_url,
+        "is_admin": current_user.is_admin,
+        "source": "week_save",
+        "upload_filename": None,
+    }
+    update_week(payload.week_start, day_mapping, audit_meta=audit_meta)
     return {"success": True, "updated_keys": list(day_mapping.keys())}
 
 
@@ -84,18 +93,42 @@ async def get_call_schedule(
     return {"call_schedule": data}
 
 
+@router.get("/audit")
+async def list_call_schedule_audit(
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    _admin: SessionUser = Depends(require_admin),
+):
+    """
+    Newest-first audit log of call schedule changes (who changed what and when).
+    """
+    entries = get_audit_entries(limit=limit, offset=offset)
+    return {"audit": entries, "limit": limit, "offset": offset}
+
+
 UPLOAD_READ_TIMEOUT_SECONDS = 30
 UPLOAD_PARSE_SAVE_TIMEOUT_SECONDS = 30
 
 
-def _parse_and_save_upload(contents: bytes, filename: str) -> dict:
+def _parse_and_save_upload(
+    contents: bytes,
+    filename: str,
+    audit_user: Optional[Dict[str, Any]] = None,
+) -> dict:
     """Synchronous parse + save so it can run in executor with a timeout."""
     day_mapping = parse_call_schedule_upload(contents, filename=filename)
     if not day_mapping:
         raise ValueError("No schedule entries found in uploaded file")
     sorted_dates = sorted(day_mapping.keys())
     week_start = sorted_dates[0]
-    update_week(week_start, day_mapping)
+    audit_meta = None
+    if audit_user:
+        audit_meta = {
+            **audit_user,
+            "source": "upload",
+            "upload_filename": filename or None,
+        }
+    update_week(week_start, day_mapping, audit_meta=audit_meta)
     return {"success": True, "updated_keys": sorted_dates}
 
 
@@ -114,11 +147,17 @@ async def upload_call_schedule(
             file.read(),
             timeout=UPLOAD_READ_TIMEOUT_SECONDS,
         )
+        audit_user = {
+            "outlook_email": current_user.outlook_email,
+            "auth_method": current_user.auth_method,
+            "practice_url": current_user.practice_url,
+            "is_admin": current_user.is_admin,
+        }
         loop = asyncio.get_event_loop()
         result = await asyncio.wait_for(
             loop.run_in_executor(
                 None,
-                lambda: _parse_and_save_upload(contents, filename),
+                lambda: _parse_and_save_upload(contents, filename, audit_user),
             ),
             timeout=UPLOAD_PARSE_SAVE_TIMEOUT_SECONDS,
         )

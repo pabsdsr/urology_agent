@@ -6,6 +6,7 @@ import React, {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
+import { Link } from "react-router-dom";
 import { callScheduleService } from "../services/callScheduleService";
 
 function formatYMD(d) {
@@ -524,8 +525,14 @@ export default function CallScheduleAdmin() {
       className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 overflow-visible"
     >
       <div className="relative bg-white rounded-lg shadow p-6 overflow-visible">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
           <h2 className="text-xl font-bold">Call Schedule (Admin)</h2>
+          <Link
+            to="/call-schedule-change-log"
+            className="text-sm text-teal-600 hover:underline shrink-0"
+          >
+            View change log
+          </Link>
         </div>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="flex flex-wrap items-center gap-4">

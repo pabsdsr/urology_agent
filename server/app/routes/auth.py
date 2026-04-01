@@ -34,6 +34,13 @@ async def get_current_user(authorization: Optional[str] = Header(None)) -> Sessi
     
     return user
 
+
+async def require_admin(current_user: SessionUser = Depends(get_current_user)) -> SessionUser:
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return current_user
+
+
 @router.post("/login", response_model=LoginResponse)
 async def login(credentials: LoginRequest):
     """
@@ -68,11 +75,12 @@ async def get_current_user_info(current_user: SessionUser = Depends(get_current_
     """
     return {
         "username": current_user.username,
+        "outlook_email": current_user.outlook_email,
         "practice_url": current_user.practice_url,
         "expires_at": current_user.expires_at,
         "created_at": current_user.created_at,
         "auth_method": current_user.auth_method,
-        "is_admin": current_user.is_admin
+        "is_admin": current_user.is_admin,
     }
 
 @router.get("/outlook/authorize")

@@ -7,6 +7,7 @@ import DashboardLayout from "./components/DashboardLayout";
 import MainApp from "./components/MainApp";
 import PractitionerSchedule from "./components/PractitionerSchedule";
 import CallScheduleAdmin from "./components/CallScheduleAdmin";
+import CallScheduleChangeLog from "./components/CallScheduleChangeLog";
 
 function App() {
   return (
@@ -18,6 +19,7 @@ function App() {
             <Route index element={<MainApp />} />
             <Route path="schedule" element={<PractitionerSchedule />} />
             <Route path="call-schedule-admin" element={<ProtectedRoute requireAdmin>{<CallScheduleAdmin />}</ProtectedRoute>} />
+            <Route path="call-schedule-change-log" element={<ProtectedRoute requireAdmin>{<CallScheduleChangeLog />}</ProtectedRoute>} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
