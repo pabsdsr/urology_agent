@@ -93,20 +93,16 @@ PRACTITIONER_LOCATION_CACHE_TTL = int(os.getenv("PRACTITIONER_LOCATION_CACHE_TTL
 _practitioner_location_cache: dict = {}  # base_url -> { "practitioner_names": {}, "location_names": {}, "practitioner_roles": {}, "practitioner_types": {}, "cached_at": float }
 
 # Cache for aggregated schedule/appointments, keyed by base_url and anchored week window.
-# Each entry: {
-#   "window_start": "YYYY-MM-DD",
-#   "window_end": "YYYY-MM-DD",
-#   "appointments": List[dict],
-#   "schedule": Dict[str, ...],
-#   "cached_at": float,
-# }
+# Stored in memory (default) or DynamoDB when SCHEDULE_CACHE_DYNAMODB_TABLE is set
+# (see schedule_cache_store.py). Each entry:
+#   window_start, window_end, appointments, schedule, cached_at (epoch seconds from time.time()).
 SCHEDULE_CACHE_WEEKS = int(os.getenv("SCHEDULE_CACHE_WEEKS", 4))
 SCHEDULE_CACHE_TTL = int(os.getenv("SCHEDULE_CACHE_TTL", 900))  # 15 minutes default
-_schedule_cache: dict = {}  # base_url -> cache_entry
 
-from typing import List, Tuple, Dict
+from typing import List, Tuple, Dict, Optional
 from app.services.client_service import client
 from app.services.call_schedule_service import get_call_schedule_range
+from app.services.schedule_cache_store import load_schedule_cache_entry, save_schedule_cache_entry
 
 
 async def _prewarm_schedule_cache(base_url: str, modmed_token: str, practice_api_key: str, window_start: str, window_end: str, logger):
@@ -114,13 +110,14 @@ async def _prewarm_schedule_cache(base_url: str, modmed_token: str, practice_api
     try:
         appointments_all = await get_appointments_by_date(window_start, window_end, modmed_token, base_url, practice_api_key)
         schedule_all = aggregate_practitioner_schedule(appointments_all)
-        _schedule_cache[base_url] = {
+        entry = {
             "window_start": window_start,
             "window_end": window_end,
             "appointments": appointments_all,
             "schedule": schedule_all,
-            "cached_at": time.monotonic(),
+            "cached_at": time.time(),
         }
+        await asyncio.to_thread(save_schedule_cache_entry, base_url, entry)
     except Exception as e:
         logger.warning(f"[Schedule cache] Failed to warm window {window_start} to {window_end}: {e}")
 
@@ -519,8 +516,8 @@ async def get_practitioner_schedule_by_date(start_date: str, end_date: str, modm
     request_in_window = window_start <= start_date <= end_date <= window_end
 
     if request_in_window:
-        now = time.monotonic()
-        cache_entry = _schedule_cache.get(base_url)
+        now = time.time()
+        cache_entry: Optional[dict] = await asyncio.to_thread(load_schedule_cache_entry, base_url)
         # If cached appointments do not include the newer "description" field,
         # treat cache as missing so we refetch with full data for surgeries.
         if cache_entry:
@@ -533,10 +530,7 @@ async def get_practitioner_schedule_by_date(start_date: str, end_date: str, modm
             and cache_entry["window_start"] == window_start
             and cache_entry["window_end"] == window_end
         )
-        cache_fresh = (
-            window_matches
-            and (now - cache_entry["cached_at"] < SCHEDULE_CACHE_TTL)
-        )
+        cache_fresh = window_matches and (now - float(cache_entry["cached_at"]) < SCHEDULE_CACHE_TTL)
 
         if cache_fresh:
             # Serve from fresh cache.
