@@ -13,31 +13,14 @@ const LoginPage = () => {
     return <Navigate to="/" replace />;
   }
 
-  // const handleLoginRedirect = () => {
-  //     instance
-  //       .loginPopup({
-  //         ...loginRequest,
-  //       })
-  //       .then((response) => {
-  //         instance.setActiveAccount(response.account);
-  //       })
-  //       .catch((error) => {
-  //         console.error(error);
-  //         setError('Login failed. Please try again.');
-  //       });
-  //   };
-
-
-
-
-    const handleLoginRedirect = () => {
-      instance
-        .loginRedirect(loginRequest)
-        .catch((error) => {
-          console.error(error);
-          setError('Login failed. Please try again.');
-        });
-    };
+  const handleLoginRedirect = () => {
+    instance
+      .loginRedirect(loginRequest)
+      .catch((error) => {
+        console.error(error);
+        setError('Login failed. Please try again.');
+      });
+  };
 
 
 
