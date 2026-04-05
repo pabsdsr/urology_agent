@@ -1,152 +1,96 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { authService } from '../services/authService.js';
-
-const AuthContext = createContext();
-
-// eslint-disable-next-line react-refresh/only-export-components
-export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
-};
+import React, { useState, useEffect, useMemo } from 'react';
+// import { authService } from '../services/authService.js';
+import { PublicClientApplication, EventType } from '@azure/msal-browser';
+import { msalConfig } from '../authConfig.js';
+import { MsalProvider } from '@azure/msal-react';
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
-  const [token, setToken] = useState(localStorage.getItem('session_token'));
-  const [loading, setLoading] = useState(true);
+    const msalInstance = useMemo(() => new PublicClientApplication(msalConfig), []);
 
-  // Check if user is authenticated on app load
-  useEffect(() => {
-    const checkAuth = async () => {
-      const storedToken = localStorage.getItem('session_token');
-      if (storedToken) {
-        try {
-          const userData = await authService.checkAuth();
-          setUser(userData);
-          setToken(storedToken);
-        } catch (error) {
-          console.error('Auth check failed:', error);
-          // Token invalid, clear it (apiClient handles this automatically)
-          localStorage.removeItem('session_token');
-          setToken(null);
-          setUser(null);
+    const handleResponse = (resp) => {
+        if (resp !== null) {
+            msalInstance.setActiveAccount(resp.account);
+        } else {
+            const currentAccounts = msalInstance.getAllAccounts();
+            if (!currentAccounts || currentAccounts.length < 1) {
+                return;
+            } else if (currentAccounts.length > 1) {
+                // Add choose account code here
+            } else if (currentAccounts.length === 1) {
+                const activeAccount = currentAccounts[0];
+                msalInstance.setActiveAccount(activeAccount);
+            }
         }
-      }
-      setLoading(false);
     };
 
-    // Listen for unauthorized events from apiClient
-    const handleUnauthorized = () => {
-      setToken(null);
-      setUser(null);
-    };
-
-    window.addEventListener('auth:unauthorized', handleUnauthorized);
-    checkAuth();
-
-    return () => {
-      window.removeEventListener('auth:unauthorized', handleUnauthorized);
-    };
-  }, []);
-
-  const loginWithOutlookToken = async (sessionToken) => {
-    setLoading(true);
-    try {
-      localStorage.setItem('session_token', sessionToken);
-      setToken(sessionToken);
-      const userData = await authService.checkAuth();
-      setUser(userData);
-      return { success: true };
-    } catch (error) {
-      console.error('Outlook token login failed:', error);
-      localStorage.removeItem('session_token');
-      setToken(null);
-      setUser(null);
-      return { success: false, error: 'Outlook login failed. Please try again.' };
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const login = async (credentials) => {
-    setLoading(true);
-    try {
-      const data = await authService.login(credentials);
-
-      if (data.success) {
-        localStorage.setItem('session_token', data.session_token);
-        setToken(data.session_token);
-        setUser({
-          username: data.username,
-          practice_url: data.practice_url,
-          expires_at: data.expires_at,
-          is_admin: data.is_admin || false
+    useEffect(() => {
+        msalInstance.initialize().then(() => {
+            msalInstance.handleRedirectPromise().then(handleResponse).catch(err => {
+                console.error(err);
+            });
         });
-        return { success: true };
-      } else {
-        return { 
-          success: false, 
-          error: data.detail || data.message || 'Login failed' 
-        };
-      }
-    } catch (error) {
-      console.error('Login error:', error);
-      
-      // Customize error messages based on error type
-      let errorMessage = 'Login failed. Please try again.';
-      
-      if (error.response?.status === 401) {
-        errorMessage = 'Invalid username or password. Please check your credentials.';
-      } else if (error.response?.status === 403) {
-        errorMessage = 'Access denied. Please contact your administrator.';
-      } else if (error.response?.status === 503) {
-        errorMessage = 'ModMed services are temporarily unavailable. Please try again in a few minutes.';
-      } else if (error.response?.status >= 500) {
-        errorMessage = 'Server error. Please try again later.';
-      } else if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
-        errorMessage = 'Request timed out. The server is taking too long to respond. Please try again.';
-      } else if (!error.response) {
-        errorMessage = 'Network error. Please check your connection.';
-      }
-      
-      return { 
-        success: false, 
-        error: errorMessage
-      };
-    } finally {
-      setLoading(false);
-    }
-  };
+    }, [msalInstance]);
 
-  const logout = async () => {
-    try {
-      if (token) {
-        await authService.logout();
-      }
-    } catch (error) {
-      console.error('Logout error:', error);
-    } finally {
-      localStorage.removeItem('session_token');
-      setToken(null);
-      setUser(null);
-    }
-  };
-
-  const value = {
-    user,
-    token,
-    login,
-    loginWithOutlookToken,
-    logout,
-    loading,
-    isAuthenticated: !!user && !!token
-  };
-
-  return (
-    <AuthContext.Provider value={value}>
-      {children}
-    </AuthContext.Provider>
-  );
+    return <MsalProvider instance={msalInstance}>{children}</MsalProvider>;
 };
+
+// export const AuthProvider = ({ children }) => {
+//   const [initialized, setInitialized] = useState(false);
+//   const msalInstance = useMemo(() => new PublicClientApplication(msalConfig), []);
+
+//   useEffect(() => {
+//     let isMounted = true;
+
+//     const initMsal = async () => {
+//       try {
+//         await msalInstance.initialize();
+//         console.log("config", msalInstance.getConfiguration());
+//         const result = await msalInstance.handleRedirectPromise();
+
+//         console.log('msal result:', result);
+
+//         if (result?.account) {
+//           msalInstance.setActiveAccount(result.account);
+//         }
+
+//         const accounts = msalInstance.getAllAccounts();
+//         if (!msalInstance.getActiveAccount() && accounts.length > 0) {
+//           msalInstance.setActiveAccount(accounts[0]);
+//         }
+//       } catch (error) {
+//         console.error(error);
+//       } finally {
+//         if (isMounted) {
+//           setInitialized(true);
+//         }
+//       }
+//     };
+
+//     initMsal();
+
+//     return () => {
+//       isMounted = false;
+//     };
+//   }, [msalInstance]);
+
+//   // useEffect(() => {
+//   //   const callbackId = msalInstance.addEventCallback((event) => {
+//   //     const authenticationResult = event?.payload;
+//   //     if (event.eventType === EventType.LOGIN_SUCCESS && authenticationResult?.account) {
+//   //       msalInstance.setActiveAccount(authenticationResult.account);
+//   //     }
+//   //   });
+
+//   //   return () => {
+//   //     if (callbackId) {
+//   //       msalInstance.removeEventCallback(callbackId);
+//   //     }
+//   //   };
+//   // }, [msalInstance]);
+
+//   if (!initialized) {
+//     return null;
+//   }
+
+//   return <MsalProvider instance={msalInstance}>{children}</MsalProvider>;
+// };

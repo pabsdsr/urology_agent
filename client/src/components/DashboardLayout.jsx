@@ -1,14 +1,28 @@
-import React from "react";
+import React, { useState } from "react";
 import { useNavigate, useLocation, Outlet } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
+import { useMsal } from '@azure/msal-react';
+// import { useAuth } from "../context/AuthContext";
 
 function DashboardLayout() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { logout } = useAuth();
+  const { instance } = useMsal();
+  const [error, setError] = useState(null);
+  // const { logout } = useAuth();
 
   const isChat = location.pathname === "/";
   const isSchedule = location.pathname === "/schedule";
+
+  const handleLogoutRedirect = () => {
+    instance
+      .logoutRedirect({
+        postLogoutRedirectUri: '/login',
+      })
+      .catch((error) => {
+        console.error(error);
+        setError('Logout failed. Please try again.');
+      });
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -49,7 +63,7 @@ function DashboardLayout() {
                 Schedule
               </button>
               <button
-                onClick={logout}
+                onClick={handleLogoutRedirect}
                 className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-teal-600 hover:text-white rounded-md transition-colors"
               >
                 Log out
