@@ -1,4 +1,4 @@
-import apiClient from './apiClient.js';
+import apiClient, { getAuthHeaders } from './apiClient.js';
 import API_CONFIG from '../config/api.js';
 
 export const callScheduleService = {
@@ -59,7 +59,7 @@ export const callScheduleService = {
   uploadSchedule: async (file) => {
     const formData = new FormData();
     formData.append('file', file);
-    const token = window.localStorage.getItem('session_token');
+    const { Authorization } = await getAuthHeaders();
 
     const baseUrl = (API_CONFIG.BASE_URL || '').replace(/\/+$/, '');
     const uploadUrl = `${baseUrl}/call-schedule/upload`;
@@ -72,7 +72,7 @@ export const callScheduleService = {
       response = await fetch(uploadUrl, {
         method: 'POST',
         headers: {
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          ...(Authorization ? { Authorization } : {}),
         },
         body: formData,
         signal: controller.signal,

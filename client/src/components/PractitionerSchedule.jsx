@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 import { scheduleService } from "../services/scheduleService";
 
 function PractitionerSchedule() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [data, setData] = useState({
     schedule: {},
     practitioner_names: {},
@@ -532,15 +534,17 @@ function PractitionerSchedule() {
           )}
         </div>
       )}
-      <div className="mt-3 flex justify-end">
-        <button
-          type="button"
-          onClick={() => navigate("/call-schedule-admin")}
-          className="px-3 py-1 text-xs bg-white text-gray-500 rounded-md hover:bg-gray-50 font-medium"
-        >
-          Edit call schedule
-        </button>
-      </div>
+      {user?.is_admin && (
+        <div className="mt-3 flex justify-end">
+          <button
+            type="button"
+            onClick={() => navigate("/call-schedule-admin")}
+            className="px-3 py-1 text-xs bg-white text-gray-500 rounded-md hover:bg-gray-50 font-medium"
+          >
+            Edit call schedule
+          </button>
+        </div>
+      )}
       </div>
       {selectedSurgery && (
         <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/30">

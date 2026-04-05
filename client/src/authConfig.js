@@ -8,8 +8,8 @@ import { LogLevel } from '@azure/msal-browser';
 
  export const msalConfig = {
      auth: {
-         clientId: '', // This is the ONLY mandatory field that you need to supply.
-         authority: '', // Replace the placeholder with your tenant info
+         clientId: '233d8702-eed9-4800-950c-536560761c35', // This is the ONLY mandatory field that you need to supply.
+         authority: 'https://login.microsoftonline.com/25585d49-c213-4ff6-b7d5-e9cc3e83a10c',
          redirectUri: 'http://localhost:5173/', // Points to window.location.origin. You must register this URI on Microsoft Entra admin center/App Registration.
          postLogoutRedirectUri: 'http://localhost:5173/login', // Indicates the page to navigate after logout.
          navigateToLoginRequestUrl: false, // If "true", will navigate back to the original request location before processing the auth code response.
@@ -51,9 +51,16 @@ import { LogLevel } from '@azure/msal-browser';
  * For more information about OIDC scopes, visit: 
  * https://docs.microsoft.com/en-us/azure/active-directory/develop/v2-permissions-and-consent#openid-connect-scopes
  */
- export const loginRequest = {
-     scopes: [],
- };
+export const loginRequest = {
+  scopes: ['openid', 'profile', 'email'],
+};
+
+/**
+ * App role value from Microsoft Entra (App roles) that may sign in on the ID token
+ * as the `roles` claim. Must match the "Value" field of the role assigned to users/groups.
+ * Override with VITE_ADMIN_APP_ROLE in .env for different naming.
+ */
+export const adminAppRole = "admin";
 
  /**
  * An optional silentRequest object can be used to achieve silent SSO
