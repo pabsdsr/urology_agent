@@ -25,30 +25,35 @@ UroAssist frontend is a React single-page application (SPA) that provides a chat
 │  │                        App.jsx                                 │  │
 │  │   ┌─────────────────────────────────────────────────────────┐ │  │
 │  │   │                   AuthProvider                           │ │  │
-│  │   │   (Context for authentication state)                     │ │  │
+│  │   │   (MSAL + session; see AuthContext)                      │ │  │
 │  │   │                                                          │ │  │
 │  │   │   ┌─────────────────────────────────────────────────┐   │ │  │
 │  │   │   │              React Router                        │   │ │  │
 │  │   │   │                                                  │   │ │  │
 │  │   │   │   /login ──────► LoginPage                       │   │ │  │
 │  │   │   │                                                  │   │ │  │
-│  │   │   │   / ──────► ProtectedRoute ──────► MainApp      │   │ │  │
-│  │   │   │                                                  │   │ │  │
+│  │   │   │   / ──────► ProtectedRoute ─► DashboardLayout   │   │ │  │
+│  │   │   │              │                                 │   │ │  │
+│  │   │   │              ├─ / (index) ──► MainApp (chat)      │   │ │  │
+│  │   │   │              ├─ /schedule ─ PractitionerSchedule│   │ │  │
+│  │   │   │              ├─ /call-schedule-admin (admin)   │   │ │  │
+│  │   │   │              └─ /call-schedule-change-log (adm)│   │ │  │
 │  │   │   └─────────────────────────────────────────────────┘   │ │  │
 │  │   └─────────────────────────────────────────────────────────┘ │  │
 │  └───────────────────────────────────────────────────────────────┘  │
 │                                                                      │
 │  ┌───────────────────────────────────────────────────────────────┐  │
 │  │                         Services                               │  │
-│  │   apiClient.js ──► authService.js ──► patientService.js       │  │
+│  │   apiClient.js ──► authService.js, patientService.js,          │  │
+│  │   scheduleService.js, callScheduleService.js                    │  │
 │  └───────────────────────────────────────────────────────────────┘  │
 └───────────────────────────────────┬─────────────────────────────────┘
                                     │
-                                    │ HTTPS (Axios)
+                                    │ HTTPS (Axios, Bearer token)
                                     ▼
 ┌─────────────────────────────────────────────────────────────────────┐
 │                    Backend API (FastAPI)                             │
-│                   https://api.uroassist.net                          │
+│                   https://api.uroassist.net (production)             │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -61,28 +66,38 @@ client/
 │   └── vite.svg               # Vite favicon
 ├── src/
 │   ├── main.jsx               # Application entry point
-│   ├── App.jsx                # Root component with routing
+│   ├── App.jsx                # Routes: login, dashboard shell, nested pages
+│   ├── authConfig.js          # MSAL config (Entra client, redirect URIs, admin role)
+│   ├── msalInstance.js        # MSAL PublicClientApplication singleton
 │   ├── index.css              # Global styles (Tailwind)
 │   ├── assets/                # Bundled assets
 │   │   └── react.svg
 │   ├── components/            # React components
-│   │   ├── LoginPage.jsx      # Authentication UI
-│   │   ├── MainApp.jsx        # Main application interface
-│   │   └── ProtectedRoute.jsx # Route guard component
-│   ├── config/                # Configuration files
-│   │   └── api.js             # API configuration
-│   ├── context/               # React contexts
-│   │   └── AuthContext.jsx    # Authentication state management
-│   └── services/              # API service layer
-│       ├── apiClient.js       # Axios instance with interceptors
-│       ├── authService.js     # Authentication API calls
-│       └── patientService.js  # Patient API calls
+│   │   ├── LoginPage.jsx
+│   │   ├── DashboardLayout.jsx    # Shell + nav for authenticated area
+│   │   ├── MainApp.jsx          # Clinical assistant (chat + patient search)
+│   │   ├── PractitionerSchedule.jsx
+│   │   ├── CallScheduleAdmin.jsx
+│   │   ├── CallScheduleChangeLog.jsx
+│   │   └── ProtectedRoute.jsx     # Auth / optional requireAdmin
+│   ├── config/
+│   │   └── api.js             # API base URL and timeouts
+│   ├── context/
+│   │   └── AuthContext.jsx    # MSAL account + derived user (e.g. is_admin)
+│   ├── services/
+│   │   ├── apiClient.js
+│   │   ├── authService.js     # /auth/me, /auth/logout
+│   │   ├── patientService.js  # /patients, /run_crew
+│   │   ├── scheduleService.js # /schedule (practitioner calendar)
+│   │   └── callScheduleService.js  # /call-schedule (grid, upload, changelog)
+│   └── utils/
+│       └── calendarPacific.js
 ├── dist/                      # Production build output
-├── index.html                 # HTML entry point
-├── package.json               # Dependencies and scripts
-├── vite.config.js             # Vite configuration
-├── eslint.config.js           # ESLint configuration
-├── CLIENT_DEPLOYMENT.md       # Deployment guide
+├── index.html
+├── package.json
+├── vite.config.js
+├── eslint.config.js
+├── CLIENT_DEPLOYMENT.md
 └── CLIENT_ARCHITECTURE.md     # This file
 ```
 
@@ -90,24 +105,26 @@ client/
 
 ### 1. App.jsx - Application Root
 
-The root component that sets up:
-- **AuthProvider:** Wraps the entire app with authentication context
-- **React Router:** Handles client-side routing
+The root component configures **React Router** routes. **`AuthProvider`** wraps `<App />` in `main.jsx` (not in `App.jsx`).
+
+Nested routes use `DashboardLayout` as the authenticated shell; `MainApp` is the default index route (`/`).
 
 ```jsx
-<AuthProvider>
-  <Router>
-    <Routes>
-      <Route path="/login" element={<LoginPage />} />
-      <Route path="/" element={
-        <ProtectedRoute>
-          <MainApp />
-        </ProtectedRoute>
-      } />
-    </Routes>
-  </Router>
-</AuthProvider>
+<Router>
+  <Routes>
+    <Route path="/login" element={<LoginPage />} />
+    <Route path="/" element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
+      <Route index element={<MainApp />} />
+      <Route path="schedule" element={<PractitionerSchedule />} />
+      <Route path="call-schedule-admin" element={<ProtectedRoute requireAdmin><CallScheduleAdmin /></ProtectedRoute>} />
+      <Route path="call-schedule-change-log" element={<ProtectedRoute requireAdmin><CallScheduleChangeLog /></ProtectedRoute>} />
+    </Route>
+    <Route path="*" element={<Navigate to="/login" replace />} />
+  </Routes>
+</Router>
 ```
+
+(`AuthProvider` wraps the tree in `main.jsx`.)
 
 ### 2. AuthContext.jsx - Authentication State
 
@@ -134,21 +151,27 @@ Protects routes that require authentication:
 - Shows loading spinner while checking auth
 - Redirects to `/login` if not authenticated
 - Renders children if authenticated
+- Optional `requireAdmin`: redirect non-admins (checks `user.is_admin` from `/auth/me` / ID token roles)
 
-### 5. MainApp.jsx - Main Interface
+### 5. DashboardLayout.jsx - Authenticated shell
 
-The primary application interface with two main sections:
+Wraps nested routes with shared navigation (e.g. links to chat, practitioner schedule, call schedule admin for admins).
 
-**Patient Search Panel (Left):**
-- Search input with autocomplete
-- Patient list dropdown
-- Selected patient display
+### 6. MainApp.jsx - Clinical assistant
 
-**Chat Interface (Right):**
-- Message history display
-- User and bot message bubbles
-- Text input with Enter key support
-- Loading indicator during AI processing
+Default route (`/`). Main sections:
+
+**Patient search (left):** autocomplete, patient list, selection.
+
+**Chat (right):** messages, input, loading state for `/run_crew`.
+
+### 7. Schedule-related pages
+
+| Component | Route | API surface (via services) |
+|-----------|-------|------------------------------|
+| `PractitionerSchedule.jsx` | `/schedule` | `scheduleService` → `/schedule` |
+| `CallScheduleAdmin.jsx` | `/call-schedule-admin` | `callScheduleService` → `/call-schedule`, `/call-schedule/week`, upload |
+| `CallScheduleChangeLog.jsx` | `/call-schedule-change-log` | `callScheduleService.getChangelog` → `GET /call-schedule/changelog` (admin) |
 
 ## Services Layer
 
@@ -186,6 +209,21 @@ config.headers.Authorization = `Bearer ${token}`;
 |--------|----------|-------------|
 | `searchPatients(input)` | GET `/patients?given=…` / `family=…` | FHIR name search (typeahead) |
 | `runCrew(data)` | POST `/run_crew` | Send AI query (`{ query, id }`) |
+
+### scheduleService.js - Practitioner schedule
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `getPractitionerSchedule(start, end)` | GET `/schedule` | Practitioner appointments for a date range |
+
+### callScheduleService.js - On-call grid
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `getCallSchedule(start, end)` | GET `/call-schedule` | On-call assignments for a range |
+| `saveWeek(weekStart, days)` | POST `/call-schedule/week` | Save a week from the editor |
+| `uploadSchedule(file)` | POST `/call-schedule/upload` | Import CSV/XLSX |
+| `getChangelog(limit, offset)` | GET `/call-schedule/changelog` | Admin change log (newest first) |
 
 ## Data Flow
 
@@ -237,13 +275,17 @@ config.headers.Authorization = `Bearer ${token}`;
 
 ### Environment Variables
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `VITE_API_URL` | Backend API base URL | `http://localhost:8080` |
+Vite exposes only variables prefixed with `VITE_`. Values are inlined at **build time**.
 
-**Files:**
-- `.env.development` - Local development
-- `.env.production` - Production build
+| Variable | Description | Typical local |
+|----------|-------------|---------------|
+| `VITE_API_URL` | Backend API base URL (no trailing slash unless the API is under a path prefix) | `http://localhost:8080` |
+| `VITE_APP_ORIGIN` | SPA origin for MSAL defaults (`redirectUri` / post-logout when not overridden) | `http://localhost:5173` |
+| `VITE_MSAL_REDIRECT_URI` | Optional override for Entra redirect URI (must match app registration) | — |
+| `VITE_MSAL_POST_LOGOUT_URI` | Optional post sign-out redirect | — |
+| `VITE_ADMIN_APP_ROLE` | Entra app role **value** for admins (must match API `ENTRA_ADMIN_APP_ROLE`) | `admin` |
+
+**Files:** `.env.development`, `.env.production`. Production CI writes `.env.production` from GitHub Actions secrets (see `.github/workflows/deploy-frontend.yml`).
 
 ### API Configuration (config/api.js)
 
@@ -353,9 +395,9 @@ See [CLIENT_DEPLOYMENT.md](./CLIENT_DEPLOYMENT.md) for detailed deployment instr
 - **SSL:** AWS Certificate Manager
 
 **CI/CD:**
-- GitHub Actions workflow (`.github/workflows/deploy-frontend.yml`)
-- Triggered on push to `main` with changes in `client/`
-- Automatic S3 sync and CloudFront invalidation
+- `.github/workflows/deploy-frontend.yml` — on push to `main` when `client/**` changes (or manual `workflow_dispatch`)
+- Requires secrets: `VITE_API_URL`, `AWS_*`, `S3_BUCKET`, `CLOUDFRONT_DISTRIBUTION_ID`; optional `VITE_APP_ORIGIN`, `VITE_MSAL_*`, `VITE_ADMIN_APP_ROLE` (see workflow header comments)
+- Sync to S3, long-cache assets, no-cache `index.html`, CloudFront invalidation `/*`
 
 ## Performance Considerations
 

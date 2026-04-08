@@ -1,8 +1,9 @@
 # Production SPA build: Vite inlines import.meta.env at `npm run build` time.
 # Required GitHub secrets (repository → Settings → Secrets and variables → Actions):
 #   VITE_API_URL              — e.g. https://api.uroassist.net
-#   VITE_APP_ORIGIN           — SPA origin (e.g. https://www.uroassist.net) for MSAL defaults
-# Optional (override MSAL URLs; must match Entra app registration redirect URIs):
+# Optional but recommended:
+#   VITE_APP_ORIGIN           — SPA origin for MSAL defaults (workflow defaults to https://uroassist.net if unset)
+# Optional (override MSAL URLs; must match Entra app registration SPA redirect URIs):
 #   VITE_MSAL_REDIRECT_URI, VITE_MSAL_POST_LOGOUT_URI, VITE_ADMIN_APP_ROLE
 #
 # Backend env (AUTHORIZED_EMAILS, ENTRA_*, PRACTICE_*, etc.) is set on Elastic Beanstalk, not here.

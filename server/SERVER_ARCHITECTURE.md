@@ -67,6 +67,11 @@ server/
 │   │   ├── auth_service.py        # Entra token validation + ModMed bootstrap
 │   │   ├── entra_jwt.py          # JWKS validation for Entra access tokens
 │   │   ├── client_service.py      # HTTP client singleton
+│   │   ├── appointment_service.py # Practitioner schedule (ModMed FHIR)
+│   │   ├── schedule_cache_store.py  # DynamoDB cache for schedule payloads (optional)
+│   │   ├── call_schedule_service.py # On-call JSON (local disk + optional S3)
+│   │   ├── call_schedule_changelog.py # Append-only change log (JSON / S3)
+│   │   ├── call_schedule_import.py  # CSV/XLSX upload parsing
 │   │   ├── patient_embedder.py    # Qdrant vector operations
 │   │   ├── patient_info_service.py # Patient FHIR fetch, embed, aggregate
 │   │   ├── patient_name_cache_store.py  # DynamoDB-backed display-name cache (optional)
@@ -260,6 +265,10 @@ clinical_query_task:
 - `POST /call-schedule/upload`: Upload CSV/XLSX schedule
 - `GET /call-schedule/changelog`: Paginated change log (admin)
 
+**Persistence (call schedule)**:
+- `call_schedule_service.py` stores the on-call grid as JSON (`call_schedule.json` under `app/data/` locally, or `CALL_SCHEDULE_S3_KEY` in the bucket set by `CALL_SCHEDULE_S3_BUCKET`).
+- `call_schedule_changelog.py` stores append-only JSON change records (`call_schedule_changelog.json` locally, or `CALL_SCHEDULE_CHANGELOG_S3_KEY` in the same bucket when configured).
+
 #### **Crew Routes** (`routes/run_crew.py`)
 
 **Endpoints**:
@@ -388,8 +397,21 @@ ENTRA_TENANT_ID
 ENTRA_CLIENT_ID
 AUTHORIZED_EMAILS
 PRACTICE_<firm_name>   # ModMed FHIR user/pass + x-api-key for that firm
-AWS_REGION
-MODEL
+MODEL                    # Bedrock model id (see pyproject / env)
+```
+
+**Call schedule & S3 (optional)**:
+```bash
+CALL_SCHEDULE_S3_BUCKET           # If set, on-call grid + changelog read/write use S3
+CALL_SCHEDULE_S3_KEY              # default: call_schedule.json
+CALL_SCHEDULE_CHANGELOG_S3_KEY    # default: call_schedule_changelog.json
+```
+
+**DynamoDB caches (optional)**:
+```bash
+DYNAMODB_REGION                   # e.g. us-west-2
+SCHEDULE_CACHE_DYNAMODB_TABLE
+PATIENT_CACHE_DYNAMODB_TABLE
 ```
 
 ## Performance Considerations
@@ -404,7 +426,10 @@ MODEL
 
 ### 2. Caching Strategies
 
-**Current State**: In-process ModMed/Qdrant session cache per Entra user in `auth_service`; optional DynamoDB-backed patient **display name** cache (`patient_name_cache_store`).
+**Current State**:
+- In-process ModMed/Qdrant session cache per Entra user in `auth_service`
+- Optional DynamoDB-backed patient **display name** cache (`patient_name_cache_store`; table + `DYNAMODB_REGION` / `PATIENT_CACHE_DYNAMODB_TABLE`)
+- Optional DynamoDB-backed **practitioner schedule** cache (`schedule_cache_store`; `SCHEDULE_CACHE_DYNAMODB_TABLE`)
 
 **Recommendations**:
 - Cache patient list per practice (TTL: 5 minutes)

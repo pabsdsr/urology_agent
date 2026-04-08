@@ -1,3 +1,4 @@
+# PR / manual: backend uv sync (lint/tests placeholders), frontend lint + production-shaped Vite build.
 name: Run Tests
 
 on:

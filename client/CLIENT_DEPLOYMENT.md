@@ -40,12 +40,20 @@ aws configure  # Should already be configured
 
 ### Update Environment Configuration
 
-Ensure `.env.production` is correct:
+Ensure `.env.production` is correct. Vite inlines these at **build** time:
 
 ```bash
 # File: client/.env.production
 VITE_API_URL=https://api.uroassist.net
+# Recommended: SPA origin for MSAL (defaults in authConfig.js use window.location.origin if omitted)
+VITE_APP_ORIGIN=https://uroassist.net
+# Optional — must match Entra app registration SPA redirect URIs:
+# VITE_MSAL_REDIRECT_URI=https://uroassist.net/
+# VITE_MSAL_POST_LOGOUT_URI=https://uroassist.net/login
+# VITE_ADMIN_APP_ROLE=admin
 ```
+
+The GitHub Actions workflow `.github/workflows/deploy-frontend.yml` writes `.env.production` from repository secrets (`VITE_API_URL` required; `VITE_APP_ORIGIN` defaults to `https://uroassist.net` when unset).
 
 ### Build the Application
 
@@ -460,6 +468,8 @@ VITE_API_URL=http://localhost:8080
 ```bash
 # client/.env.production
 VITE_API_URL=https://api.uroassist.net
+VITE_APP_ORIGIN=https://uroassist.net
+# Optional: VITE_MSAL_REDIRECT_URI, VITE_MSAL_POST_LOGOUT_URI, VITE_ADMIN_APP_ROLE
 ```
 
 **Important**: Vite environment variables must be prefixed with `VITE_`.
@@ -507,64 +517,9 @@ For enhanced security, restrict S3 access to CloudFront only:
 2. Update S3 bucket policy to allow only OAI
 3. Update CloudFront origin to use OAI
 
-## CI/CD Pipeline (Optional)
+## CI/CD (GitHub Actions)
 
-### GitHub Actions Workflow
-
-Create `.github/workflows/deploy-frontend.yml`:
-
-```yaml
-name: Deploy Frontend
-
-on:
-  push:
-    branches: [main]
-    paths:
-      - 'client/**'
-
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    
-    steps:
-    - uses: actions/checkout@v3
-    
-    - name: Setup Node
-      uses: actions/setup-node@v3
-      with:
-        node-version: '18'
-        
-    - name: Install dependencies
-      working-directory: ./client
-      run: npm ci
-      
-    - name: Build
-      working-directory: ./client
-      run: npm run build
-      
-    - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@v2
-      with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: us-west-2
-        
-    - name: Deploy to S3
-      working-directory: ./client
-      run: |
-        aws s3 sync dist/ s3://uroassist-frontend/ \
-          --delete \
-          --cache-control "public, max-age=31536000" \
-          --exclude "index.html"
-        aws s3 cp dist/index.html s3://uroassist-frontend/ \
-          --cache-control "no-cache, no-store, must-revalidate"
-          
-    - name: Invalidate CloudFront
-      run: |
-        aws cloudfront create-invalidation \
-          --distribution-id ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }} \
-          --paths "/*"
-```
+Production deploy is defined in **`.github/workflows/deploy-frontend.yml`** (Node 20, `npm ci`, writes `.env.production` from secrets, `aws s3 sync`, CloudFront invalidation). See the workflow file for the exact secret names and steps—do not duplicate a second, outdated YAML here.
 
 ## Performance Optimization
 
