@@ -13,6 +13,7 @@ router = APIRouter(
 async def get_current_user(
     authorization: Optional[str] = Header(None),
 ) -> SessionUser:
+    """Resolve authenticated user from Bearer access token."""
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(
             status_code=401,
@@ -39,8 +40,26 @@ async def get_current_user(
 async def require_admin(
     current_user: SessionUser = Depends(get_current_user),
 ) -> SessionUser:
+    """Require admin role for protected routes."""
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Admin access required")
+    return current_user
+
+
+async def require_modmed_session(
+    current_user: SessionUser = Depends(get_current_user),
+) -> SessionUser:
+    """
+    Require a usable ModMed token and practice API key (schedule, patients, crew).
+    """
+    if not current_user.modmed_access_token or not current_user.practice_api_key:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "ModMed session is not available for this account. "
+                "Practice credentials may be missing or ModMed login failed."
+            ),
+        )
     return current_user
 
 
@@ -59,9 +78,10 @@ async def logout(authorization: Optional[str] = Header(None)):
 
 @router.get("/me")
 async def get_current_user_info(current_user: SessionUser = Depends(get_current_user)):
+    """Return profile fields used by the frontend session context."""
     return {
         "username": current_user.username,
-        "outlook_email": current_user.outlook_email,
+        "email": current_user.email,
         "practice_url": current_user.practice_url,
         "expires_at": current_user.expires_at,
         "created_at": current_user.created_at,

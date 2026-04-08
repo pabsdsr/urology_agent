@@ -33,7 +33,11 @@ function App() {
           />
           <Route
             path="call-schedule-change-log"
-            element={<CallScheduleChangeLog />}
+            element={
+              <ProtectedRoute requireAdmin>
+                <CallScheduleChangeLog />
+              </ProtectedRoute>
+            }
           />
         </Route>
         <Route path="*" element={<Navigate to="/login" replace />} />

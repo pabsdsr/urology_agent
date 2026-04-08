@@ -174,8 +174,8 @@ export default function CallScheduleChangeLog() {
           <ul className="space-y-4 text-sm">
             {audit.map((entry, i) => {
               const email =
-                entry.outlook_email && String(entry.outlook_email).trim()
-                  ? entry.outlook_email
+                entry.email && String(entry.email).trim()
+                  ? entry.email
                   : null;
               const changeLines = summarizeScheduleChanges(entry);
               return (
@@ -188,7 +188,7 @@ export default function CallScheduleChangeLog() {
                       <span className="text-gray-500 font-normal">By </span>
                       {email || (
                         <span className="text-amber-800">
-                          Not recorded (signed in without Outlook email)
+                          Not recorded (signed in without email)
                         </span>
                       )}
                     </p>

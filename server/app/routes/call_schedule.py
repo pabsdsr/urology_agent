@@ -4,7 +4,7 @@ import asyncio
 from typing import Any, Dict, List, Optional
 
 from app.models import SessionUser
-from app.routes.auth import get_current_user, require_admin
+from app.routes.auth import get_current_user, require_admin, require_modmed_session
 from app.services.call_schedule_service import update_week, get_call_schedule_range
 from app.services.call_schedule_import import parse_call_schedule_upload
 from app.services.call_schedule_audit import get_audit_entries
@@ -36,7 +36,7 @@ class CallScheduleWeekRequest(BaseModel):
 @router.post("/week")
 async def save_call_schedule_week(
     payload: CallScheduleWeekRequest,
-    current_user: SessionUser = Depends(get_current_user),
+    current_user: SessionUser = Depends(require_modmed_session),
 ):
     """
     Save or update the on-call schedule for a single week.
@@ -69,7 +69,7 @@ async def save_call_schedule_week(
         }
 
     audit_meta = {
-        "outlook_email": current_user.outlook_email,
+        "email": current_user.email,
         "auth_method": current_user.auth_method,
         "practice_url": current_user.practice_url,
         "is_admin": current_user.is_admin,
@@ -84,7 +84,7 @@ async def save_call_schedule_week(
 async def get_call_schedule(
     start: str,
     end: str,
-    current_user: SessionUser = Depends(get_current_user),
+    current_user: SessionUser = Depends(require_modmed_session),
 ):
     """
     Get call schedule entries for an inclusive date range.
@@ -97,7 +97,7 @@ async def get_call_schedule(
 async def list_call_schedule_audit(
     limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
-    _admin: SessionUser = Depends(require_admin),
+    admin: SessionUser = Depends(require_admin),
 ):
     """
     Newest-first audit log of call schedule changes (who changed what and when).
@@ -135,7 +135,7 @@ def _parse_and_save_upload(
 @router.post("/upload")
 async def upload_call_schedule(
     file: UploadFile = File(...),
-    current_user: SessionUser = Depends(get_current_user),
+    current_user: SessionUser = Depends(require_modmed_session),
 ):
     """
     Upload a call schedule spreadsheet (CSV or XLSX).
@@ -148,7 +148,7 @@ async def upload_call_schedule(
             timeout=UPLOAD_READ_TIMEOUT_SECONDS,
         )
         audit_user = {
-            "outlook_email": current_user.outlook_email,
+            "email": current_user.email,
             "auth_method": current_user.auth_method,
             "practice_url": current_user.practice_url,
             "is_admin": current_user.is_admin,

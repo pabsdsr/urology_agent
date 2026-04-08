@@ -11,7 +11,7 @@ from io import BytesIO
 from PyPDF2 import PdfReader
 from app.services.client_service import client
 from app.services.patient_embedder import PatientDataEmbedder
-from fastapi import APIRouter, HTTPException
+from fastapi import HTTPException
 import logging
 
 logger = logging.getLogger(__name__)
@@ -96,13 +96,6 @@ async def limited_get(client: httpx.AsyncClient, url: str, headers: dict = None)
         except Exception as e:
             return e
 
-router = APIRouter(
-    prefix="/patient_info",
-    tags=["patient_info"]
-)
-
-
-@router.post("")
 async def get_patient_info(id: str, modmed_token: str = None, practice_url: str = None, practice_api_key: str = None, user_qdrant_tool = None):
     """
     Fetch patient information from Modmed endpoints and process for embedding storage.

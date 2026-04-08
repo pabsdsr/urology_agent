@@ -1,25 +1,30 @@
 import React, { useState } from "react";
 import { useNavigate, useLocation, Outlet } from "react-router-dom";
 import { useMsal } from '@azure/msal-react';
-// import { useAuth } from "../context/AuthContext";
+import { authService } from '../services/authService.js';
+import { msalConfig } from '../authConfig.js';
 
 function DashboardLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const { instance } = useMsal();
   const [error, setError] = useState(null);
-  // const { logout } = useAuth();
 
   const isChat = location.pathname === "/";
   const isSchedule = location.pathname === "/schedule";
 
-  const handleLogoutRedirect = () => {
+  const handleLogoutRedirect = async () => {
+    try {
+      await authService.logout();
+    } catch (e) {
+      console.error(e);
+    }
     instance
       .logoutRedirect({
-        postLogoutRedirectUri: '/login',
+        postLogoutRedirectUri: msalConfig.auth.postLogoutRedirectUri,
       })
-      .catch((error) => {
-        console.error(error);
+      .catch((err) => {
+        console.error(err);
         setError('Logout failed. Please try again.');
       });
   };

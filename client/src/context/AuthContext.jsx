@@ -23,6 +23,14 @@ function parseRoles(claims) {
 function AuthStateProvider({ children }) {
   const { instance, inProgress } = useMsal();
   const activeAccount = instance.getActiveAccount();
+
+  useEffect(() => {
+    const onUnauthorized = () => {
+      window.location.assign("/login");
+    };
+    window.addEventListener("auth:unauthorized", onUnauthorized);
+    return () => window.removeEventListener("auth:unauthorized", onUnauthorized);
+  }, []);
   const loading = inProgress !== InteractionStatus.None;
   const isAuthenticated = !!activeAccount;
 

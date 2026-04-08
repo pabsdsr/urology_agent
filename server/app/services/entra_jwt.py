@@ -1,5 +1,5 @@
 """
-Validate Microsoft Entra ID (Azure AD) access tokens for this API using JWKS.
+Validate Microsoft Entra access tokens for this API using JWKS.
 """
 
 from __future__ import annotations
@@ -18,9 +18,11 @@ class EntraAccessTokenError(Exception):
 
 
 class EntraAccessTokenValidator:
+    """Validates Entra JWTs against tenant issuer and allowed audiences."""
+
     def __init__(self, tenant_id: str, valid_audiences: List[str]):
         if not tenant_id or not tenant_id.strip():
-            raise ValueError("ENTRA_TENANT_ID (or OUTLOOK_TENANT_ID) is required")
+            raise ValueError("ENTRA_TENANT_ID is required")
         self.tenant_id = tenant_id.strip()
         if not valid_audiences:
             raise ValueError("At least one expected audience is required")
@@ -36,6 +38,7 @@ class EntraAccessTokenValidator:
         )
 
     def validate(self, token: str) -> Dict[str, Any]:
+        """Decode and validate a bearer token, returning its claims."""
         try:
             signing_key = self._jwks.get_signing_key_from_jwt(token)
             payload = jwt.decode(

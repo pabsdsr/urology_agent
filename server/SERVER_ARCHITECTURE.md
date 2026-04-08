@@ -57,15 +57,20 @@ server/
 │   ├── models.py                  # Pydantic models
 │   │
 │   ├── routes/                    # API endpoints
-│   │   ├── auth.py                # Login, logout endpoints
-│   │   ├── all_patients.py        # Patient list endpoint
-│   │   └── run_crew.py            # AI agent query endpoint
+│   │   ├── auth.py                # /auth/me, /auth/logout (Entra bearer)
+│   │   ├── patients.py            # /patients (FHIR name search)
+│   │   ├── run_crew.py            # /run_crew (clinical assistant)
+│   │   ├── appointments.py       # /schedule (practitioner schedule)
+│   │   └── call_schedule.py       # /call-schedule (on-call grid + audit)
 │   │
 │   ├── services/                  # Business logic
-│   │   ├── auth_service.py        # ModMed authentication
+│   │   ├── auth_service.py        # Entra token validation + ModMed bootstrap
+│   │   ├── entra_jwt.py          # JWKS validation for Entra access tokens
 │   │   ├── client_service.py      # HTTP client singleton
 │   │   ├── patient_embedder.py    # Qdrant vector operations
-│   │   └── patient_info_service.py # Patient data retrieval
+│   │   ├── patient_info_service.py # Patient FHIR fetch, embed, aggregate
+│   │   ├── patient_name_cache_store.py  # DynamoDB-backed display-name cache (optional)
+│   │   └── patient_name_refresh.py      # Background cache refresh helpers
 │   │
 │   └── crew/                      # CrewAI agents
 │       ├── crew.py                # Crew configuration
@@ -84,7 +89,9 @@ server/
 ├── Dockerfile                     # Container definition
 ├── pyproject.toml                 # Dependencies
 ├── uv.lock                        # Locked dependencies
-└── create_qdrant_collection.py   # Setup script
+└── scripts/
+    ├── create_qdrant_collection.py    # Qdrant collection setup
+    └── populate_patient_name_cache.py # One-off / ops cache backfill
 ```
 
 ## Core Components
@@ -103,53 +110,36 @@ server/
 ```python
 def create_app():
     app = FastAPI(title="UroAssist Backend")
-    
-    # CORS configuration based on environment
-    if os.getenv('ENVIRONMENT') == 'production':
-        allowed_origins = ["https://uroassist.net", "https://api.uroassist.net"]
-    else:
-        allowed_origins = ["http://localhost:3000", "http://localhost:5173"]
-    
+    # CORS: production uses www.uroassist.net / uroassist.net / api.uroassist.net;
+    # development uses http://localhost:5173
     app.add_middleware(CORSMiddleware, allow_origins=allowed_origins, ...)
-    
-    # Register routes
+
     app.include_router(auth.router)
-    app.include_router(all_patients.router)
     app.include_router(run_crew.router)
-    
+    app.include_router(patients.router)
+    app.include_router(appointments.router)
+    app.include_router(call_schedule.router)
+
     return app
 ```
 
 ### 2. Authentication Service (`app/services/auth_service.py`)
 
-**Purpose**: Handle ModMed authentication and session management.
+**Purpose**: Validate **Microsoft Entra** access tokens, map the signed-in user to a practice via `AUTHORIZED_EMAILS`, then bootstrap **ModMed** (FHIR) and **Qdrant** tooling for that session.
 
-**Key Functions**:
+**Key behavior**:
 
-- `authenticate_user(username, password)`: Login to ModMed
-  - Extracts practice ID from username format: `fhir_USERNAME`
-  - Calls ModMed OAuth token endpoint
-  - Returns JWT session token with practice URL
+- `resolve_session_user_from_access_token(access_token)`: Validates the Entra JWT (JWKS) using `ENTRA_TENANT_ID` and `ENTRA_CLIENT_ID` audiences, reads email-style claims, checks `AUTHORIZED_EMAILS` → practice name, loads `PRACTICE_<practice>` ModMed credentials, obtains ModMed tokens, and caches per Entra `oid`.
+- `try_clear_cache_for_access_token(token)`: Best-effort in-process cache clear on logout (works with expired tokens via unverified decode fallback).
 
-**Authentication Flow**:
+**Authentication flow (high level)**:
 ```
-1. User submits credentials → Frontend
-2. POST /auth/login → auth.py route
-3. auth_service.authenticate_user() → ModMed OAuth API
-4. ModMed returns access token
-5. Backend generates JWT with practice info
-6. JWT returned to frontend (stored in AuthContext)
+1. User signs in with Microsoft (MSAL) in the SPA → obtains Entra access token
+2. SPA sends Authorization: Bearer <Entra access token> on API calls
+3. auth_service validates token + resolves practice + ModMed session (server-side cache)
 ```
 
-**JWT Payload**:
-```json
-{
-  "username": "fhir_WpKHZ",
-  "practice_url": "uropmsandbox460",
-  "exp": 1760259295,
-  "iat": 1760230495
-}
-```
+There is **no** `POST /auth/login` and **no** app-issued JWT for API auth; the API trusts **Entra-issued** bearer tokens.
 
 ### 3. Patient Info Service (`app/services/patient_info_service.py`)
 
@@ -157,12 +147,7 @@ def create_app():
 
 **Key Functions**:
 
-- `get_all_patients(practice_url, access_token)`: Retrieve patient list
-  - Calls ModMed `/Patient` endpoint
-  - Parses FHIR bundle response
-  - Extracts: ID, name, birthdate, gender, contact info
-
-- `get_patient_info(patient_id, practice_url, access_token)`: Get detailed patient data
+- `get_patient_info(...)`: Load and aggregate a single patient’s FHIR data for RAG
   - Fetches: Patient demographics, Encounters, Conditions, Medications, Observations
   - Aggregates all FHIR resources for the patient
   - Returns comprehensive patient record
@@ -234,7 +219,7 @@ clinical_query_task:
 **Agent Execution Flow**:
 ```
 1. User query → Frontend
-2. POST /api/run-crew → run_crew.py
+2. POST /run_crew → run_crew.py
 3. ClinicalAssistantCrew.kickoff(query, patient_id)
 4. Agent uses QdrantVectorSearchTool
 5. Tool fetches relevant patient data
@@ -247,68 +232,49 @@ clinical_query_task:
 #### **Auth Routes** (`routes/auth.py`)
 
 **Endpoints**:
-- `POST /auth/login`: Authenticate user
-  - Request: `{"username": "fhir_XXX", "password": "YYY"}`
-  - Response: JWT token, practice URL, expiration
+- `GET /auth/me`: Current user profile (requires `Authorization: Bearer <Entra access token>`)
+  - Response includes `email`, `practice_url`, `is_admin`, etc.
 
-- `POST /auth/logout`: Invalidate session
-  - Request: JWT token in Authorization header
-  - Response: Success message
+- `POST /auth/logout`: Best-effort clear of server-side cached ModMed/Qdrant state for this Entra user
+  - Optional `Authorization: Bearer <token>` (expired tokens still attempt cache clear)
+  - Client should also sign out with MSAL
 
-#### **Patient Routes** (`routes/all_patients.py`)
+#### **Patient Routes** (`routes/patients.py`)
 
 **Endpoints**:
-- `GET /api/patients`: Get all patients for practice
-  - Headers: Authorization (JWT)
-  - Response: Array of patient objects
+- `GET /patients`: FHIR name search (query params `given` and/or `family`)
+  - Headers: `Authorization: Bearer <Entra access token>`
+  - Response: List of `{ id, familyName, givenName, dob }`
+
+#### **Schedule Routes** (`routes/appointments.py`)
+
+**Endpoints** (representative):
+- `GET /schedule`: Practitioner schedule for an inclusive date range (`start`, `end`)
+- `GET /schedule/appointment_types`: Appointment type and surgery location mappings (optional date window)
+
+#### **Call Schedule Routes** (`routes/call_schedule.py`)
+
+**Endpoints**:
+- `GET /call-schedule`: On-call grid for `start`–`end`
+- `POST /call-schedule/week`: Save a week of on-call entries (any authenticated user; changes are audited)
+- `POST /call-schedule/upload`: Upload CSV/XLSX schedule
+- `GET /call-schedule/audit`: Paginated change log (admin)
 
 #### **Crew Routes** (`routes/run_crew.py`)
 
 **Endpoints**:
-- `POST /api/run-crew`: Execute clinical query
-  - Request: `{"query": "...", "patient_id": "...", "practice_url": "..."}`
-  - Response: AI-generated clinical response
+- `POST /run_crew`: Run the clinical assistant for a patient
+  - Request body: `CrewInput` — `query` and `id` (patient id). `practice_url` comes from the authenticated session.
+  - Response: `{ "result": "<assistant text>" }`
 
 ## Data Models (`app/models.py`)
 
 ### Core Models
 
-**LoginRequest**:
-```python
-class LoginRequest(BaseModel):
-    username: str
-    password: str
-```
+**SessionUser** (server-side session object after Entra bootstrap; not all fields are exposed on `GET /auth/me`):
+- Holds Entra-derived identity (`email`, `username`), resolved `practice_url`, ModMed tokens, optional Qdrant tool handle, and cache metadata after `resolve_session_user_from_access_token`.
 
-**LoginResponse**:
-```python
-class LoginResponse(BaseModel):
-    success: bool
-    session_token: str
-    username: str
-    practice_url: str
-    expires_at: str
-    message: str
-```
-
-**Patient**:
-```python
-class Patient(BaseModel):
-    id: str
-    name: str
-    birthDate: Optional[str]
-    gender: Optional[str]
-    phone: Optional[str]
-    email: Optional[str]
-```
-
-**CrewRunRequest**:
-```python
-class CrewRunRequest(BaseModel):
-    query: str
-    id: str
-    practice_url: str
-```
+**Route-local bodies**: Request schemas such as `CrewInput` live beside their handlers (e.g. `routes/run_crew.py`); `routes/call_schedule.py` defines week/upload payloads.
 
 ## External Integrations
 
@@ -378,14 +344,14 @@ class CrewRunRequest(BaseModel):
 
 ### 1. Authentication & Authorization
 
-**JWT Tokens**:
-- Signed with `JWT_SECRET_KEY` (env variable)
-- Expiration: 8 hours
-- Payload includes: username, practice_url
+**Entra access tokens**:
+- Issued by Microsoft Entra ID; validated on the API using JWKS (`app/services/entra_jwt.py`)
+- Configure `ENTRA_TENANT_ID`, `ENTRA_CLIENT_ID`, and (optionally) `ENTRA_ADMIN_APP_ROLE`
+- ModMed credentials are **not** the same as Entra credentials; they come from `PRACTICE_*` env vars after the user is mapped via `AUTHORIZED_EMAILS`
 
-**Token Validation**:
-- All protected routes check for valid JWT
-- Expired tokens rejected with 401 Unauthorized
+**Token validation**:
+- Protected routes expect `Authorization: Bearer <Entra access token>`
+- Invalid or unauthorized tokens → `401 Unauthorized`
 
 ### 2. Data Privacy (HIPAA)
 
@@ -399,14 +365,13 @@ class CrewRunRequest(BaseModel):
 - ✅ Qdrant Cloud encrypts stored vectors
 
 **Access Control**:
-- Practice-level data isolation
-- JWT tokens scoped to specific practice
+- Practice-level data isolation (resolved per Entra user email → practice mapping)
 - No cross-practice data access
 
 **Data Retention**:
 - Patient embeddings stored indefinitely (consider TTL)
 - No PHI in application logs
-- Session tokens expire after 8 hours
+- Entra token lifetime is controlled by Microsoft identity settings; the API validates `exp` when verifying tokens
 
 ### 3. Environment Variables
 
@@ -415,14 +380,14 @@ class CrewRunRequest(BaseModel):
 - Never committed to git
 - Set via `eb setenv` for production
 
-**Required Variables**:
+**Required Variables (representative)**:
 ```bash
 QDRANT_URL
 QDRANT_API_KEY
-MODMED_BASE_URL
-MODMED_CLIENT_ID
-MODMED_CLIENT_SECRET
-JWT_SECRET_KEY
+ENTRA_TENANT_ID
+ENTRA_CLIENT_ID
+AUTHORIZED_EMAILS
+PRACTICE_<firm_name>   # ModMed FHIR user/pass + x-api-key for that firm
 AWS_REGION
 MODEL
 ```
@@ -439,7 +404,7 @@ MODEL
 
 ### 2. Caching Strategies
 
-**Current State**: No caching implemented
+**Current State**: In-process ModMed/Qdrant session cache per Entra user in `auth_service`; optional DynamoDB-backed patient **display name** cache (`patient_name_cache_store`).
 
 **Recommendations**:
 - Cache patient list per practice (TTL: 5 minutes)
@@ -558,9 +523,10 @@ uv sync
 # Set environment variables
 export QDRANT_URL="..."
 export QDRANT_API_KEY="..."
-export MODMED_CLIENT_ID="..."
-export MODMED_CLIENT_SECRET="..."
-export JWT_SECRET_KEY="..."
+export ENTRA_TENANT_ID="..."
+export ENTRA_CLIENT_ID="..."
+export AUTHORIZED_EMAILS="user@org.com:firm_name"
+export PRACTICE_firm_name="fhir_user,password,x-api-key"
 export AWS_REGION="us-west-2"
 export MODEL="anthropic.claude-3-5-sonnet-20241022-v2:0"
 
@@ -576,14 +542,9 @@ python -m app.main
 # Health check
 curl http://localhost:8080/health
 
-# Login
-curl -X POST http://localhost:8080/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"username":"fhir_XXX","password":"YYY"}'
-
-# Get patients (replace JWT)
-curl http://localhost:8080/api/patients \
-  -H "Authorization: Bearer <JWT_TOKEN>"
+# Authenticated call (obtain Entra access token via MSAL in the SPA, then:)
+curl http://localhost:8080/auth/me \
+  -H "Authorization: Bearer <ENTRA_ACCESS_TOKEN>"
 ```
 
 **Unit Tests**: Not implemented (TODO)
@@ -606,9 +567,9 @@ eb deploy
 ### Common Issues
 
 **1. "ModMed authentication failed"**
-- Check `MODMED_CLIENT_ID` and `MODMED_CLIENT_SECRET`
-- Verify practice URL format: `PRACTICE_username`
-- Ensure ModMed credentials are active
+- Verify `AUTHORIZED_EMAILS` maps the user’s email to the correct practice key
+- Check `PRACTICE_<practice>` env vars (FHIR username, password, x-api-key) for that practice
+- Ensure tokens are not expired and ModMed credentials are still valid
 
 **2. "Qdrant connection timeout"**
 - Verify `QDRANT_URL` and `QDRANT_API_KEY`

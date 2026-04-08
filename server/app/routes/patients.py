@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 import httpx
 import os
 import asyncio
-from app.routes.auth import get_current_user
+from app.routes.auth import require_modmed_session
 from app.models import SessionUser
 
 router = APIRouter(
@@ -12,7 +12,7 @@ router = APIRouter(
 
 @router.get("")
 async def search_patients(
-    current_user: SessionUser = Depends(get_current_user),
+    current_user: SessionUser = Depends(require_modmed_session),
     given: str = Query(None, description="Given (first) name, partial allowed"),
     family: str = Query(None, description="Family (last) name, exact match")
 ):

@@ -1,28 +1,18 @@
 /**
  * Authentication Service
- * Handles all authentication-related API calls
+ * Thin helpers around the current MSAL + /auth API model.
  */
 
 import apiClient from './apiClient.js';
-import API_CONFIG from '../config/api.js';
+import { msalInstance } from '../msalInstance.js';
+import { loginRequest } from '../authConfig.js';
 
 export const authService = {
   /**
-   * Login user with ModMed credentials
-   * @param {Object} credentials - { username, password }
-   * @returns {Promise} Response with session token and user data
+   * Start Microsoft Entra sign-in via MSAL redirect.
    */
-  login: async (credentials) => {
-    const response = await apiClient.post('/auth/login', credentials);
-    return response.data;
-  },
-
-  /**
-   * Redirect to Microsoft Outlook OAuth login
-   */
-  loginWithOutlook: () => {
-    const baseUrl = (API_CONFIG.BASE_URL || '').replace(/\/+$/, '');
-    window.location.href = `${baseUrl}/auth/outlook/authorize`;
+  loginWithEntra: async () => {
+    await msalInstance.loginRedirect(loginRequest);
   },
 
   /**

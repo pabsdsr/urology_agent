@@ -26,7 +26,6 @@ export async function getAuthHeaders() {
     });
     // OIDC scopes yield an access token for Graph (wrong aud for our API). ID token aud = client id.
     const token = response.idToken || response.accessToken;
-    console.log("idToken", response.idToken);
     return {
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       'Content-Type': 'application/json',
@@ -78,7 +77,7 @@ apiClient.interceptors.response.use(
     return response;
   },
   (error) => {
-    // Handle 401 Unauthorized - clear token and redirect to login
+    // Handle 401 Unauthorized - notify app to re-authenticate
     if (error.response?.status === 401) {
       window.dispatchEvent(new CustomEvent('auth:unauthorized'));
       // Customize 401 error message
@@ -102,42 +101,5 @@ apiClient.interceptors.response.use(
   }
 );
 
-// Retry logic for failed requests
-const retryRequest = async (originalRequest, retryCount = 0) => {
-  if (retryCount >= API_CONFIG.RETRY_ATTEMPTS) {
-    throw originalRequest;
-  }
-
-  // Wait before retrying
-  await new Promise(resolve => setTimeout(resolve, API_CONFIG.RETRY_DELAY * (retryCount + 1)));
-
-  try {
-    return await apiClient(originalRequest);
-  } catch (error) {
-    // Only retry on network errors or 5xx server errors
-    if (!error.response || error.response.status >= 500) {
-      return retryRequest(originalRequest, retryCount + 1);
-    }
-    throw error;
-  }
-};
-
-// Enhanced API client with retry capability
-const apiClientWithRetry = {
-  get: (url, config = {}) => {
-    return retryRequest({ method: 'get', url, ...config });
-  },
-  post: (url, data, config = {}) => {
-    return retryRequest({ method: 'post', url, data, ...config });
-  },
-  put: (url, data, config = {}) => {
-    return retryRequest({ method: 'put', url, data, ...config });
-  },
-  delete: (url, config = {}) => {
-    return retryRequest({ method: 'delete', url, ...config });
-  },
-};
-
 export default apiClient;
-export { apiClientWithRetry };
 

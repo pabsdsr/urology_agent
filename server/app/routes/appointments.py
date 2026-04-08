@@ -10,7 +10,7 @@ from app.services.appointment_service import (
     get_practitioner_and_location_names,
 )
 from app.models import SessionUser
-from app.routes.auth import get_current_user
+from app.routes.auth import require_modmed_session
 
 router = APIRouter(
     prefix="/schedule",
@@ -33,10 +33,18 @@ def _schedule_params(current_user: SessionUser):
 async def practitioner_schedule_by_date(
     start: str,
     end: str,
-    current_user: SessionUser = Depends(get_current_user)
+    current_user: SessionUser = Depends(require_modmed_session)
 ):
+    """Return practitioner schedule payload for an inclusive date range."""
     modmed_token, base_url, practice_api_key = _schedule_params(current_user)
-    result = await get_practitioner_schedule_by_date(start, end, modmed_token, base_url, practice_api_key)
+    result = await get_practitioner_schedule_by_date(
+        start,
+        end,
+        modmed_token,
+        base_url,
+        practice_api_key,
+        current_user.practice_url,
+    )
     return result
 
 
@@ -44,9 +52,9 @@ async def practitioner_schedule_by_date(
 async def list_appointment_types(
     start: str = None,
     end: str = None,
-    current_user: SessionUser = Depends(get_current_user)
+    current_user: SessionUser = Depends(require_modmed_session)
 ):
-    """Fetch appointments in the given date range, collect all appointment type IDs and map them to display names. Prints the map and returns it as JSON."""
+    """Return appointment type and surgery location mappings for a date range."""
     today = datetime.utcnow().date()
     if end is None:
         end_dt = today

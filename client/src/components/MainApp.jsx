@@ -159,15 +159,11 @@ function MainApp() {
                           <div className="font-medium text-gray-900">
                             {patient.givenName} {patient.familyName}
                           </div>
-                          <div className="text-sm text-gray-500">
-                            ID: {patient.id}
-                            {patient.dob && (
-                              <>
-                                {" | DOB: "}
-                                {patient.dob}
-                              </>
-                            )}
-                          </div>
+                          {patient.dob && (
+                            <div className="text-sm text-gray-500">
+                              DOB: {patient.dob}
+                            </div>
+                          )}
                         </div>
                       ))
                     ) : (
@@ -190,13 +186,7 @@ function MainApp() {
                         {selectedPatient.givenName} {selectedPatient.familyName}
                       </p>
                       <p className="text-sm text-teal-600">
-                        ID: {selectedPatient.id}
-                        {selectedPatient.dob && (
-                          <>
-                            {" | DOB: "}
-                            {selectedPatient.dob}
-                          </>
-                        )}
+                        {selectedPatient.dob ? `DOB: ${selectedPatient.dob}` : ""}
                       </p>
                     </div>
                     <button

@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, Optional
 
 import httpx
+import jwt
 import pytz
 from app.crew.tools.tools import QdrantVectorSearchTool
 from app.models import SessionUser
@@ -15,6 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 def _email_from_claims(claims: Dict[str, Any]) -> Optional[str]:
+    """Extract a normalized email-like identifier from Entra claims."""
     for key in ("email", "preferred_username", "upn"):
         v = claims.get(key)
         if isinstance(v, str) and "@" in v:
@@ -23,6 +25,7 @@ def _email_from_claims(claims: Dict[str, Any]) -> Optional[str]:
 
 
 def _roles_from_claims(claims: Dict[str, Any]) -> list:
+    """Normalize roles claim into a list."""
     r = claims.get("roles")
     if isinstance(r, list):
         return list(r)
@@ -38,14 +41,17 @@ def _client_jwt_audiences(client_id: str) -> list[str]:
 
 
 def _tenant_id() -> str:
+    """Configured Microsoft Entra tenant id."""
     return (os.getenv("ENTRA_TENANT_ID") or "").strip()
 
 
 def _client_id() -> str:
+    """Configured Microsoft Entra client id (audience)."""
     return (os.getenv("ENTRA_CLIENT_ID") or "").strip()
 
 
 def _admin_role() -> str:
+    """App role value that grants admin privileges."""
     return (os.getenv("ENTRA_ADMIN_APP_ROLE") or "admin").strip()
 
 
@@ -56,8 +62,10 @@ class AuthService:
     """
 
     def __init__(self):
+        """Initialize in-memory session cache and Entra validator."""
         self._cache_lock = asyncio.Lock()
         self._users_by_oid: Dict[str, SessionUser] = {}
+        self._oid_bootstrap_locks: Dict[str, asyncio.Lock] = {}
         tenant = _tenant_id()
         client_id = _client_id()
         audiences = _client_jwt_audiences(client_id) if client_id else []
@@ -73,11 +81,17 @@ class AuthService:
             )
 
     def clear_cache_for_oid(self, oid: str) -> None:
+        """Drop one Entra user's cached session state."""
         self._users_by_oid.pop(oid, None)
 
     async def resolve_session_user_from_access_token(
         self, access_token: str,
     ) -> Optional[SessionUser]:
+        """
+        Validate Entra bearer token and return cached/build SessionUser.
+
+        Uses a per-oid lock so only one bootstrap flow runs for a user at a time.
+        """
         if not self._entra:
             return None
         try:
@@ -102,11 +116,15 @@ class AuthService:
 
         async with self._cache_lock:
             cached = self._users_by_oid.get(oid)
+            oid_lock = self._oid_bootstrap_locks.get(oid)
+            if not oid_lock:
+                oid_lock = asyncio.Lock()
+                self._oid_bootstrap_locks[oid] = oid_lock
 
         if cached:
             cached.is_admin = token_is_admin
             cached.username = email
-            cached.outlook_email = email
+            cached.email = email
             if (
                 cached.modmed_expires_at
                 and datetime.utcnow() > cached.modmed_expires_at
@@ -116,66 +134,74 @@ class AuthService:
                 await self._refresh_modmed_token_user(cached)
             return cached
 
-        outlook_config = self._get_authorized_outlook_config(email)
-        if not outlook_config:
-            logger.warning("Unauthorized email for UroAssist API: %s", email)
-            return None
+        async with oid_lock:
+            async with self._cache_lock:
+                cached = self._users_by_oid.get(oid)
+            if cached:
+                cached.is_admin = token_is_admin
+                cached.username = email
+                cached.email = email
+                return cached
 
-        practice_name = outlook_config[0]
-        modmed_creds = self._get_practice_modmed_credentials(practice_name)
-        modmed_access_token = None
-        modmed_refresh_token = None
-        modmed_expires_at = None
-        practice_api_key = None
-        practice_url = practice_name
-        qdrant_tool = None
+            entra_config = self._get_authorized_entra_config(email)
+            if not entra_config:
+                logger.warning("Unauthorized email for UroAssist API: %s", email)
+                return None
 
-        if modmed_creds:
-            fhir_username, fhir_password, practice_url, practice_api_key = modmed_creds
-            mm_tokens = await self._authenticate_with_modmed(
-                fhir_username, fhir_password, practice_url, practice_api_key
+            practice_name = entra_config[0]
+            modmed_creds = self._get_practice_modmed_credentials(practice_name)
+            modmed_access_token = None
+            modmed_refresh_token = None
+            modmed_expires_at = None
+            practice_api_key = None
+            practice_url = practice_name
+            qdrant_tool = None
+
+            if modmed_creds:
+                fhir_username, fhir_password, practice_url, practice_api_key = modmed_creds
+                mm_tokens = await self._authenticate_with_modmed(
+                    fhir_username, fhir_password, practice_url, practice_api_key
+                )
+                if mm_tokens:
+                    modmed_access_token = mm_tokens["access_token"]
+                    modmed_refresh_token = mm_tokens["refresh_token"]
+                    modmed_expires_at = datetime.utcnow() + timedelta(hours=2)
+                else:
+                    logger.warning("ModMed bootstrap failed for practice %s", practice_name)
+
+            try:
+                qdrant_tool = QdrantVectorSearchTool(
+                    collection_name=practice_url,
+                    limit=5,
+                    qdrant_url=os.getenv("QDRANT_URL"),
+                    qdrant_api_key=os.getenv("QDRANT_API_KEY"),
+                )
+            except Exception as e:
+                logger.warning("Failed to create Qdrant tool: %s", e)
+
+            session_user = SessionUser(
+                username=email,
+                practice_url=practice_url,
+                auth_method="entra",
+                email=email,
+                is_admin=token_is_admin,
+                modmed_access_token=modmed_access_token,
+                modmed_refresh_token=modmed_refresh_token,
+                modmed_expires_at=modmed_expires_at,
+                created_at=datetime.utcnow(),
+                expires_at=datetime.utcnow() + timedelta(days=3650),
+                practice_api_key=practice_api_key,
+                qdrant_tool=qdrant_tool,
             )
-            if mm_tokens:
-                modmed_access_token = mm_tokens["access_token"]
-                modmed_refresh_token = mm_tokens["refresh_token"]
-                modmed_expires_at = datetime.utcnow() + timedelta(hours=2)
-            else:
-                logger.warning("ModMed bootstrap failed for practice %s", practice_name)
 
-        try:
-            qdrant_tool = QdrantVectorSearchTool(
-                collection_name=practice_url,
-                limit=5,
-                qdrant_url=os.getenv("QDRANT_URL"),
-                qdrant_api_key=os.getenv("QDRANT_API_KEY"),
-            )
-        except Exception as e:
-            logger.warning("Failed to create Qdrant tool: %s", e)
-
-        session_user = SessionUser(
-            username=email,
-            practice_url=practice_url,
-            session_token="",
-            auth_method="entra",
-            outlook_email=email,
-            is_admin=token_is_admin,
-            modmed_access_token=modmed_access_token,
-            modmed_refresh_token=modmed_refresh_token,
-            modmed_expires_at=modmed_expires_at,
-            created_at=datetime.utcnow(),
-            expires_at=datetime.utcnow() + timedelta(days=3650),
-            practice_api_key=practice_api_key,
-            qdrant_tool=qdrant_tool,
-        )
-
-        async with self._cache_lock:
-            if oid in self._users_by_oid:
-                existing = self._users_by_oid[oid]
-                existing.is_admin = token_is_admin
-                existing.username = email
-                existing.outlook_email = email
-                return existing
-            self._users_by_oid[oid] = session_user
+            async with self._cache_lock:
+                existing = self._users_by_oid.get(oid)
+                if existing:
+                    existing.is_admin = token_is_admin
+                    existing.username = email
+                    existing.email = email
+                    return existing
+                self._users_by_oid[oid] = session_user
 
         if modmed_access_token and practice_api_key:
             self._start_schedule_prewarm(
@@ -187,14 +213,16 @@ class AuthService:
     def _start_schedule_prewarm(
         self, practice_url: str, modmed_token: str, practice_api_key: str
     ) -> None:
+        """Warm the schedule cache for the current fixed Pacific window."""
         try:
             pacific = pytz.timezone("US/Pacific")
             today_pacific = datetime.now(pacific).date()
-            weekday = today_pacific.weekday()
-            current_monday = today_pacific - timedelta(days=weekday)
-            window_start = current_monday.strftime("%Y-%m-%d")
+            weekday = today_pacific.weekday()  # Monday=0 ... Sunday=6
+            days_to_subtract = (weekday + 1) % 7
+            current_sunday = today_pacific - timedelta(days=days_to_subtract)
+            window_start = current_sunday.strftime("%Y-%m-%d")
             window_end = (
-                current_monday + timedelta(weeks=SCHEDULE_CACHE_WEEKS) - timedelta(days=1)
+                current_sunday + timedelta(weeks=SCHEDULE_CACHE_WEEKS) - timedelta(days=1)
             ).strftime("%Y-%m-%d")
             base_url = (
                 f"https://mmapi.ema-api.com/ema-prod/firm/{practice_url}/ema/fhir/v2"
@@ -213,6 +241,7 @@ class AuthService:
             logger.warning("[Schedule cache] login prewarm failed: %s", e)
 
     async def _refresh_modmed_token_user(self, session_user: SessionUser) -> None:
+        """Refresh cached ModMed tokens for a resolved session user."""
         if (
             not session_user.practice_api_key
             or not session_user.modmed_refresh_token
@@ -243,7 +272,7 @@ class AuthService:
                     )
                     logger.info(
                         "ModMed token refreshed for %s",
-                        session_user.outlook_email or session_user.username,
+                        session_user.email or session_user.username,
                     )
                 else:
                     logger.error(
@@ -256,6 +285,7 @@ class AuthService:
     async def _authenticate_with_modmed(
         self, username: str, password: str, practice_url: str, api_key: str
     ) -> Optional[Dict]:
+        """Authenticate against ModMed password grant and return tokens."""
         headers = {
             "x-api-key": api_key,
             "Content-Type": "application/x-www-form-urlencoded",
@@ -307,7 +337,7 @@ class AuthService:
             )
             return None
 
-    def _get_authorized_outlook_config(self, email: str) -> Optional[tuple]:
+    def _get_authorized_entra_config(self, email: str) -> Optional[tuple]:
         """
         Check if an email is authorized and return its practice mapping.
         Reads AUTHORIZED_EMAILS env var.
@@ -351,13 +381,32 @@ class AuthService:
         return None
 
     def try_clear_cache_for_access_token(self, access_token: str) -> None:
-        """Best-effort: drop cached ModMed state after logout (token may be expired)."""
-        if not self._entra:
-            return
-        try:
-            claims = self._entra.validate(access_token)
-        except EntraAccessTokenError:
-            return
+        """
+        Best-effort cache clear after logout.
+
+        Falls back to unverified claim parsing so expired tokens can still clear oid
+        in-memory state for this process.
+        """
+        claims: Dict[str, Any] = {}
+        if self._entra:
+            try:
+                claims = self._entra.validate(access_token)
+            except EntraAccessTokenError:
+                claims = {}
+        if not claims:
+            try:
+                claims = jwt.decode(
+                    access_token,
+                    options={
+                        "verify_signature": False,
+                        "verify_exp": False,
+                        "verify_aud": False,
+                        "verify_iss": False,
+                    },
+                    algorithms=["RS256", "HS256"],
+                )
+            except Exception:
+                claims = {}
         oid = (claims.get("oid") or claims.get("sub") or "").strip()
         if oid:
             self.clear_cache_for_oid(oid)

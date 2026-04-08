@@ -44,9 +44,11 @@ def aggregate_practitioner_schedule(appointments: list) -> dict:
     """
     Aggregate appointments into a schedule by location, AM/PM, and practitioner.
     Surgery appointments use a dedicated column (SURGERY_COLUMN_KEY). Other appointments use location_id.
+    For each (date, practitioner, AM/PM, location), keeps the earliest Pacific start time (displayed as 12-hour).
     Returns: {date: {practitioner: {AM: {location_or_Surgery: time}, PM: {...}}}}
     """
     schedule = defaultdict(lambda: defaultdict(lambda: {"AM": {}, "PM": {}}))
+    earliest: dict[tuple, datetime] = {}
     try:
         from zoneinfo import ZoneInfo
     except ImportError:
@@ -71,10 +73,12 @@ def aggregate_practitioner_schedule(appointments: list) -> dict:
         date_str = pacific_dt.strftime("%Y-%m-%d")
         practitioner = (appt.get("practitioner_ids") or ["Unknown"])[0]
         loc_key = SURGERY_COLUMN_KEY if _is_surgery_appointment(appt) else (appt.get("location_ids") or ["Unknown"])[0]
-        time_str = pacific_dt.strftime("%I:%M").lstrip("0")
         loc_times = schedule[date_str][practitioner][ampm]
-        if loc_key not in loc_times or pacific_dt.time() < datetime.strptime(loc_times[loc_key], "%H:%M").time():
-            loc_times[loc_key] = time_str
+        slot_key = (date_str, practitioner, ampm, loc_key)
+        prev = earliest.get(slot_key)
+        if prev is None or pacific_dt < prev:
+            earliest[slot_key] = pacific_dt
+            loc_times[loc_key] = pacific_dt.strftime("%I:%M").lstrip("0")
     # Convert defaultdicts to dicts
     return {date: {prac: {block: dict(locs) for block, locs in blocks.items()} for prac, blocks in prac_map.items()} for date, prac_map in schedule.items()}
 
@@ -106,7 +110,7 @@ from app.services.schedule_cache_store import load_schedule_cache_entry, save_sc
 
 
 async def _prewarm_schedule_cache(base_url: str, modmed_token: str, practice_api_key: str, window_start: str, window_end: str, logger):
-    """Warm the 3‑week schedule cache in the background without blocking responses."""
+    """Warm the rolling schedule cache window (``SCHEDULE_CACHE_WEEKS``) in the background."""
     try:
         appointments_all = await get_appointments_by_date(window_start, window_end, modmed_token, base_url, practice_api_key)
         schedule_all = aggregate_practitioner_schedule(appointments_all)
@@ -493,7 +497,14 @@ async def get_appointments_by_date(start_date: str, end_date: str, modmed_token:
     return deduped_appointments
 
 
-async def get_practitioner_schedule_by_date(start_date: str, end_date: str, modmed_token: str, base_url: str, practice_api_key: str):
+async def get_practitioner_schedule_by_date(
+    start_date: str,
+    end_date: str,
+    modmed_token: str,
+    base_url: str,
+    practice_api_key: str,
+    practice_url: str,
+):
     """
     Returns practitioner schedule grid by date/location/AMPM/practitioner, plus id→name maps for practitioners and locations.
     Also returns a surgery-only view grouped by date and practitioner with time, location, and procedure type.
@@ -501,7 +512,7 @@ async def get_practitioner_schedule_by_date(start_date: str, end_date: str, modm
     logger = logging.getLogger("app.services.appointment_service")
     pacific = pytz.timezone("US/Pacific")
 
-    # Fixed cache window: 3 weeks starting from Sunday of the *current* week (Pacific).
+    # Fixed cache window: SCHEDULE_CACHE_WEEKS weeks from current Sunday's Pacific date.
     today_pacific = datetime.now(pacific).date()
     weekday = today_pacific.weekday()  # Monday=0 ... Sunday=6
     # Move back to Sunday of this week: 0 when Sunday, 1 when Monday, etc.
@@ -619,6 +630,70 @@ async def get_practitioner_schedule_by_date(start_date: str, end_date: str, modm
                 "patient_id": appt.get("patient_id"),
             }
         )
+
+    # Patient display names: DynamoDB stale-while-revalidate + background ModMed refresh
+    from app.services.patient_name_cache_store import (
+        batch_get_patient_names,
+        is_stale,
+        patient_cache_writes_enabled,
+    )
+    from app.services.patient_name_refresh import schedule_patient_name_refresh
+
+    if practice_url and modmed_token and practice_api_key:
+        surgery_pids: List[str] = []
+        for _d, by_prac in surgery_appointments.items():
+            for _p, rows in by_prac.items():
+                for row in rows:
+                    pid = row.get("patient_id")
+                    if pid:
+                        s = str(pid).strip()
+                        if s:
+                            surgery_pids.append(s)
+        unique_pids = list(dict.fromkeys(surgery_pids))
+        if unique_pids:
+            cache_rows = await asyncio.to_thread(
+                batch_get_patient_names, practice_url, unique_pids
+            )
+            refresh_ids: List[str] = []
+            for pid in unique_pids:
+                cached = cache_rows.get(pid)
+                if not cached or is_stale(cached.get("cached_at")):
+                    refresh_ids.append(pid)
+            for _d, by_prac in surgery_appointments.items():
+                for _p, rows in by_prac.items():
+                    for row in rows:
+                        pid = row.get("patient_id")
+                        if not pid:
+                            continue
+                        pid = str(pid).strip()
+                        if not pid:
+                            continue
+                        cached = cache_rows.get(pid)
+                        if cached:
+                            g = cached.get("given_name") or ""
+                            f = cached.get("family_name") or ""
+                            dn = (cached.get("display_name") or "").strip()
+                            if not dn:
+                                dn = f"{g} {f}".strip()
+                            row["patient_given_name"] = g
+                            row["patient_family_name"] = f
+                            if dn:
+                                row["patient_display_name"] = dn
+                            row["patient_name_stale"] = is_stale(
+                                cached.get("cached_at")
+                            )
+                        else:
+                            row["patient_name_stale"] = True
+            refresh_ids = list(dict.fromkeys(refresh_ids))
+            if refresh_ids and patient_cache_writes_enabled():
+                schedule_patient_name_refresh(
+                    practice_url,
+                    base_url,
+                    refresh_ids,
+                    modmed_token,
+                    practice_api_key,
+                    logger,
+                )
 
     surgery_loc_ids = get_surgery_location_ids(appointments)
     surgery_locations = [{"id": lid, "name": location_names.get(lid) or "(unknown)"} for lid in surgery_loc_ids]
