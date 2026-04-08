@@ -1,377 +1,349 @@
+import asyncio
+import logging
+import os
+from datetime import datetime, timedelta
+from typing import Any, Dict, Optional
+
 import httpx
 import jwt
-import os
-import logging
-import asyncio
 import pytz
-import secrets
-from urllib.parse import urlencode
-from datetime import datetime, timedelta
-from typing import Optional, Dict
-from app.models import LoginRequest, LoginResponse, SessionUser
 from app.crew.tools.tools import QdrantVectorSearchTool
-from app.services.appointment_service import _prewarm_schedule_cache, SCHEDULE_CACHE_WEEKS
+from app.models import SessionUser
+from app.services.appointment_service import SCHEDULE_CACHE_WEEKS, _prewarm_schedule_cache
+from app.services.entra_jwt import EntraAccessTokenError, EntraAccessTokenValidator
 
 logger = logging.getLogger(__name__)
 
+
+def _email_from_claims(claims: Dict[str, Any]) -> Optional[str]:
+    """Extract a normalized email-like identifier from Entra claims."""
+    for key in ("email", "preferred_username", "upn"):
+        v = claims.get(key)
+        if isinstance(v, str) and "@" in v:
+            return v.strip().lower()
+    return None
+
+
+def _roles_from_claims(claims: Dict[str, Any]) -> list:
+    """Normalize roles claim into a list."""
+    r = claims.get("roles")
+    if isinstance(r, list):
+        return list(r)
+    if isinstance(r, str) and r:
+        return [r]
+    return []
+
+
+def _client_jwt_audiences(client_id: str) -> list[str]:
+    """JWT `aud` values we accept: SPA client id and default api:// URI."""
+    cid = client_id.strip()
+    return [cid, f"api://{cid}"]
+
+
+def _tenant_id() -> str:
+    """Configured Microsoft Entra tenant id."""
+    return (os.getenv("ENTRA_TENANT_ID") or "").strip()
+
+
+def _client_id() -> str:
+    """Configured Microsoft Entra client id (audience)."""
+    return (os.getenv("ENTRA_CLIENT_ID") or "").strip()
+
+
+def _admin_role() -> str:
+    """App role value that grants admin privileges."""
+    return (os.getenv("ENTRA_ADMIN_APP_ROLE") or "admin").strip()
+
+
 class AuthService:
-    def _is_admin_email(self, email: str) -> bool:
-        """Check if email is in the ADMIN_EMAILS env var (comma-separated)."""
-        admin_emails = os.environ.get("ADMIN_EMAILS", "")
-        if not admin_emails:
-            return False
-        return email.lower().strip() in [e.strip().lower() for e in admin_emails.split(",") if e.strip()]
+    """
+    Resolves API users from Microsoft Entra access tokens and caches ModMed/Qdrant
+    state per Entra object id (oid).
+    """
 
     def __init__(self):
-        self.SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-secret-key-change-in-production")
-        self.user_sessions: Dict[str, SessionUser] = {}  # In-memory storage
-        self.SESSION_DURATION = timedelta(hours=8)  # 8 hour sessions
-        # Outlook OAuth config
-        self.OUTLOOK_CLIENT_ID = os.getenv("OUTLOOK_CLIENT_ID", "")
-        self.OUTLOOK_CLIENT_SECRET = os.getenv("OUTLOOK_CLIENT_SECRET", "")
-        self.OUTLOOK_TENANT_ID = os.getenv("OUTLOOK_TENANT_ID", "")
-        self.OUTLOOK_REDIRECT_URI = os.getenv("OUTLOOK_REDIRECT_URI", "http://localhost:8080/auth/outlook/callback")
-        # Store OAuth state tokens to prevent CSRF
-        self._oauth_states: Dict[str, datetime] = {}
-    
-    async def authenticate_user(self, login_data: LoginRequest) -> Optional[LoginResponse]:
-        """
-        Authenticate user with ModMed credentials and create session
-        """
-        try:
-            # Get practice configuration by username
-            practice_config = self._get_practice_config(login_data.username)
-            if not practice_config:
-                return LoginResponse(
-                    success=False,
-                    session_token="",
-                    username="",
-                    practice_url="",
-                    expires_at=datetime.utcnow(),
-                    message=f"Username '{login_data.username}' is not configured for any practice"
-                )
-            
-            practice_url, practice_api_key = practice_config
-            
-            # Call ModMed OAuth API with user's credentials
-            modmed_tokens = await self._authenticate_with_modmed(
-                login_data.username, 
-                login_data.password, 
-                practice_url,
-                practice_api_key
-            )
-            
-            if not modmed_tokens:
-                logger.warning("ModMed authentication failed", 
-                             extra={"username": login_data.username, "practice_url": practice_url})
-                return LoginResponse(
-                    success=False,
-                    session_token="",
-                    username="",
-                    practice_url="",
-                    expires_at=datetime.utcnow(),
-                    message="Invalid ModMed credentials"
-                )
-            
-            # Generate session token
-            is_admin = self._is_admin_email(login_data.username)
-            expires_at = datetime.utcnow() + self.SESSION_DURATION
-            session_payload = {
-                "username": login_data.username,
-                "practice_url": practice_url,
-                "is_admin": is_admin,
-                "exp": expires_at,
-                "iat": datetime.utcnow()
-            }
-
-            session_token = jwt.encode(session_payload, self.SECRET_KEY, algorithm="HS256")
-            
-            # Create practice-specific qdrant tool for this user
-            user_qdrant_tool = QdrantVectorSearchTool(
-                collection_name=practice_url,
-                limit=5,
-                qdrant_url=os.getenv("QDRANT_URL"),
-                qdrant_api_key=os.getenv("QDRANT_API_KEY")
-            )
-            
-            # Store session data
-            session_user = SessionUser(
-                username=login_data.username,
-                practice_url=practice_url,
-                session_token=session_token,
-                outlook_email=None,
-                is_admin=is_admin,
-                modmed_access_token=modmed_tokens["access_token"],
-                modmed_refresh_token=modmed_tokens["refresh_token"],
-                modmed_expires_at=datetime.utcnow() + timedelta(hours=2),  # ModMed tokens expire in 2 hours
-                created_at=datetime.utcnow(),
-                expires_at=expires_at,
-                practice_api_key=practice_api_key,
-                qdrant_tool=user_qdrant_tool
-            )
-            
-            self.user_sessions[session_token] = session_user
-            
-            logger.info("User authenticated successfully", 
-                       extra={"username": login_data.username, "practice_url": practice_url})
-
-            # Kick off background prewarm of the current 3‑week schedule cache window for this practice.
+        """Initialize in-memory session cache and Entra validator."""
+        self._cache_lock = asyncio.Lock()
+        self._users_by_oid: Dict[str, SessionUser] = {}
+        self._oid_bootstrap_locks: Dict[str, asyncio.Lock] = {}
+        tenant = _tenant_id()
+        client_id = _client_id()
+        audiences = _client_jwt_audiences(client_id) if client_id else []
+        self._entra: Optional[EntraAccessTokenValidator] = None
+        if tenant and audiences:
             try:
-                pacific = pytz.timezone("US/Pacific")
-                today_pacific = datetime.now(pacific).date()
-                weekday = today_pacific.weekday()  # Monday=0
-                current_monday = today_pacific - timedelta(days=weekday)
-                window_start_dt = current_monday
-                window_end_dt = current_monday + timedelta(weeks=SCHEDULE_CACHE_WEEKS) - timedelta(days=1)
-                window_start = window_start_dt.strftime("%Y-%m-%d")
-                window_end = window_end_dt.strftime("%Y-%m-%d")
-                base_url = f"https://mmapi.ema-api.com/ema-prod/firm/{practice_url}/ema/fhir/v2"
+                self._entra = EntraAccessTokenValidator(tenant, audiences)
+            except ValueError as e:
+                logger.error("Entra validator not configured: %s", e)
+        else:
+            logger.warning(
+                "Entra auth not fully configured: set ENTRA_TENANT_ID and ENTRA_CLIENT_ID"
+            )
 
-                asyncio.create_task(
-                    _prewarm_schedule_cache(
-                        base_url,
-                        session_user.modmed_access_token,
-                        practice_api_key,
-                        window_start,
-                        window_end,
-                        logger,
-                    )
+    def clear_cache_for_oid(self, oid: str) -> None:
+        """Drop one Entra user's cached session state."""
+        self._users_by_oid.pop(oid, None)
+
+    async def resolve_session_user_from_access_token(
+        self, access_token: str,
+    ) -> Optional[SessionUser]:
+        """
+        Validate Entra bearer token and return cached/build SessionUser.
+
+        Uses a per-oid lock so only one bootstrap flow runs for a user at a time.
+        """
+        if not self._entra:
+            return None
+        try:
+            claims = self._entra.validate(access_token)
+        except EntraAccessTokenError:
+            return None
+
+        oid = (claims.get("oid") or claims.get("sub") or "").strip()
+        if not oid:
+            logger.warning("Entra token missing oid/sub")
+            return None
+
+        email = _email_from_claims(claims)
+        if not email:
+            logger.warning(
+                "Entra token missing email-style claim (email, preferred_username, upn)"
+            )
+            return None
+
+        roles = _roles_from_claims(claims)
+        token_is_admin = _admin_role() in roles
+
+        async with self._cache_lock:
+            cached = self._users_by_oid.get(oid)
+            oid_lock = self._oid_bootstrap_locks.get(oid)
+            if not oid_lock:
+                oid_lock = asyncio.Lock()
+                self._oid_bootstrap_locks[oid] = oid_lock
+
+        if cached:
+            cached.is_admin = token_is_admin
+            cached.username = email
+            cached.email = email
+            if (
+                cached.modmed_expires_at
+                and datetime.utcnow() > cached.modmed_expires_at
+                and cached.modmed_refresh_token
+                and cached.practice_api_key
+            ):
+                await self._refresh_modmed_token_user(cached)
+            return cached
+
+        async with oid_lock:
+            async with self._cache_lock:
+                cached = self._users_by_oid.get(oid)
+            if cached:
+                cached.is_admin = token_is_admin
+                cached.username = email
+                cached.email = email
+                return cached
+
+            entra_config = self._get_authorized_entra_config(email)
+            if not entra_config:
+                logger.warning("Unauthorized email for UroAssist API: %s", email)
+                return None
+
+            practice_name = entra_config[0]
+            modmed_creds = self._get_practice_modmed_credentials(practice_name)
+            modmed_access_token = None
+            modmed_refresh_token = None
+            modmed_expires_at = None
+            practice_api_key = None
+            practice_url = practice_name
+            qdrant_tool = None
+
+            if modmed_creds:
+                fhir_username, fhir_password, practice_url, practice_api_key = modmed_creds
+                mm_tokens = await self._authenticate_with_modmed(
+                    fhir_username, fhir_password, practice_url, practice_api_key
+                )
+                if mm_tokens:
+                    modmed_access_token = mm_tokens["access_token"]
+                    modmed_refresh_token = mm_tokens["refresh_token"]
+                    modmed_expires_at = datetime.utcnow() + timedelta(hours=2)
+                else:
+                    logger.warning("ModMed bootstrap failed for practice %s", practice_name)
+
+            try:
+                qdrant_tool = QdrantVectorSearchTool(
+                    collection_name=practice_url,
+                    limit=5,
+                    qdrant_url=os.getenv("QDRANT_URL"),
+                    qdrant_api_key=os.getenv("QDRANT_API_KEY"),
                 )
             except Exception as e:
-                logger.warning(f"[Schedule cache] Failed to start login prewarm for practice {practice_url}: {e}")
-            
-            return LoginResponse(
-                success=True,
-                session_token=session_token,
-                username=login_data.username,
+                logger.warning("Failed to create Qdrant tool: %s", e)
+
+            session_user = SessionUser(
+                username=email,
                 practice_url=practice_url,
-                expires_at=expires_at,
-                message="Login successful",
-                is_admin=is_admin
+                auth_method="entra",
+                email=email,
+                is_admin=token_is_admin,
+                modmed_access_token=modmed_access_token,
+                modmed_refresh_token=modmed_refresh_token,
+                modmed_expires_at=modmed_expires_at,
+                created_at=datetime.utcnow(),
+                expires_at=datetime.utcnow() + timedelta(days=3650),
+                practice_api_key=practice_api_key,
+                qdrant_tool=qdrant_tool,
             )
-            
-        except Exception as e:
-            logger.exception("Authentication process failed", 
-                           extra={"username": login_data.username})
-            return LoginResponse(
-                success=False,
-                session_token="",
-                username="",
-                practice_url="",
-                expires_at=datetime.utcnow(),
-                message="Authentication system error"
+
+            async with self._cache_lock:
+                existing = self._users_by_oid.get(oid)
+                if existing:
+                    existing.is_admin = token_is_admin
+                    existing.username = email
+                    existing.email = email
+                    return existing
+                self._users_by_oid[oid] = session_user
+
+        if modmed_access_token and practice_api_key:
+            self._start_schedule_prewarm(
+                practice_url, modmed_access_token, practice_api_key
             )
-    
-    def _get_practice_config(self, username: str) -> Optional[tuple]:
-        """
-        Get practice configuration (practice_url, api_key) for username from environment variables.
 
-        Expected env format (per practice):
-            PRACTICE_<practice_name>=username,password,api_key
+        return session_user
 
-        Returns tuple of (practice_url, api_key) or None if not found.
-        """
-        # Look for PRACTICE_* environment variables
-        for key, value in os.environ.items():
-            if key.startswith("PRACTICE_"):
-                try:
-                    parts = value.split(',')
-                    if len(parts) == 3:
-                        env_username, _env_password, api_key = parts
-                        if env_username.strip() == username:
-                            # Practice URL is the suffix of the env var name after PRACTICE_
-                            practice_url = key[len("PRACTICE_") :].strip()
-                            return practice_url, api_key.strip()
-                except Exception as e:
-                    logger.warning(f"Invalid PRACTICE_ config format for {key}: {e}")
-                    continue
-        return None
-    
-    async def _authenticate_with_modmed(self, username: str, password: str, practice_url: str, api_key: str) -> Optional[Dict]:
-        """
-        Call ModMed OAuth API to get access tokens
-        """
-        headers = {
-            "x-api-key": api_key,
-            "Content-Type": "application/x-www-form-urlencoded"
-        }
-        
-        data = {
-            "grant_type": "password",
-            "username": username,
-            "password": password
-        }
-        
-        # oauth_url = f"https://stage.ema-api.com/ema-dev/firm/{practice_url}/ema/ws/oauth2/grant"
-        oauth_url = f"https://mmapi.ema-api.com/ema-prod/firm/{practice_url}/ema/ws/oauth2/grant"
-        
+    def _start_schedule_prewarm(
+        self, practice_url: str, modmed_token: str, practice_api_key: str
+    ) -> None:
+        """Warm the schedule cache for the current fixed Pacific window."""
         try:
-            # Increase timeout for ModMed API calls
-            timeout = httpx.Timeout(30.0, connect=10.0)  # 30s total, 10s connect
-            async with httpx.AsyncClient(timeout=timeout) as client:
-                response = await client.post(oauth_url, headers=headers, data=data)
-                
-                if response.status_code == 200:
-                    logger.info("ModMed authentication successful", 
-                              extra={"username": username, "practice_url": practice_url})
-                    return response.json()
-                elif response.status_code == 503:
-                    logger.error("ModMed API is temporarily unavailable (503)", 
-                               extra={"username": username, "practice_url": practice_url})
-                    return None
-                else:
-                    logger.warning("ModMed authentication failed", 
-                                 extra={"username": username, "practice_url": practice_url, 
-                                       "status_code": response.status_code, "response": response.text[:200]})
-                    return None
-                    
-        except httpx.ReadTimeout as e:
-            logger.error("ModMed API timeout - server took too long to respond", 
-                        extra={"username": username, "practice_url": practice_url, "timeout": "30s"})
-            return None
-        except httpx.ConnectTimeout as e:
-            logger.error("ModMed API connection timeout - unable to connect", 
-                        extra={"username": username, "practice_url": practice_url, "timeout": "10s"})
-            return None
+            pacific = pytz.timezone("US/Pacific")
+            today_pacific = datetime.now(pacific).date()
+            weekday = today_pacific.weekday()  # Monday=0 ... Sunday=6
+            days_to_subtract = (weekday + 1) % 7
+            current_sunday = today_pacific - timedelta(days=days_to_subtract)
+            window_start = current_sunday.strftime("%Y-%m-%d")
+            window_end = (
+                current_sunday + timedelta(weeks=SCHEDULE_CACHE_WEEKS) - timedelta(days=1)
+            ).strftime("%Y-%m-%d")
+            base_url = (
+                f"https://mmapi.ema-api.com/ema-prod/firm/{practice_url}/ema/fhir/v2"
+            )
+            asyncio.create_task(
+                _prewarm_schedule_cache(
+                    base_url,
+                    modmed_token,
+                    practice_api_key,
+                    window_start,
+                    window_end,
+                    logger,
+                )
+            )
         except Exception as e:
-            logger.exception("ModMed API call failed", 
-                           extra={"username": username, "practice_url": practice_url, "error_type": type(e).__name__})
-            return None
-    
-    async def validate_session(self, session_token: str) -> Optional[SessionUser]:
-        """
-        Validate session token and return user info
-        """
-        try:
-            # Decode JWT
-            payload = jwt.decode(session_token, self.SECRET_KEY, algorithms=["HS256"])
-            
-            # Check if session exists
-            if session_token not in self.user_sessions:
-                return None
-            
-            session_user = self.user_sessions[session_token]
-            
-            # Check if session expired
-            if datetime.utcnow() > session_user.expires_at:
-                del self.user_sessions[session_token]
-                return None
-            
-            # Check if ModMed token needs refresh (only for ModMed-authenticated users)
-            if session_user.modmed_expires_at and datetime.utcnow() > session_user.modmed_expires_at:
-                await self._refresh_modmed_token(session_token)
-            
-            return session_user
-            
-        except jwt.ExpiredSignatureError:
-            logger.info("Session token expired", extra={"session_token": session_token[:20]})
-            # Remove expired session
-            self.user_sessions.pop(session_token, None)
-            return None
-        except jwt.InvalidTokenError:
-            logger.warning("Invalid session token", extra={"session_token": session_token[:20]})
-            return None
-    
-    async def _refresh_modmed_token(self, session_token: str):
-        """
-        Refresh ModMed access token using refresh token
-        """
-        if session_token not in self.user_sessions:
+            logger.warning("[Schedule cache] login prewarm failed: %s", e)
+
+    async def _refresh_modmed_token_user(self, session_user: SessionUser) -> None:
+        """Refresh cached ModMed tokens for a resolved session user."""
+        if (
+            not session_user.practice_api_key
+            or not session_user.modmed_refresh_token
+            or not session_user.practice_url
+        ):
             return
-        
-        session_user = self.user_sessions[session_token]
-        
         headers = {
             "x-api-key": session_user.practice_api_key,
-            "Content-Type": "application/x-www-form-urlencoded"
+            "Content-Type": "application/x-www-form-urlencoded",
         }
-        
         data = {
             "grant_type": "refresh_token",
-            "refresh_token": session_user.modmed_refresh_token
+            "refresh_token": session_user.modmed_refresh_token,
         }
-        
-        # oauth_url = f"https://stage.ema-api.com/ema-dev/firm/{session_user.practice_url}/ema/ws/oauth2/grant"
-        oauth_url = f"https://mmapi.ema-api.com/ema-prod/firm/{session_user.practice_url}/ema/ws/oauth2/grant"
-        
+        oauth_url = (
+            f"https://mmapi.ema-api.com/ema-prod/firm/{session_user.practice_url}"
+            "/ema/ws/oauth2/grant"
+        )
         try:
             async with httpx.AsyncClient() as client:
                 response = await client.post(oauth_url, headers=headers, data=data)
-                
                 if response.status_code == 200:
                     tokens = response.json()
-                    # Update stored tokens
                     session_user.modmed_access_token = tokens["access_token"]
                     session_user.modmed_refresh_token = tokens["refresh_token"]
-                    session_user.modmed_expires_at = datetime.utcnow() + timedelta(hours=2)
-                    logger.info("ModMed token refreshed successfully", 
-                              extra={"username": session_user.username, "practice_url": session_user.practice_url})
+                    session_user.modmed_expires_at = datetime.utcnow() + timedelta(
+                        hours=2
+                    )
+                    logger.info(
+                        "ModMed token refreshed for %s",
+                        session_user.email or session_user.username,
+                    )
                 else:
-                    logger.error("Failed to refresh ModMed token", 
-                               extra={"username": session_user.username, "practice_url": session_user.practice_url,
-                                     "status_code": response.status_code})
-                    
-        except Exception as e:
-            logger.exception("ModMed token refresh failed", 
-                           extra={"username": session_user.username, "practice_url": session_user.practice_url})
-    
-    async def logout_user(self, session_token: str) -> bool:
-        """
-        Logout user by removing session
-        """
-        if session_token in self.user_sessions:
-            del self.user_sessions[session_token]
-            return True
-        return False
-    
-    def get_modmed_token_for_session(self, session_token: str) -> Optional[str]:
-        """
-        Get ModMed access token for a session
-        """
-        if session_token in self.user_sessions:
-            return self.user_sessions[session_token].modmed_access_token
-        return None
+                    logger.error(
+                        "Failed to refresh ModMed token: status %s",
+                        response.status_code,
+                    )
+        except Exception:
+            logger.exception("ModMed token refresh failed")
 
-    # ── Outlook OAuth ──────────────────────────────────────────────
-
-    def get_outlook_authorize_url(self) -> str:
-        """Build the Microsoft OAuth2 authorization URL."""
-        state = secrets.token_urlsafe(32)
-        self._oauth_states[state] = datetime.utcnow() + timedelta(minutes=10)
-        params = {
-            "client_id": self.OUTLOOK_CLIENT_ID,
-            "response_type": "code",
-            "redirect_uri": self.OUTLOOK_REDIRECT_URI,
-            "response_mode": "query",
-            "scope": "openid profile email User.Read",
-            "state": state,
+    async def _authenticate_with_modmed(
+        self, username: str, password: str, practice_url: str, api_key: str
+    ) -> Optional[Dict]:
+        """Authenticate against ModMed password grant and return tokens."""
+        headers = {
+            "x-api-key": api_key,
+            "Content-Type": "application/x-www-form-urlencoded",
         }
-        # Single-tenant apps cannot use /common (AADSTS50194). Use your Directory (tenant) ID.
-        # Multi-tenant apps may set OUTLOOK_TENANT_ID to "common" or "organizations".
-        tenant = (self.OUTLOOK_TENANT_ID or "").strip()
-        if not tenant:
-            raise ValueError("OUTLOOK_TENANT_ID is required for Outlook OAuth")
-        base = f"https://login.microsoftonline.com/{tenant}/oauth2/v2.0/authorize"
-        return f"{base}?{urlencode(params)}"
+        data = {
+            "grant_type": "password",
+            "username": username,
+            "password": password,
+        }
+        oauth_url = (
+            f"https://mmapi.ema-api.com/ema-prod/firm/{practice_url}/ema/ws/oauth2/grant"
+        )
+        try:
+            timeout = httpx.Timeout(30.0, connect=10.0)
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                response = await client.post(oauth_url, headers=headers, data=data)
+                if response.status_code == 200:
+                    logger.info(
+                        "ModMed authentication successful",
+                        extra={"username": username, "practice_url": practice_url},
+                    )
+                    return response.json()
+                logger.warning(
+                    "ModMed authentication failed",
+                    extra={
+                        "username": username,
+                        "practice_url": practice_url,
+                        "status_code": response.status_code,
+                        "response": response.text[:200],
+                    },
+                )
+                return None
+        except httpx.ReadTimeout:
+            logger.error(
+                "ModMed API read timeout",
+                extra={"username": username, "practice_url": practice_url},
+            )
+            return None
+        except httpx.ConnectTimeout:
+            logger.error(
+                "ModMed API connect timeout",
+                extra={"username": username, "practice_url": practice_url},
+            )
+            return None
+        except Exception:
+            logger.exception(
+                "ModMed API call failed",
+                extra={"username": username, "practice_url": practice_url},
+            )
+            return None
 
-    def _validate_oauth_state(self, state: str) -> bool:
-        """Validate and consume an OAuth state token."""
-        expiry = self._oauth_states.pop(state, None)
-        if expiry is None:
-            return False
-        if datetime.utcnow() > expiry:
-            return False
-        return True
-
-    def _get_authorized_outlook_config(self, email: str) -> Optional[tuple]:
+    def _get_authorized_entra_config(self, email: str) -> Optional[tuple]:
         """
         Check if an email is authorized and return its practice mapping.
-        Reads OUTLOOK_AUTHORIZED_EMAILS env var.
-        Format: "email1@org.com:practice_name,@domain.com:practice_name"
-        Entries starting with '@' match all emails from that domain.
-        Returns (practice_name,) or None if not authorized.
+        Reads AUTHORIZED_EMAILS env var.
+        Format: "user@org.com:practice_name,@domain.com:practice_name"
         """
-        authorized = os.getenv("OUTLOOK_AUTHORIZED_EMAILS", "")
+        authorized = os.getenv("AUTHORIZED_EMAILS", "")
         email_lower = email.lower().strip()
         for entry in authorized.split(","):
             entry = entry.strip()
@@ -380,7 +352,6 @@ class AuthService:
             pattern, practice_name = entry.rsplit(":", 1)
             pattern = pattern.strip().lower()
             practice_name = practice_name.strip()
-            # Domain wildcard: entries starting with '@' match the whole domain
             if pattern.startswith("@"):
                 if email_lower.endswith(pattern):
                     return (practice_name,)
@@ -395,8 +366,6 @@ class AuthService:
 
         Expected env format:
             PRACTICE_<practice_name>=username,password,api_key
-
-        Returns (username, password, practice_url, api_key) or None.
         """
         env_key = f"PRACTICE_{practice_name}"
         value = os.getenv(env_key)
@@ -411,186 +380,37 @@ class AuthService:
             return username, password, practice_url, api_key
         return None
 
-    async def authenticate_outlook_user(self, code: str, state: str) -> Optional[LoginResponse]:
+    def try_clear_cache_for_access_token(self, access_token: str) -> None:
         """
-        Complete the Outlook OAuth flow:
-        1. Validate state
-        2. Exchange code for tokens
-        3. Get user profile (email)
-        4. Check authorization
-        5. Optionally get ModMed tokens for the mapped practice
-        6. Create session
+        Best-effort cache clear after logout.
+
+        Falls back to unverified claim parsing so expired tokens can still clear oid
+        in-memory state for this process.
         """
-        # Validate state
-        if not self._validate_oauth_state(state):
-            logger.warning("Invalid or expired OAuth state")
-            return LoginResponse(
-                success=False, session_token="", username="", practice_url="",
-                expires_at=datetime.utcnow(), message="Invalid OAuth state. Please try again."
-            )
-
-        # Exchange code for Microsoft tokens (same tenant segment as authorize)
-        tenant = (self.OUTLOOK_TENANT_ID or "").strip()
-        if not tenant:
-            return LoginResponse(
-                success=False,
-                session_token="",
-                username="",
-                practice_url="",
-                expires_at=datetime.utcnow(),
-                message="Outlook OAuth tenant is not configured",
-            )
-        token_url = f"https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token"
-        token_data = {
-            "client_id": self.OUTLOOK_CLIENT_ID,
-            "client_secret": self.OUTLOOK_CLIENT_SECRET,
-            "code": code,
-            "redirect_uri": self.OUTLOOK_REDIRECT_URI,
-            "grant_type": "authorization_code",
-            "scope": "openid profile email User.Read",
-        }
-        try:
-            timeout = httpx.Timeout(30.0, connect=10.0)
-            async with httpx.AsyncClient(timeout=timeout) as http_client:
-                resp = await http_client.post(token_url, data=token_data)
-                if resp.status_code != 200:
-                    logger.error(f"Microsoft token exchange failed: {resp.status_code} {resp.text[:300]}")
-                    return LoginResponse(
-                        success=False, session_token="", username="", practice_url="",
-                        expires_at=datetime.utcnow(), message="Microsoft authentication failed."
-                    )
-                ms_tokens = resp.json()
-
-                # Get user profile from Microsoft Graph
-                graph_resp = await http_client.get(
-                    "https://graph.microsoft.com/v1.0/me",
-                    headers={"Authorization": f"Bearer {ms_tokens['access_token']}"},
-                )
-                if graph_resp.status_code != 200:
-                    logger.error(f"Microsoft Graph /me failed: {graph_resp.status_code}")
-                    return LoginResponse(
-                        success=False, session_token="", username="", practice_url="",
-                        expires_at=datetime.utcnow(), message="Failed to retrieve Microsoft profile."
-                    )
-                profile = graph_resp.json()
-        except Exception as e:
-            logger.exception("Outlook OAuth exchange failed")
-            return LoginResponse(
-                success=False, session_token="", username="", practice_url="",
-                expires_at=datetime.utcnow(), message="Authentication system error."
-            )
-
-        email = (profile.get("mail") or profile.get("userPrincipalName") or "").strip()
-        display_name = profile.get("displayName", email)
-        if not email:
-            return LoginResponse(
-                success=False, session_token="", username="", practice_url="",
-                expires_at=datetime.utcnow(), message="No email found on Microsoft account."
-            )
-
-        # Check authorization
-        outlook_config = self._get_authorized_outlook_config(email)
-        if not outlook_config:
-            logger.warning(f"Unauthorized Outlook email attempted login: {email}")
-            return LoginResponse(
-                success=False, session_token="", username="", practice_url="",
-                expires_at=datetime.utcnow(), message=f"Email '{email}' is not authorized to access UroAssist."
-            )
-
-        practice_name = outlook_config[0]
-
-        # Look up practice's ModMed FHIR credentials
-        modmed_creds = self._get_practice_modmed_credentials(practice_name)
-        modmed_access_token = None
-        modmed_refresh_token = None
-        modmed_expires_at = None
-        practice_api_key = None
-        practice_url = practice_name
-        fhir_username = None
-
-        if modmed_creds:
-            fhir_username, fhir_password, practice_url, practice_api_key = modmed_creds
-            mm_tokens = await self._authenticate_with_modmed(
-                fhir_username, fhir_password, practice_url, practice_api_key
-            )
-            if mm_tokens:
-                modmed_access_token = mm_tokens["access_token"]
-                modmed_refresh_token = mm_tokens["refresh_token"]
-                modmed_expires_at = datetime.utcnow() + timedelta(hours=2)
-                logger.info(f"Auto-authenticated with ModMed for Outlook user {email}")
-            else:
-                logger.warning(f"ModMed auto-auth failed for practice {practice_name}")
-
-        # Generate session token
-        is_admin = self._is_admin_email(email)
-        expires_at = datetime.utcnow() + self.SESSION_DURATION
-        session_payload = {
-            "username": email,
-            "practice_url": practice_url,
-            "auth_method": "outlook",
-            "is_admin": is_admin,
-            "exp": expires_at,
-            "iat": datetime.utcnow(),
-        }
-        session_token = jwt.encode(session_payload, self.SECRET_KEY, algorithm="HS256")
-
-        # Create qdrant tool for this practice
-        user_qdrant_tool = None
-        try:
-            user_qdrant_tool = QdrantVectorSearchTool(
-                collection_name=practice_url,
-                limit=5,
-                qdrant_url=os.getenv("QDRANT_URL"),
-                qdrant_api_key=os.getenv("QDRANT_API_KEY"),
-            )
-        except Exception as e:
-            logger.warning(f"Failed to create Qdrant tool for Outlook user: {e}")
-
-        session_user = SessionUser(
-            username=email,
-            practice_url=practice_url,
-            session_token=session_token,
-            auth_method="outlook",
-            outlook_email=email,
-            is_admin=is_admin,
-            modmed_access_token=modmed_access_token,
-            modmed_refresh_token=modmed_refresh_token,
-            modmed_expires_at=modmed_expires_at,
-            created_at=datetime.utcnow(),
-            expires_at=expires_at,
-            practice_api_key=practice_api_key,
-            qdrant_tool=user_qdrant_tool,
-        )
-        self.user_sessions[session_token] = session_user
-
-        logger.info(f"Outlook user authenticated: {email} → practice {practice_url}")
-
-        # Prewarm schedule cache if we have ModMed tokens
-        if modmed_access_token and practice_api_key:
+        claims: Dict[str, Any] = {}
+        if self._entra:
             try:
-                pacific = pytz.timezone("US/Pacific")
-                today_pacific = datetime.now(pacific).date()
-                weekday = today_pacific.weekday()
-                current_monday = today_pacific - timedelta(days=weekday)
-                window_start = current_monday.strftime("%Y-%m-%d")
-                window_end = (current_monday + timedelta(weeks=SCHEDULE_CACHE_WEEKS) - timedelta(days=1)).strftime("%Y-%m-%d")
-                base_url = f"https://mmapi.ema-api.com/ema-prod/firm/{practice_url}/ema/fhir/v2"
-                asyncio.create_task(
-                    _prewarm_schedule_cache(base_url, modmed_access_token, practice_api_key, window_start, window_end, logger)
+                claims = self._entra.validate(access_token)
+            except EntraAccessTokenError:
+                claims = {}
+        if not claims:
+            try:
+                claims = jwt.decode(
+                    access_token,
+                    options={
+                        "verify_signature": False,
+                        "verify_exp": False,
+                        "verify_aud": False,
+                        "verify_iss": False,
+                    },
+                    algorithms=["RS256", "HS256"],
                 )
-            except Exception as e:
-                logger.warning(f"[Schedule cache] prewarm failed for Outlook user: {e}")
-
-        return LoginResponse(
-            success=True,
-            session_token=session_token,
-            username=email,
-            practice_url=practice_url,
-            expires_at=expires_at,
-            message="Login successful",
-            is_admin=is_admin,
-        )
+            except Exception:
+                claims = {}
+        oid = (claims.get("oid") or claims.get("sub") or "").strip()
+        if oid:
+            self.clear_cache_for_oid(oid)
 
 
-# Global auth service instance
 auth_service = AuthService()
+

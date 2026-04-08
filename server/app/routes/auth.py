@@ -1,124 +1,90 @@
-import os
-from fastapi import APIRouter, HTTPException, Depends, Header, Query
-from fastapi.responses import RedirectResponse
+from fastapi import APIRouter, Depends, Header, HTTPException
 from typing import Optional
-from app.models import LoginRequest, LoginResponse, SessionUser
+
+from app.models import SessionUser
 from app.services.auth_service import auth_service
 
 router = APIRouter(
     prefix="/auth",
-    tags=["authentication"]
+    tags=["authentication"],
 )
 
-# Dependency to validate session and get current user (moved to top)
-async def get_current_user(authorization: Optional[str] = Header(None)) -> SessionUser:
-    """
-    FastAPI dependency to validate session and return current user
-    """
+
+async def get_current_user(
+    authorization: Optional[str] = Header(None),
+) -> SessionUser:
+    """Resolve authenticated user from Bearer access token."""
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(
-            status_code=401, 
-            detail="No valid session token provided",
-            headers={"WWW-Authenticate": "Bearer"}
+            status_code=401,
+            detail="No access token provided",
+            headers={"WWW-Authenticate": "Bearer"},
         )
-    
-    session_token = authorization.split(" ")[1]
-    user = await auth_service.validate_session(session_token)
-    
+    access_token = authorization[7:].strip()
+    if not access_token:
+        raise HTTPException(
+            status_code=401,
+            detail="No access token provided",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    user = await auth_service.resolve_session_user_from_access_token(access_token)
     if not user:
         raise HTTPException(
-            status_code=401, 
-            detail="Invalid or expired session",
-            headers={"WWW-Authenticate": "Bearer"}
+            status_code=401,
+            detail="Invalid or unauthorized access token",
+            headers={"WWW-Authenticate": "Bearer"},
         )
-    
     return user
 
 
-async def require_admin(current_user: SessionUser = Depends(get_current_user)) -> SessionUser:
+async def require_admin(
+    current_user: SessionUser = Depends(get_current_user),
+) -> SessionUser:
+    """Require admin role for protected routes."""
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Admin access required")
     return current_user
 
 
-@router.post("/login", response_model=LoginResponse)
-async def login(credentials: LoginRequest):
+async def require_modmed_session(
+    current_user: SessionUser = Depends(get_current_user),
+) -> SessionUser:
     """
-    Login with ModMed credentials (username, password, practice URL)
+    Require a usable ModMed token and practice API key (schedule, patients, crew).
     """
-    result = await auth_service.authenticate_user(credentials)
-    
-    if not result.success:
+    if not current_user.modmed_access_token or not current_user.practice_api_key:
         raise HTTPException(
-            status_code=401, 
-            detail=result.message or "Authentication failed"
+            status_code=503,
+            detail=(
+                "ModMed session is not available for this account. "
+                "Practice credentials may be missing or ModMed login failed."
+            ),
         )
-    
-    return result
+    return current_user
+
 
 @router.post("/logout")
-async def logout(current_user: SessionUser = Depends(get_current_user)):
+async def logout(authorization: Optional[str] = Header(None)):
     """
-    Logout current user session
+    Clears server-side ModMed/Qdrant cache for this Entra user.
+    The client should also sign out with MSAL.
     """
-    success = await auth_service.logout_user(current_user.session_token)
-    
-    if success:
-        return {"message": "Logged out successfully"}
-    else:
-        raise HTTPException(status_code=400, detail="Logout failed")
+    if authorization and authorization.startswith("Bearer "):
+        token = authorization[7:].strip()
+        if token:
+            auth_service.try_clear_cache_for_access_token(token)
+    return {"message": "Logged out successfully"}
+
 
 @router.get("/me")
 async def get_current_user_info(current_user: SessionUser = Depends(get_current_user)):
-    """
-    Get current user information
-    """
+    """Return profile fields used by the frontend session context."""
     return {
         "username": current_user.username,
-        "outlook_email": current_user.outlook_email,
+        "email": current_user.email,
         "practice_url": current_user.practice_url,
         "expires_at": current_user.expires_at,
         "created_at": current_user.created_at,
         "auth_method": current_user.auth_method,
         "is_admin": current_user.is_admin,
     }
-
-@router.get("/outlook/authorize")
-async def outlook_authorize():
-    """
-    Redirect user to Microsoft OAuth2 login page
-    """
-    if not auth_service.OUTLOOK_CLIENT_ID:
-        raise HTTPException(status_code=500, detail="Outlook OAuth is not configured")
-    if not (auth_service.OUTLOOK_TENANT_ID or "").strip():
-        raise HTTPException(
-            status_code=500,
-            detail="Outlook OAuth tenant is not configured (OUTLOOK_TENANT_ID)",
-        )
-    try:
-        url = auth_service.get_outlook_authorize_url()
-    except ValueError as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
-    return RedirectResponse(url=url)
-
-@router.get("/outlook/callback")
-async def outlook_callback(code: str = Query(None), state: str = Query(None), error: str = Query(None)):
-    """
-    Handle Microsoft OAuth2 callback, then redirect to frontend with session token
-    """
-    # Determine frontend URL for redirects
-    frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173")
-
-    if error:
-        return RedirectResponse(url=f"{frontend_url}/login?error=outlook_denied")
-
-    if not code or not state:
-        return RedirectResponse(url=f"{frontend_url}/login?error=outlook_missing_params")
-
-    result = await auth_service.authenticate_outlook_user(code, state)
-
-    if not result.success:
-        return RedirectResponse(url=f"{frontend_url}/login?error={result.message}")
-
-    # Redirect to frontend with session token — frontend will pick it up
-    return RedirectResponse(url=f"{frontend_url}/login?outlook_token={result.session_token}")

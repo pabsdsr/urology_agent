@@ -111,30 +111,22 @@ The root component that sets up:
 
 ### 2. AuthContext.jsx - Authentication State
 
-Manages authentication state globally:
+Manages authentication state globally using **Microsoft Entra** via **MSAL** (`@azure/msal-react`):
 
 | State | Type | Description |
 |-------|------|-------------|
-| `user` | Object | Current user info (username, practice_url) |
-| `token` | String | JWT session token |
-| `loading` | Boolean | Auth operation in progress |
-| `isAuthenticated` | Boolean | Whether user is logged in |
+| `user` | Object \| null | Derived from active MSAL account (name, username, `is_admin` from ID token `roles`) |
+| `account` | Account \| null | Active MSAL account |
+| `loading` | Boolean | MSAL interaction in progress |
+| `isAuthenticated` | Boolean | Whether an MSAL account is active |
 
-**Functions:**
-- `login(credentials)` - Authenticate user
-- `logout()` - Clear session
-- `checkAuth()` - Validate existing token on app load
-
-**Token Storage:** `localStorage.session_token`
+API calls attach tokens through `apiClient` → `getAuthHeaders()` (MSAL-acquired token used as `Authorization: Bearer ...` for the backend).
 
 ### 3. LoginPage.jsx - Authentication UI
 
 Features:
-- Username/password form
-- Show/hide password toggle
-- "Remember me" checkbox
-- Loading state during authentication
-- Error message display
+- **Sign in with Microsoft** (MSAL redirect or popup flow per app configuration)
+- Loading and error handling while MSAL completes
 
 ### 4. ProtectedRoute.jsx - Route Guard
 
@@ -182,44 +174,40 @@ config.headers.Authorization = `Bearer ${token}`;
 
 ### authService.js - Authentication API
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `login(credentials)` | POST `/auth/login` | Authenticate user |
-| `logout()` | POST `/auth/logout` | End session |
-| `checkAuth()` | GET `/auth/me` | Validate session |
+| Method | Description |
+|--------|-------------|
+| `loginWithEntra()` | Start Entra sign-in via MSAL (`loginRedirect`) |
+| `logout()` | POST `/auth/logout` (clears server-side cache; client should also MSAL sign-out) |
+| `checkAuth()` | GET `/auth/me` — load profile with current bearer token |
 
 ### patientService.js - Patient API
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `getAllPatients()` | GET `/all_patients` | Fetch patient list |
-| `runCrew(data)` | POST `/run_crew` | Send AI query |
+| `searchPatients(input)` | GET `/patients?given=…` / `family=…` | FHIR name search (typeahead) |
+| `runCrew(data)` | POST `/run_crew` | Send AI query (`{ query, id }`) |
 
 ## Data Flow
 
 ### Authentication Flow
 
 ```
-1. User enters credentials on LoginPage
+1. User chooses Sign in with Microsoft on LoginPage
                     │
                     ▼
-2. AuthContext.login() called
+2. MSAL acquires tokens (redirect or interactive)
                     │
                     ▼
-3. authService.login() → POST /auth/login
+3. Active MSAL account set; AuthContext reflects user + roles
                     │
                     ▼
-4. Server validates with ModMed OAuth
+4. apiClient requests include Authorization: Bearer <token>
                     │
                     ▼
-5. Server returns session_token + user info
+5. Backend validates Entra JWT and resolves ModMed session server-side
                     │
                     ▼
-6. Token stored in localStorage
-   User state updated in AuthContext
-                    │
-                    ▼
-7. Navigate to MainApp (/)
+6. Navigate to MainApp (/) when authenticated
 ```
 
 ### Query Flow
@@ -301,7 +289,7 @@ The application uses React's built-in state management:
 
 ### Local State (useState)
 - **MainApp:** Patients list, selected patient, messages, search term
-- **LoginPage:** Credentials, error, loading
+- **LoginPage:** MSAL interaction state, error, loading
 
 ### Side Effects (useEffect)
 - Fetch patients on mount
@@ -312,17 +300,16 @@ The application uses React's built-in state management:
 ## Security
 
 ### Token Management
-- Session token stored in `localStorage`
-- Automatically attached to all API requests
-- Cleared on logout or 401 response
+- Tokens are managed by **MSAL** (browser cache/session storage per `msal` config)
+- `apiClient` attaches `Authorization` via `getAuthHeaders()` on each request
+- On `401`, the client dispatches `auth:unauthorized` (optional listeners; MSAL re-auth may be required)
 
 ### Protected Routes
 - ProtectedRoute component guards authenticated pages
 - Redirects to login if no valid session
 
 ### Event-Based Auth
-- `auth:unauthorized` event fired on 401 responses
-- AuthContext listens and clears state
+- `auth:unauthorized` custom event is dispatched on 401 responses (see `apiClient.js`); wire a listener if you want global redirect to sign-in
 
 ## Build & Development
 

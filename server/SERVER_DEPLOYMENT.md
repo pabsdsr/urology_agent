@@ -179,10 +179,9 @@ eb create production --instance-type t3.small
 eb setenv \
   QDRANT_URL="https://your-cluster.qdrant.io" \
   QDRANT_API_KEY="your-key" \
-  MODMED_BASE_URL="https://api-rest.modmed.com/api" \
-  MODMED_CLIENT_ID="your-id" \
-  MODMED_CLIENT_SECRET="your-secret" \
-  JWT_SECRET_KEY="your-jwt-secret" \
+  ENTRA_TENANT_ID="your-entra-tenant-id" \
+  ENTRA_CLIENT_ID="your-spa-app-client-id" \
+  AUTHORIZED_EMAILS="user@org.com:your_firm_prefix" \
   AWS_REGION="us-west-2" \
   MODEL="anthropic.claude-3-5-sonnet-20241022-v2:0"
 
@@ -260,9 +259,11 @@ eb setenv \
   EMBEDDING_MODEL="amazon.titan-embed-text-v2:0" \
   QDRANT_URL="https://your-cluster.qdrant.io" \
   QDRANT_API_KEY="your-qdrant-key" \
-  JWT_SECRET_KEY="your-super-secret-jwt-key" \
+  ENTRA_TENANT_ID="your-entra-tenant-id" \
+  ENTRA_CLIENT_ID="your-spa-app-client-id" \
+  AUTHORIZED_EMAILS="user@org.com:uropmsandbox460" \
   AWS_REGION="us-west-2" \
-  "PRACTICE_uropmsandbox460=fhir_WpKHZ,uropmsandbox460,83529f51-4952-4749-8fb9-31c2170cdf0b"
+  "PRACTICE_uropmsandbox460=fhir_WpKHZ,Urd6RwiU3c,83529f51-4952-4749-8fb9-31c2170cdf0b"
 ```
 
 **Environment Variable Format**:
@@ -281,15 +282,10 @@ eb status  # Should show: Status: Ready, Health: Green
 curl https://api.uroassist.net/health
 # Expected: {"status":"healthy","service":"UroAssist-backend"}
 
-# Test authentication with ModMed
-curl -X POST https://api.uroassist.net/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{
-    "practice_id": "PRACTICE_uropmsandbox460",
-    "username": "fhir_WpKHZ",
-    "password": "Urd6RwiU3c"
-  }'
-# Expected: {"success":true,"session_token":"...","username":"fhir_WpKHZ",...}
+# Test authenticated API (get an Entra access token from the SPA / MSAL, then:)
+curl https://api.uroassist.net/auth/me \
+  -H "Authorization: Bearer <ENTRA_ACCESS_TOKEN>"
+# Expected: JSON with email, practice_url, is_admin, etc.
 ```
 
 ## Step 9: Test ModMed API Directly (Optional)

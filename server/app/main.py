@@ -38,11 +38,12 @@ async def lifespan(app: FastAPI):
     await client.aclose()
 
 def create_app():
+    """Build FastAPI app with CORS and route modules."""
     app = FastAPI(
         title="UroAssist Backend"
     )
 
-    # HTTPS enforcement for production
+    # CORS allowlist (TLS is enforced at the load balancer / reverse proxy in production).
     allowed_origins = []
     
     if os.getenv('ENVIRONMENT') == 'production':
@@ -86,8 +87,11 @@ def create_app():
 
     return app
 
-def run(query: str, id: str, practice_url: str = None, user_qdrant_tool = None):
-    inputs = {"query": query, "id": id, "practice_url": practice_url}
+def run(query: str, patient_id: str, practice_url: str = None, user_qdrant_tool = None):
+    """
+    Execute the CrewAI clinical assistant synchronously (call via asyncio.to_thread from routes).
+    """
+    inputs = {"query": query, "id": patient_id, "practice_url": practice_url}
 
     try:
         # Create clinical assistant crew instance

@@ -6,7 +6,7 @@ Usage:
     python create_qdrant_collection.py <practice_url>
     
 Example:
-    python create_qdrant_collection.py uropmsandbox460
+    python create_qdrant_collection.py ocua
     python create_qdrant_collection.py anotherpractice
 """
 

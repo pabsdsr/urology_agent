@@ -1,3 +1,12 @@
+# Production SPA build: Vite inlines import.meta.env at `npm run build` time.
+# Required GitHub secrets (repository → Settings → Secrets and variables → Actions):
+#   VITE_API_URL              — e.g. https://api.uroassist.net
+#   VITE_APP_ORIGIN           — SPA origin (e.g. https://www.uroassist.net) for MSAL defaults
+# Optional (override MSAL URLs; must match Entra app registration redirect URIs):
+#   VITE_MSAL_REDIRECT_URI, VITE_MSAL_POST_LOGOUT_URI, VITE_ADMIN_APP_ROLE
+#
+# Backend env (AUTHORIZED_EMAILS, ENTRA_*, PRACTICE_*, etc.) is set on Elastic Beanstalk, not here.
+
 name: Deploy Frontend to S3 + CloudFront
 
 on:
@@ -32,8 +41,28 @@ jobs:
       - name: Create production environment file
         working-directory: ./client
         run: |
-          echo "VITE_API_URL=${{ secrets.VITE_API_URL }}" > .env.production
-      
+          set -euo pipefail
+          if [ -z "${{ secrets.VITE_API_URL }}" ]; then
+            echo "::error::Set repository secret VITE_API_URL (e.g. https://api.uroassist.net)"
+            exit 1
+          fi
+          # Default SPA origin matches health-check URL below; override with VITE_APP_ORIGIN secret.
+          ORIGIN="${{ secrets.VITE_APP_ORIGIN }}"
+          {
+            echo "VITE_API_URL=${{ secrets.VITE_API_URL }}"
+            echo "VITE_APP_ORIGIN=${ORIGIN:-https://uroassist.net}"
+          } > .env.production
+          if [ -n "${{ secrets.VITE_MSAL_REDIRECT_URI }}" ]; then
+            echo "VITE_MSAL_REDIRECT_URI=${{ secrets.VITE_MSAL_REDIRECT_URI }}" >> .env.production
+          fi
+          if [ -n "${{ secrets.VITE_MSAL_POST_LOGOUT_URI }}" ]; then
+            echo "VITE_MSAL_POST_LOGOUT_URI=${{ secrets.VITE_MSAL_POST_LOGOUT_URI }}" >> .env.production
+          fi
+          if [ -n "${{ secrets.VITE_ADMIN_APP_ROLE }}" ]; then
+            echo "VITE_ADMIN_APP_ROLE=${{ secrets.VITE_ADMIN_APP_ROLE }}" >> .env.production
+          fi
+          echo "Wrote .env.production (Vite build-time config)"
+
       - name: Build React app
         working-directory: ./client
         run: npm run build

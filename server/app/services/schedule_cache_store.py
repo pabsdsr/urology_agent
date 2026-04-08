@@ -2,7 +2,8 @@
 Shared schedule cache: in-process dict or DynamoDB (gzip JSON payload).
 
 Set SCHEDULE_CACHE_DYNAMODB_TABLE to enable DynamoDB (e.g. uroassist-schedule-cache).
-Partition key attribute: cache_key (String), value = ModMed FHIR base_url.
+Partition key: ``SCHEDULE_CACHE_DYNAMODB_PK`` (default ``practice_url``), holding the ModMed
+firm segment / FHIR base path key; item payload is gzip JSON.
 
 Optional composite key: set SCHEDULE_CACHE_DYNAMODB_SK to the sort key attribute name
 and SCHEDULE_CACHE_DYNAMODB_SK_VALUE (default SCHEDULE_WINDOW).

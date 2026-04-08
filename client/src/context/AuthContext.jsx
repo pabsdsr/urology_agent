@@ -1,152 +1,108 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { authService } from '../services/authService.js';
+import {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useMemo,
+} from "react";
+import { InteractionStatus } from "@azure/msal-browser";
+import { MsalProvider, useMsal } from "@azure/msal-react";
+import { adminAppRole } from "../authConfig.js";
+import { msalInstance } from "../msalInstance.js";
 
-const AuthContext = createContext();
+const AuthContext = createContext(null);
 
-// eslint-disable-next-line react-refresh/only-export-components
-export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
-};
+function parseRoles(claims) {
+  if (!claims || typeof claims !== "object") return [];
+  const raw = claims.roles;
+  if (Array.isArray(raw)) return raw;
+  if (typeof raw === "string" && raw) return [raw];
+  return [];
+}
 
-export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
-  const [token, setToken] = useState(localStorage.getItem('session_token'));
-  const [loading, setLoading] = useState(true);
+function AuthStateProvider({ children }) {
+  const { instance, inProgress } = useMsal();
+  const activeAccount = instance.getActiveAccount();
 
-  // Check if user is authenticated on app load
   useEffect(() => {
-    const checkAuth = async () => {
-      const storedToken = localStorage.getItem('session_token');
-      if (storedToken) {
-        try {
-          const userData = await authService.checkAuth();
-          setUser(userData);
-          setToken(storedToken);
-        } catch (error) {
-          console.error('Auth check failed:', error);
-          // Token invalid, clear it (apiClient handles this automatically)
-          localStorage.removeItem('session_token');
-          setToken(null);
-          setUser(null);
-        }
-      }
-      setLoading(false);
+    const onUnauthorized = () => {
+      window.location.assign("/login");
     };
-
-    // Listen for unauthorized events from apiClient
-    const handleUnauthorized = () => {
-      setToken(null);
-      setUser(null);
-    };
-
-    window.addEventListener('auth:unauthorized', handleUnauthorized);
-    checkAuth();
-
-    return () => {
-      window.removeEventListener('auth:unauthorized', handleUnauthorized);
-    };
+    window.addEventListener("auth:unauthorized", onUnauthorized);
+    return () => window.removeEventListener("auth:unauthorized", onUnauthorized);
   }, []);
+  const loading = inProgress !== InteractionStatus.None;
+  const isAuthenticated = !!activeAccount;
 
-  const loginWithOutlookToken = async (sessionToken) => {
-    setLoading(true);
-    try {
-      localStorage.setItem('session_token', sessionToken);
-      setToken(sessionToken);
-      const userData = await authService.checkAuth();
-      setUser(userData);
-      return { success: true };
-    } catch (error) {
-      console.error('Outlook token login failed:', error);
-      localStorage.removeItem('session_token');
-      setToken(null);
-      setUser(null);
-      return { success: false, error: 'Outlook login failed. Please try again.' };
-    } finally {
-      setLoading(false);
-    }
-  };
+  const user = useMemo(() => {
+    if (!activeAccount) return null;
+    const claims = activeAccount.idTokenClaims ?? {};
+    const roles = parseRoles(claims);
+    const is_admin = roles.includes(adminAppRole);
+    return {
+      name: activeAccount.name,
+      username: activeAccount.username,
+      roles,
+      is_admin,
+    };
+  }, [activeAccount]);
 
-  const login = async (credentials) => {
-    setLoading(true);
-    try {
-      const data = await authService.login(credentials);
-
-      if (data.success) {
-        localStorage.setItem('session_token', data.session_token);
-        setToken(data.session_token);
-        setUser({
-          username: data.username,
-          practice_url: data.practice_url,
-          expires_at: data.expires_at,
-          is_admin: data.is_admin || false
-        });
-        return { success: true };
-      } else {
-        return { 
-          success: false, 
-          error: data.detail || data.message || 'Login failed' 
-        };
-      }
-    } catch (error) {
-      console.error('Login error:', error);
-      
-      // Customize error messages based on error type
-      let errorMessage = 'Login failed. Please try again.';
-      
-      if (error.response?.status === 401) {
-        errorMessage = 'Invalid username or password. Please check your credentials.';
-      } else if (error.response?.status === 403) {
-        errorMessage = 'Access denied. Please contact your administrator.';
-      } else if (error.response?.status === 503) {
-        errorMessage = 'ModMed services are temporarily unavailable. Please try again in a few minutes.';
-      } else if (error.response?.status >= 500) {
-        errorMessage = 'Server error. Please try again later.';
-      } else if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
-        errorMessage = 'Request timed out. The server is taking too long to respond. Please try again.';
-      } else if (!error.response) {
-        errorMessage = 'Network error. Please check your connection.';
-      }
-      
-      return { 
-        success: false, 
-        error: errorMessage
-      };
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const logout = async () => {
-    try {
-      if (token) {
-        await authService.logout();
-      }
-    } catch (error) {
-      console.error('Logout error:', error);
-    } finally {
-      localStorage.removeItem('session_token');
-      setToken(null);
-      setUser(null);
-    }
-  };
-
-  const value = {
-    user,
-    token,
-    login,
-    loginWithOutlookToken,
-    logout,
-    loading,
-    isAuthenticated: !!user && !!token
-  };
+  const value = useMemo(
+    () => ({
+      isAuthenticated,
+      loading,
+      user,
+      account: activeAccount,
+    }),
+    [isAuthenticated, loading, user, activeAccount]
+  );
 
   return (
-    <AuthContext.Provider value={value}>
-      {children}
-    </AuthContext.Provider>
+    <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
+  );
+}
+
+// eslint-disable-next-line react-refresh/only-export-components -- useAuth is tied to AuthProvider
+export function useAuth() {
+  const ctx = useContext(AuthContext);
+  if (!ctx) {
+    throw new Error("useAuth must be used within AuthProvider");
+  }
+  return ctx;
+}
+
+export const AuthProvider = ({ children }) => {
+  const [initialized, setInitialized] = useState(false);
+
+  useEffect(() => {
+    msalInstance
+      .initialize()
+      .then(() => msalInstance.handleRedirectPromise())
+      .then((response) => {
+        if (response?.account) {
+          msalInstance.setActiveAccount(response.account);
+        } else {
+          const accounts = msalInstance.getAllAccounts();
+          if (accounts.length === 1) {
+            msalInstance.setActiveAccount(accounts[0]);
+          }
+        }
+      })
+      .catch((err) => {
+        console.error(err);
+      })
+      .finally(() => {
+        setInitialized(true);
+      });
+  }, []);
+
+  if (!initialized) {
+    return null;
+  }
+
+  return (
+    <MsalProvider instance={msalInstance}>
+      <AuthStateProvider>{children}</AuthStateProvider>
+    </MsalProvider>
   );
 };

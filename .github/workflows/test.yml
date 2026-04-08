@@ -64,7 +64,11 @@ jobs:
       - name: Build (test if build succeeds)
         working-directory: ./client
         run: |
-          echo "VITE_API_URL=https://api.uroassist.net" > .env.production
+          # Match production bundle shape: MSAL must not fall back to localhost at build time.
+          {
+            echo "VITE_API_URL=https://api.uroassist.net"
+            echo "VITE_APP_ORIGIN=https://uroassist.net"
+          } > .env.production
           npm run build
       
       - name: Run tests (optional)

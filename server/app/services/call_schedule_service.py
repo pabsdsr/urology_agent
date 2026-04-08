@@ -1,8 +1,16 @@
+"""
+Single-tenant on-call schedule: one JSON file locally and/or one S3 object.
+"""
 import copy
+import contextlib
 import json
+import logging
 import os
+import sys
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
+
+logger = logging.getLogger(__name__)
 
 CALL_SCHEDULE_PATH = os.path.join(
     os.path.dirname(__file__),
@@ -11,7 +19,6 @@ CALL_SCHEDULE_PATH = os.path.join(
     "call_schedule.json",
 )
 
-# Optional S3-backed storage for call schedule in production.
 CALL_SCHEDULE_S3_BUCKET = os.getenv("CALL_SCHEDULE_S3_BUCKET")
 CALL_SCHEDULE_S3_KEY = os.getenv("CALL_SCHEDULE_S3_KEY", "call_schedule.json")
 
@@ -22,13 +29,27 @@ if CALL_SCHEDULE_S3_BUCKET:
 
         _s3_client = boto3.client("s3")
     except Exception:
-        # If boto3 is not available, we silently fall back to local file storage.
         _s3_client = None
 
 
-def _ensure_dir():
-    directory = os.path.dirname(CALL_SCHEDULE_PATH)
-    os.makedirs(directory, exist_ok=True)
+@contextlib.contextmanager
+def _local_file_lock(path: str):
+    """Exclusive lock around local schedule read/write (Unix). No-op on Windows."""
+    if sys.platform == "win32":
+        yield
+        return
+    import fcntl
+
+    directory = os.path.dirname(path)
+    if directory:
+        os.makedirs(directory, exist_ok=True)
+    lock_path = path + ".lock"
+    with open(lock_path, "a+", encoding="utf-8") as lf:
+        fcntl.flock(lf.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(lf.fileno(), fcntl.LOCK_UN)
 
 
 def _load_call_schedule_from_s3() -> Dict[str, Dict[str, str]]:
@@ -41,7 +62,8 @@ def _load_call_schedule_from_s3() -> Dict[str, Dict[str, str]]:
         return {str(k): dict(v) for k, v in data.items()}
     except _s3_client.exceptions.NoSuchKey:  # type: ignore[attr-defined]
         return {}
-    except Exception:
+    except Exception as e:
+        logger.warning("S3 get call schedule failed key=%s: %s", CALL_SCHEDULE_S3_KEY, e)
         return {}
 
 
@@ -56,36 +78,40 @@ def _save_call_schedule_to_s3(data: Dict[str, Dict[str, str]]) -> None:
             Body=body,
             ContentType="application/json",
         )
-    except Exception:
-        # Fail soft; better to have no update than crash the API.
-        pass
+    except Exception as e:
+        logger.error("S3 put call schedule failed key=%s: %s", CALL_SCHEDULE_S3_KEY, e)
 
 
-def _load_call_schedule() -> Dict[str, Dict[str, str]]:
-    """Load call schedule from storage. Keys are YYYY-MM-DD strings."""
-    # Prefer S3 when configured, otherwise local JSON file.
-    if _s3_client and CALL_SCHEDULE_S3_BUCKET:
-        data = _load_call_schedule_from_s3()
-        if data:
-            return data
+def _load_call_schedule_disk() -> Dict[str, Dict[str, str]]:
     if not os.path.exists(CALL_SCHEDULE_PATH):
         return {}
     try:
         with open(CALL_SCHEDULE_PATH, "r", encoding="utf-8") as f:
             data = json.load(f)
         return {str(k): dict(v) for k, v in data.items()}
-    except Exception:
+    except Exception as e:
+        logger.warning("Read call schedule failed path=%s: %s", CALL_SCHEDULE_PATH, e)
         return {}
 
 
+def _load_call_schedule() -> Dict[str, Dict[str, str]]:
+    if _s3_client and CALL_SCHEDULE_S3_BUCKET:
+        s3_data = _load_call_schedule_from_s3()
+        if s3_data:
+            return s3_data
+    return _load_call_schedule_disk()
+
+
 def _save_call_schedule(data: Dict[str, Dict[str, str]]) -> None:
-    # Always try to save to S3 when configured.
     if _s3_client and CALL_SCHEDULE_S3_BUCKET:
         _save_call_schedule_to_s3(data)
-    else:
-        _ensure_dir()
+    directory = os.path.dirname(CALL_SCHEDULE_PATH)
+    os.makedirs(directory, exist_ok=True)
+    try:
         with open(CALL_SCHEDULE_PATH, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, sort_keys=True)
+    except Exception as e:
+        logger.error("Write call schedule failed path=%s: %s", CALL_SCHEDULE_PATH, e)
 
 
 def update_week(
@@ -96,11 +122,9 @@ def update_week(
     """
     Update (or create) call schedule entries for a single week.
 
-    week_start: ISO date string (YYYY-MM-DD) for the start of the week (currently Sunday).
-    days: mapping of date string -> { "North Pod": [...entries...], "Central Pod": [...], "South Pod": [...] }.
-    audit_meta: if set, append an audit row with user + before/after for touched dates.
+    week_start: ISO date (YYYY-MM-DD) for the week start (Sunday).
+    days: mapping of date string -> { "North Pod": [...], ... }.
     """
-    schedule = _load_call_schedule()
     norm_days: Dict[str, Dict[str, Any]] = {}
     for date_str, pods in days.items():
         try:
@@ -110,26 +134,45 @@ def update_week(
             continue
         norm_days[norm_key] = pods
 
-    previous_by_date: Dict[str, Any] = {}
-    if audit_meta and norm_days:
-        for k in norm_days:
-            prev = schedule.get(k)
-            previous_by_date[k] = copy.deepcopy(prev) if prev is not None else None
+    def apply_merge(schedule: Dict[str, Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
+        for norm_key, pods in norm_days.items():
+            schedule[norm_key] = pods
+        return schedule
 
-    for norm_key, pods in norm_days.items():
-        schedule[norm_key] = pods
-
-    _save_call_schedule(schedule)
+    if _s3_client and CALL_SCHEDULE_S3_BUCKET:
+        schedule = dict(_load_call_schedule())
+        previous_by_date: Dict[str, Any] = {}
+        if audit_meta and norm_days:
+            for k in norm_days:
+                prev = schedule.get(k)
+                previous_by_date[k] = copy.deepcopy(prev) if prev is not None else None
+        schedule = apply_merge(schedule)
+        _save_call_schedule_to_s3(schedule)
+    else:
+        with _local_file_lock(CALL_SCHEDULE_PATH):
+            schedule = dict(_load_call_schedule_disk())
+            previous_by_date = {}
+            if audit_meta and norm_days:
+                for k in norm_days:
+                    prev = schedule.get(k)
+                    previous_by_date[k] = copy.deepcopy(prev) if prev is not None else None
+            schedule = apply_merge(schedule)
+            try:
+                os.makedirs(os.path.dirname(CALL_SCHEDULE_PATH), exist_ok=True)
+                with open(CALL_SCHEDULE_PATH, "w", encoding="utf-8") as f:
+                    json.dump(schedule, f, indent=2, sort_keys=True)
+            except Exception as e:
+                logger.error("Write call schedule failed path=%s: %s", CALL_SCHEDULE_PATH, e)
 
     if audit_meta and norm_days:
         from app.services.call_schedule_audit import append_audit_entry
 
         updated_by_date = {k: copy.deepcopy(schedule[k]) for k in norm_days}
-        outlook_email = audit_meta.get("outlook_email")
+        email = audit_meta.get("email")
         append_audit_entry(
             {
                 "at": datetime.now(timezone.utc).isoformat(),
-                "outlook_email": outlook_email,
+                "email": email,
                 "auth_method": audit_meta.get("auth_method") or "",
                 "practice_url": audit_meta.get("practice_url") or "",
                 "is_admin": bool(audit_meta.get("is_admin")),
@@ -145,19 +188,23 @@ def update_week(
     return schedule
 
 
-def get_call_schedule_range(start_date: str, end_date: str) -> Dict[str, Dict[str, Any]]:
-    """
-    Return call schedule entries for an inclusive date range.
-    Keys are YYYY-MM-DD strings between start_date and end_date.
-    """
+def get_call_schedule_range(
+    start_date: str, end_date: str
+) -> Dict[str, Dict[str, Any]]:
+    """Return call schedule entries for an inclusive date range (YYYY-MM-DD keys)."""
     try:
         start_dt = datetime.strptime(start_date, "%Y-%m-%d").date()
         end_dt = datetime.strptime(end_date, "%Y-%m-%d").date()
     except ValueError:
         return {}
 
-    raw = _load_call_schedule()
-    result: Dict[str, Dict[str, str]] = {}
+    if _s3_client and CALL_SCHEDULE_S3_BUCKET:
+        raw = _load_call_schedule()
+    else:
+        with _local_file_lock(CALL_SCHEDULE_PATH):
+            raw = _load_call_schedule_disk()
+
+    result: Dict[str, Dict[str, Any]] = {}
     cur = start_dt
     while cur <= end_dt:
         key = cur.strftime("%Y-%m-%d")
@@ -165,5 +212,3 @@ def get_call_schedule_range(start_date: str, end_date: str) -> Dict[str, Dict[st
             result[key] = raw[key]
         cur += timedelta(days=1)
     return result
-
-

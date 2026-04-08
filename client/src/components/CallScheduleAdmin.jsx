@@ -8,32 +8,19 @@ import React, {
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import { callScheduleService } from "../services/callScheduleService";
-
-function formatYMD(d) {
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
+import {
+  formatYMD,
+  addDays,
+  startOfWeekSundayUTC,
+  getPacificDateString,
+} from "../utils/calendarPacific.js";
 
 function startOfWeek(dateStr) {
-  const d = new Date(`${dateStr}T00:00:00`);
-  const dayOfWeek = d.getDay();
-  d.setDate(d.getDate() - dayOfWeek);
-  return formatYMD(d);
-}
-
-function addDays(dateStr, delta) {
-  const d = new Date(`${dateStr}T00:00:00`);
-  d.setDate(d.getDate() + delta);
-  return formatYMD(d);
+  return startOfWeekSundayUTC(dateStr);
 }
 
 export default function CallScheduleAdmin() {
-  const today = useMemo(() => {
-    const now = new Date();
-    return formatYMD(now);
-  }, []);
+  const today = useMemo(() => getPacificDateString(), []);
 
   const [customLocations, setCustomLocations] = useState(() => {
     if (typeof window === "undefined") return [];

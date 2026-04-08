@@ -122,6 +122,7 @@ function MainApp() {
     }
   };
 
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -158,15 +159,11 @@ function MainApp() {
                           <div className="font-medium text-gray-900">
                             {patient.givenName} {patient.familyName}
                           </div>
-                          <div className="text-sm text-gray-500">
-                            ID: {patient.id}
-                            {patient.dob && (
-                              <>
-                                {" | DOB: "}
-                                {patient.dob}
-                              </>
-                            )}
-                          </div>
+                          {patient.dob && (
+                            <div className="text-sm text-gray-500">
+                              DOB: {patient.dob}
+                            </div>
+                          )}
                         </div>
                       ))
                     ) : (
@@ -189,13 +186,7 @@ function MainApp() {
                         {selectedPatient.givenName} {selectedPatient.familyName}
                       </p>
                       <p className="text-sm text-teal-600">
-                        ID: {selectedPatient.id}
-                        {selectedPatient.dob && (
-                          <>
-                            {" | DOB: "}
-                            {selectedPatient.dob}
-                          </>
-                        )}
+                        {selectedPatient.dob ? `DOB: ${selectedPatient.dob}` : ""}
                       </p>
                     </div>
                     <button

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 import { callScheduleService } from "../services/callScheduleService";
 
 const POD_ORDER = ["North Pod", "Central Pod", "South Pod"];
@@ -109,6 +110,7 @@ function formatSource(entry) {
 }
 
 export default function CallScheduleChangeLog() {
+  const { user } = useAuth();
   const [audit, setAudit] = useState([]);
   const [meta, setMeta] = useState({ limit: 100, offset: 0 });
   const [loading, setLoading] = useState(true);
@@ -151,10 +153,10 @@ export default function CallScheduleChangeLog() {
         <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
           <h2 className="text-xl font-bold">Call schedule change log</h2>
           <Link
-            to="/call-schedule-admin"
+            to={user?.is_admin ? "/call-schedule-admin" : "/schedule"}
             className="text-sm text-teal-600 hover:underline"
           >
-            ← Back to edit schedule
+            {user?.is_admin ? "← Back to edit schedule" : "← Back to schedule"}
           </Link>
         </div>
         <p className="text-sm text-gray-500 mb-4">
@@ -172,8 +174,8 @@ export default function CallScheduleChangeLog() {
           <ul className="space-y-4 text-sm">
             {audit.map((entry, i) => {
               const email =
-                entry.outlook_email && String(entry.outlook_email).trim()
-                  ? entry.outlook_email
+                entry.email && String(entry.email).trim()
+                  ? entry.email
                   : null;
               const changeLines = summarizeScheduleChanges(entry);
               return (
@@ -186,7 +188,7 @@ export default function CallScheduleChangeLog() {
                       <span className="text-gray-500 font-normal">By </span>
                       {email || (
                         <span className="text-amber-800">
-                          Not recorded (signed in without Outlook email)
+                          Not recorded (signed in without email)
                         </span>
                       )}
                     </p>

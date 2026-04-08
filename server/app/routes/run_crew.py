@@ -1,8 +1,10 @@
+import asyncio
+
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 import logging
 from app.services.patient_info_service import get_patient_info
-from app.routes.auth import get_current_user
+from app.routes.auth import require_modmed_session
 from app.models import SessionUser
 
 logger = logging.getLogger(__name__)
@@ -14,11 +16,12 @@ router = APIRouter(
 )
 
 class CrewInput(BaseModel):
-        query: str
-        id: str
+    """Body for clinical assistant run; `id` is the ModMed patient id."""
+    query: str = Field(..., description="User question for the assistant")
+    id: str = Field(..., description="FHIR Patient id")
 
 @router.post("")
-async def run_crew(req: CrewInput, current_user: SessionUser = Depends(get_current_user)):
+async def run_crew(req: CrewInput, current_user: SessionUser = Depends(require_modmed_session)):
 
     # Always ensure patient data is embedded before running crew
     await get_patient_info(
@@ -36,11 +39,13 @@ async def run_crew(req: CrewInput, current_user: SessionUser = Depends(get_curre
                    extra={"patient_id": req.id, "query": req.query[:50], 
                          "username": current_user.username, "practice_url": current_user.practice_url})
         
-        result = run(
-            query=req.query, 
-            id=req.id, 
-            practice_url=current_user.practice_url,
-            user_qdrant_tool=current_user.qdrant_tool
+        # CrewAI is synchronous; run off the event loop so other requests can progress.
+        result = await asyncio.to_thread(
+            run,
+            req.query,
+            req.id,
+            current_user.practice_url,
+            current_user.qdrant_tool,
         )
         
         logger.info("Crew execution completed successfully", 

@@ -21,9 +21,6 @@ except ImportError:
     FieldCondition = Any
     MatchValue = Any
 
-from crewai.tools import BaseTool
-from pydantic import BaseModel, Field
-
 
 class QdrantToolSchema(BaseModel):
     """Input for QdrantTool."""

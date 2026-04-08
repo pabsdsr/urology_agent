@@ -1,9 +1,17 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 import { scheduleService } from "../services/scheduleService";
+import {
+  addDays,
+  getSundayWeekRange,
+  getDatesInRange,
+  getPacificDateString,
+} from "../utils/calendarPacific.js";
 
 function PractitionerSchedule() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [data, setData] = useState({
     schedule: {},
     practitioner_names: {},
@@ -17,37 +25,7 @@ function PractitionerSchedule() {
   const [viewMode, setViewMode] = useState("day"); // "day" or "week"
   const [activeTab, setActiveTab] = useState("schedule"); // "schedule" or "surgeries"
   const [selectedSurgery, setSelectedSurgery] = useState(null);
-  // Get current date in US/Pacific time
-  function getPacificDateString() {
-    // Get the current time in Pacific, regardless of browser timezone
-    const now = new Date();
-    // Get the equivalent time in Pacific
-    const pacificDateParts = new Intl.DateTimeFormat('en-CA', {
-      timeZone: 'America/Los_Angeles',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    }).formatToParts(now);
-    // Compose YYYY-MM-DD
-    const year = pacificDateParts.find(p => p.type === 'year').value;
-    const month = pacificDateParts.find(p => p.type === 'month').value;
-    const day = pacificDateParts.find(p => p.type === 'day').value;
-    return `${year}-${month}-${day}`;
-  }
   const [date, setDate] = useState(getPacificDateString());
-
-  const formatYMD = (d) => {
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, "0");
-    const day = String(d.getDate()).padStart(2, "0");
-    return `${year}-${month}-${day}`;
-  };
-
-  const addDays = (dateStr, delta) => {
-    const d = new Date(`${dateStr}T00:00:00`);
-    d.setDate(d.getDate() + delta);
-    return formatYMD(d);
-  };
 
   const goToPrev = () => {
     const step = viewMode === "week" ? 7 : 1;
@@ -59,29 +37,7 @@ function PractitionerSchedule() {
     setDate((prev) => addDays(prev, step));
   };
 
-  const getWorkWeekRange = (baseDateStr) => {
-    const d = new Date(`${baseDateStr}T00:00:00`);
-    const dayOfWeek = d.getDay(); // 0 = Sun, 1 = Mon, ...
-    // Move back to Sunday of this week
-    const sunday = new Date(d);
-    sunday.setDate(d.getDate() - dayOfWeek);
-    const saturday = new Date(sunday);
-    saturday.setDate(sunday.getDate() + 6);
-    return { start: formatYMD(sunday), end: formatYMD(saturday) };
-  };
-
-  const getDatesInRange = (startStr, endStr) => {
-    const dates = [];
-    let cur = new Date(`${startStr}T00:00:00`);
-    const end = new Date(`${endStr}T00:00:00`);
-    while (cur <= end) {
-      dates.push(formatYMD(cur));
-      cur.setDate(cur.getDate() + 1);
-    }
-    return dates;
-  };
-
-  const weekRange = viewMode === "week" ? getWorkWeekRange(date) : null;
+  const weekRange = viewMode === "week" ? getSundayWeekRange(date) : null;
   const currentDays = weekRange
     ? getDatesInRange(weekRange.start, weekRange.end)
     : [date];
@@ -102,7 +58,7 @@ function PractitionerSchedule() {
         let start = date;
         let end = date;
         if (viewMode === "week") {
-          const range = getWorkWeekRange(date);
+          const range = getSundayWeekRange(date);
           start = range.start;
           end = range.end;
         }
@@ -122,7 +78,6 @@ function PractitionerSchedule() {
       }
     }
     fetchSchedule();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [date, viewMode]);
 
   const { schedule, practitioner_names, practitioner_roles, location_names, call_schedule, surgery_appointments } = data;
@@ -510,6 +465,8 @@ function PractitionerSchedule() {
                                         locationName: sx.location_name,
                                         procedureType: sx.procedure_type || "Surgery",
                                         patientId: sx.patient_id || "",
+                                        patientDisplayName: sx.patient_display_name || "",
+                                        patientNameStale: Boolean(sx.patient_name_stale),
                                         practitionerName: displayPractitioner(practitionerId),
                                         date: day,
                                       })
@@ -532,15 +489,17 @@ function PractitionerSchedule() {
           )}
         </div>
       )}
-      <div className="mt-3 flex justify-end">
-        <button
-          type="button"
-          onClick={() => navigate("/call-schedule-admin")}
-          className="px-3 py-1 text-xs bg-white text-gray-500 rounded-md hover:bg-gray-50 font-medium"
-        >
-          Edit call schedule
-        </button>
-      </div>
+      {user?.is_admin && (
+        <div className="mt-3 flex justify-end">
+          <button
+            type="button"
+            onClick={() => navigate("/call-schedule-admin")}
+            className="px-3 py-1 text-xs bg-white text-gray-500 rounded-md hover:bg-gray-50 font-medium"
+          >
+            Edit call schedule
+          </button>
+        </div>
+      )}
       </div>
       {selectedSurgery && (
         <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/30">
@@ -560,24 +519,27 @@ function PractitionerSchedule() {
               <div><span className="font-semibold">Date:</span> {selectedSurgery.date}</div>
               <div><span className="font-semibold">Time:</span> {selectedSurgery.time}</div>
               <div><span className="font-semibold">Location:</span> {selectedSurgery.locationName}</div>
-              {selectedSurgery.patientId && (
+              {selectedSurgery.patientDisplayName ? (
                 <div>
                   <span className="font-semibold">Patient:</span>{" "}
-                  {selectedSurgery.patientId}
+                  {selectedSurgery.patientDisplayName}
+                  {selectedSurgery.patientNameStale && (
+                    <span className="block text-xs text-amber-700 mt-0.5">
+                      Name may refresh shortly after load.
+                    </span>
+                  )}
                 </div>
+              ) : (
+                selectedSurgery.patientId && (
+                  <div>
+                    <span className="font-semibold">Patient:</span>{" "}
+                    {selectedSurgery.patientId}
+                  </div>
+                )
               )}
               {selectedSurgery.procedureType && (
                 <div><span className="font-semibold">Procedure:</span> {selectedSurgery.procedureType}</div>
               )}
-            </div>
-            <div className="mt-3 flex justify-end">
-              <button
-                type="button"
-                onClick={() => setSelectedSurgery(null)}
-                className="px-3 py-1 text-xs rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50"
-              >
-                Close
-              </button>
             </div>
           </div>
         </div>
