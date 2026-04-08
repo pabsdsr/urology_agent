@@ -5,6 +5,8 @@ Set SCHEDULE_CACHE_DYNAMODB_TABLE to enable DynamoDB (e.g. uroassist-schedule-ca
 Partition key: ``SCHEDULE_CACHE_DYNAMODB_PK`` (default ``practice_url``), holding the ModMed
 firm segment / FHIR base path key; item payload is gzip JSON.
 
+``DYNAMODB_REGION`` sets the AWS region for the DynamoDB client (default ``us-west-2``).
+
 Optional composite key: set SCHEDULE_CACHE_DYNAMODB_SK to the sort key attribute name
 and SCHEDULE_CACHE_DYNAMODB_SK_VALUE (default SCHEDULE_WINDOW).
 """
@@ -20,7 +22,7 @@ from typing import Any, Dict, Optional
 logger = logging.getLogger(__name__)
 
 SCHEDULE_CACHE_DYNAMODB_TABLE = (os.getenv("SCHEDULE_CACHE_DYNAMODB_TABLE") or "").strip()
-SCHEDULE_CACHE_DYNAMODB_REGION = (os.getenv("SCHEDULE_CACHE_DYNAMODB_REGION") or "").strip()
+_DDB_REGION = (os.getenv("DYNAMODB_REGION") or "").strip() or "us-west-2"
 SCHEDULE_CACHE_DYNAMODB_PK = (os.getenv("SCHEDULE_CACHE_DYNAMODB_PK") or "practice_url").strip() or "practice_url"
 SCHEDULE_CACHE_DYNAMODB_SK = (os.getenv("SCHEDULE_CACHE_DYNAMODB_SK") or "").strip()
 SCHEDULE_CACHE_DYNAMODB_SK_VALUE = (
@@ -42,10 +44,7 @@ def _get_table():
     try:
         import boto3  # type: ignore
 
-        kwargs = {}
-        if SCHEDULE_CACHE_DYNAMODB_REGION:
-            kwargs["region_name"] = SCHEDULE_CACHE_DYNAMODB_REGION
-        resource = boto3.resource("dynamodb", **kwargs)
+        resource = boto3.resource("dynamodb", region_name=_DDB_REGION)
         _dynamodb_table = resource.Table(SCHEDULE_CACHE_DYNAMODB_TABLE)
         return _dynamodb_table
     except Exception as e:

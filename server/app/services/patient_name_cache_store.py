@@ -3,7 +3,7 @@ DynamoDB cache for surgery patient display names (PK practice_url, SK patient_id
 
 Env:
   PATIENT_CACHE_DYNAMODB_TABLE — default uroassist-patient-cache
-  PATIENT_CACHE_DYNAMODB_REGION — optional AWS region
+  DYNAMODB_REGION — AWS region for DynamoDB (default us-west-2)
   PATIENT_CACHE_PK — partition key attribute (default practice_url)
   PATIENT_CACHE_SK — sort key attribute (default patient_id)
   PATIENT_CACHE_TTL_SECONDS — staleness for stale-while-revalidate (default 86400)
@@ -22,9 +22,7 @@ logger = logging.getLogger(__name__)
 PATIENT_CACHE_DYNAMODB_TABLE = (
     os.getenv("PATIENT_CACHE_DYNAMODB_TABLE") or "uroassist-patient-cache"
 ).strip()
-PATIENT_CACHE_DYNAMODB_REGION = (
-    os.getenv("PATIENT_CACHE_DYNAMODB_REGION") or ""
-).strip()
+_DDB_REGION = (os.getenv("DYNAMODB_REGION") or "").strip() or "us-west-2"
 PATIENT_CACHE_PK = (
     os.getenv("PATIENT_CACHE_PK") or "practice_url"
 ).strip() or "practice_url"
@@ -53,10 +51,7 @@ def _get_client():
     try:
         import boto3  # type: ignore
 
-        kwargs = {}
-        if PATIENT_CACHE_DYNAMODB_REGION:
-            kwargs["region_name"] = PATIENT_CACHE_DYNAMODB_REGION
-        _dynamodb_client = boto3.client("dynamodb", **kwargs)
+        _dynamodb_client = boto3.client("dynamodb", region_name=_DDB_REGION)
         _table_name = PATIENT_CACHE_DYNAMODB_TABLE
         return _dynamodb_client, _table_name
     except Exception as e:
