@@ -111,7 +111,7 @@ function formatSource(entry) {
 
 export default function CallScheduleChangeLog() {
   const { user } = useAuth();
-  const [audit, setAudit] = useState([]);
+  const [entries, setEntries] = useState([]);
   const [meta, setMeta] = useState({ limit: 100, offset: 0 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -122,9 +122,9 @@ export default function CallScheduleChangeLog() {
       setLoading(true);
       setError(null);
       try {
-        const data = await callScheduleService.getAuditLog(100, 0);
+        const data = await callScheduleService.getChangelog(100, 0);
         if (!cancelled) {
-          setAudit(Array.isArray(data.audit) ? data.audit : []);
+          setEntries(Array.isArray(data.changelog) ? data.changelog : []);
           setMeta({
             limit: data.limit ?? 100,
             offset: data.offset ?? 0,
@@ -167,16 +167,18 @@ export default function CallScheduleChangeLog() {
         {error && (
           <p className="text-red-600 text-sm whitespace-pre-wrap">{error}</p>
         )}
-        {!loading && !error && audit.length === 0 && (
+        {!loading && !error && entries.length === 0 && (
           <p className="text-gray-600">No changes recorded yet.</p>
         )}
-        {!loading && !error && audit.length > 0 && (
+        {!loading && !error && entries.length > 0 && (
           <ul className="space-y-4 text-sm">
-            {audit.map((entry, i) => {
+            {entries.map((entry, i) => {
+              const raw =
+                entry.email ||
+                entry.outlook_email ||
+                entry.entra_email;
               const email =
-                entry.email && String(entry.email).trim()
-                  ? entry.email
-                  : null;
+                raw && String(raw).trim() ? String(raw).trim() : null;
               const changeLines = summarizeScheduleChanges(entry);
               return (
                 <li

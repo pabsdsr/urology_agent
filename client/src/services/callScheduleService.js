@@ -41,12 +41,12 @@ export const callScheduleService = {
   },
 
   /**
-   * Admin-only: newest-first audit entries for call schedule changes.
+   * Admin-only: newest-first change log entries for call schedule edits.
    * @param {number} [limit=100]
    * @param {number} [offset=0]
    */
-  getAuditLog: async (limit = 100, offset = 0) => {
-    const response = await apiClient.get('/call-schedule/audit', {
+  getChangelog: async (limit = 100, offset = 0) => {
+    const response = await apiClient.get('/call-schedule/changelog', {
       params: { limit, offset },
     });
     return response.data;

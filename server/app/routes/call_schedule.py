@@ -7,7 +7,7 @@ from app.models import SessionUser
 from app.routes.auth import get_current_user, require_admin, require_modmed_session
 from app.services.call_schedule_service import update_week, get_call_schedule_range
 from app.services.call_schedule_import import parse_call_schedule_upload
-from app.services.call_schedule_audit import get_audit_entries
+from app.services.call_schedule_changelog import get_changelog_entries
 
 
 router = APIRouter(
@@ -68,7 +68,7 @@ async def save_call_schedule_week(
             "South Pod": normalize_entries(raw_day.get("south")),
         }
 
-    audit_meta = {
+    changelog_meta = {
         "email": current_user.email,
         "auth_method": current_user.auth_method,
         "practice_url": current_user.practice_url,
@@ -76,7 +76,7 @@ async def save_call_schedule_week(
         "source": "week_save",
         "upload_filename": None,
     }
-    update_week(payload.week_start, day_mapping, audit_meta=audit_meta)
+    update_week(payload.week_start, day_mapping, changelog_meta=changelog_meta)
     return {"success": True, "updated_keys": list(day_mapping.keys())}
 
 
@@ -93,17 +93,17 @@ async def get_call_schedule(
     return {"call_schedule": data}
 
 
-@router.get("/audit")
-async def list_call_schedule_audit(
+@router.get("/changelog")
+async def list_call_schedule_changelog(
     limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
     admin: SessionUser = Depends(require_admin),
 ):
     """
-    Newest-first audit log of call schedule changes (who changed what and when).
+    Newest-first change log of call schedule edits (who changed what and when).
     """
-    entries = get_audit_entries(limit=limit, offset=offset)
-    return {"audit": entries, "limit": limit, "offset": offset}
+    entries = get_changelog_entries(limit=limit, offset=offset)
+    return {"changelog": entries, "limit": limit, "offset": offset}
 
 
 UPLOAD_READ_TIMEOUT_SECONDS = 30
@@ -113,7 +113,7 @@ UPLOAD_PARSE_SAVE_TIMEOUT_SECONDS = 30
 def _parse_and_save_upload(
     contents: bytes,
     filename: str,
-    audit_user: Optional[Dict[str, Any]] = None,
+    editor_user: Optional[Dict[str, Any]] = None,
 ) -> dict:
     """Synchronous parse + save so it can run in executor with a timeout."""
     day_mapping = parse_call_schedule_upload(contents, filename=filename)
@@ -121,14 +121,14 @@ def _parse_and_save_upload(
         raise ValueError("No schedule entries found in uploaded file")
     sorted_dates = sorted(day_mapping.keys())
     week_start = sorted_dates[0]
-    audit_meta = None
-    if audit_user:
-        audit_meta = {
-            **audit_user,
+    changelog_meta = None
+    if editor_user:
+        changelog_meta = {
+            **editor_user,
             "source": "upload",
             "upload_filename": filename or None,
         }
-    update_week(week_start, day_mapping, audit_meta=audit_meta)
+    update_week(week_start, day_mapping, changelog_meta=changelog_meta)
     return {"success": True, "updated_keys": sorted_dates}
 
 
@@ -147,7 +147,7 @@ async def upload_call_schedule(
             file.read(),
             timeout=UPLOAD_READ_TIMEOUT_SECONDS,
         )
-        audit_user = {
+        editor_user = {
             "email": current_user.email,
             "auth_method": current_user.auth_method,
             "practice_url": current_user.practice_url,
@@ -157,7 +157,7 @@ async def upload_call_schedule(
         result = await asyncio.wait_for(
             loop.run_in_executor(
                 None,
-                lambda: _parse_and_save_upload(contents, filename, audit_user),
+                lambda: _parse_and_save_upload(contents, filename, editor_user),
             ),
             timeout=UPLOAD_PARSE_SAVE_TIMEOUT_SECONDS,
         )

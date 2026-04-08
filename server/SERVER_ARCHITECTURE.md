@@ -61,7 +61,7 @@ server/
 │   │   ├── patients.py            # /patients (FHIR name search)
 │   │   ├── run_crew.py            # /run_crew (clinical assistant)
 │   │   ├── appointments.py       # /schedule (practitioner schedule)
-│   │   └── call_schedule.py       # /call-schedule (on-call grid + audit)
+│   │   └── call_schedule.py       # /call-schedule (on-call grid + change log)
 │   │
 │   ├── services/                  # Business logic
 │   │   ├── auth_service.py        # Entra token validation + ModMed bootstrap
@@ -256,9 +256,9 @@ clinical_query_task:
 
 **Endpoints**:
 - `GET /call-schedule`: On-call grid for `start`–`end`
-- `POST /call-schedule/week`: Save a week of on-call entries (any authenticated user; changes are audited)
+- `POST /call-schedule/week`: Save a week of on-call entries (any authenticated user; edits are logged)
 - `POST /call-schedule/upload`: Upload CSV/XLSX schedule
-- `GET /call-schedule/audit`: Paginated change log (admin)
+- `GET /call-schedule/changelog`: Paginated change log (admin)
 
 #### **Crew Routes** (`routes/run_crew.py`)
 

@@ -117,7 +117,7 @@ def _save_call_schedule(data: Dict[str, Dict[str, str]]) -> None:
 def update_week(
     week_start: str,
     days: Dict[str, Dict[str, Any]],
-    audit_meta: Optional[Dict[str, Any]] = None,
+    changelog_meta: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Dict[str, Any]]:
     """
     Update (or create) call schedule entries for a single week.
@@ -142,7 +142,7 @@ def update_week(
     if _s3_client and CALL_SCHEDULE_S3_BUCKET:
         schedule = dict(_load_call_schedule())
         previous_by_date: Dict[str, Any] = {}
-        if audit_meta and norm_days:
+        if changelog_meta and norm_days:
             for k in norm_days:
                 prev = schedule.get(k)
                 previous_by_date[k] = copy.deepcopy(prev) if prev is not None else None
@@ -152,7 +152,7 @@ def update_week(
         with _local_file_lock(CALL_SCHEDULE_PATH):
             schedule = dict(_load_call_schedule_disk())
             previous_by_date = {}
-            if audit_meta and norm_days:
+            if changelog_meta and norm_days:
                 for k in norm_days:
                     prev = schedule.get(k)
                     previous_by_date[k] = copy.deepcopy(prev) if prev is not None else None
@@ -164,20 +164,20 @@ def update_week(
             except Exception as e:
                 logger.error("Write call schedule failed path=%s: %s", CALL_SCHEDULE_PATH, e)
 
-    if audit_meta and norm_days:
-        from app.services.call_schedule_audit import append_audit_entry
+    if changelog_meta and norm_days:
+        from app.services.call_schedule_changelog import append_changelog_entry
 
         updated_by_date = {k: copy.deepcopy(schedule[k]) for k in norm_days}
-        email = audit_meta.get("email")
-        append_audit_entry(
+        email = changelog_meta.get("email")
+        append_changelog_entry(
             {
                 "at": datetime.now(timezone.utc).isoformat(),
                 "email": email,
-                "auth_method": audit_meta.get("auth_method") or "",
-                "practice_url": audit_meta.get("practice_url") or "",
-                "is_admin": bool(audit_meta.get("is_admin")),
-                "source": audit_meta.get("source") or "unknown",
-                "upload_filename": audit_meta.get("upload_filename"),
+                "auth_method": changelog_meta.get("auth_method") or "",
+                "practice_url": changelog_meta.get("practice_url") or "",
+                "is_admin": bool(changelog_meta.get("is_admin")),
+                "source": changelog_meta.get("source") or "unknown",
+                "upload_filename": changelog_meta.get("upload_filename"),
                 "week_start": week_start,
                 "affected_dates": sorted(norm_days.keys()),
                 "previous_by_date": previous_by_date,
