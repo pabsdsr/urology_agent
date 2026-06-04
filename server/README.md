@@ -80,3 +80,4 @@ No separate bucket is required for codes.
 - `400 Billing sheet image exceeds the 10MB limit` — attachment is too large.
 - `404 Billing sheet not found` — index row exists but the image object is missing in `BILLING_S3_BUCKET`.
 - `500 Failed to save billing submission` — check logs for S3 permission or `BILLING_S3_BUCKET` misconfiguration.
+- Mobile upload “network error” with no API error — EB nginx may still be on the default **1MB** body limit; redeploy after adding `server/.platform/nginx/` (see [SERVER_DEPLOYMENT.md](./SERVER_DEPLOYMENT.md)).
