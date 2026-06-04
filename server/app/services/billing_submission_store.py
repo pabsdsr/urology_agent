@@ -85,7 +85,7 @@ def _sheet_extension(content_type: str, filename: str) -> str:
     if guessed:
         return guessed
     name = (filename or "").lower()
-    for ext in (".png", ".jpg", ".jpeg", ".webp", ".heic"):
+    for ext in (".png", ".jpg", ".jpeg", ".webp", ".heic", ".heif"):
         if name.endswith(ext):
             return ext if ext != ".jpeg" else ".jpg"
     return ".png"
@@ -329,7 +329,7 @@ def _delete_sheet_file(entry: Dict[str, Any], submission_id: str) -> None:
         except OSError as e:
             logger.warning("Local delete billing sheet failed path=%s: %s", storage_key, e)
 
-    for ext in (".png", ".jpg", ".webp", ".heic", ".jpeg"):
+    for ext in (".png", ".jpg", ".webp", ".heic", ".heif", ".jpeg"):
         path = _local_sheet_path(submission_id, ext)
         if os.path.isfile(path):
             try:
@@ -452,7 +452,7 @@ def _try_load_sheet_from_s3(storage_key: str, submission_id: str) -> Optional[by
     candidates: list[str] = []
     if storage_key and not _is_local_filesystem_key(storage_key):
         candidates.append(storage_key)
-    for ext in (".png", ".jpg", ".jpeg", ".webp", ".heic"):
+    for ext in (".png", ".jpg", ".jpeg", ".webp", ".heic", ".heif"):
         candidates.append(_s3_sheet_key(submission_id, ext))
 
     seen: set[str] = set()
@@ -495,7 +495,7 @@ def load_billing_sheet(
     if s3_bytes is not None:
         return s3_bytes, content_type, filename
 
-    for ext in (".png", ".jpg", ".webp", ".heic", ".jpeg"):
+    for ext in (".png", ".jpg", ".webp", ".heic", ".heif", ".jpeg"):
         path = _local_sheet_path(submission_id, ext)
         if os.path.isfile(path):
             with open(path, "rb") as f:

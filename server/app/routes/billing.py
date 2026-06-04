@@ -29,7 +29,35 @@ class ProcessedUpdate(BaseModel):
     processed: bool
 
 MAX_IMAGE_BYTES = 10 * 1024 * 1024
-ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp", "image/heic"}
+ALLOWED_CONTENT_TYPES = {
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+    "image/heic",
+    "image/heif",
+}
+_FILENAME_EXT_TO_CONTENT_TYPE = {
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
+    ".webp": "image/webp",
+    ".heic": "image/heic",
+    ".heif": "image/heif",
+}
+
+
+def _normalize_billing_sheet_content_type(
+    content_type: str | None, filename: str | None
+) -> str | None:
+    """Accept iOS HEIC/HEIF and empty or generic multipart content types."""
+    ct = (content_type or "").split(";")[0].strip().lower()
+    if ct in ALLOWED_CONTENT_TYPES:
+        return ct
+    name = (filename or "").lower()
+    for ext, mime in _FILENAME_EXT_TO_CONTENT_TYPE.items():
+        if name.endswith(ext):
+            return mime
+    return None
 
 
 def _validate_cpt_code(code: str) -> bool:
@@ -129,7 +157,10 @@ async def submit_billing(
         cpt_code=cpt_code,
         icd10_code=icd10_code,
     )
-    if billing_sheet.content_type not in ALLOWED_CONTENT_TYPES:
+    sheet_content_type = _normalize_billing_sheet_content_type(
+        billing_sheet.content_type, billing_sheet.filename
+    )
+    if not sheet_content_type:
         raise HTTPException(status_code=400, detail="Billing sheet must be a supported image file.")
 
     image_bytes = await billing_sheet.read()
@@ -146,7 +177,7 @@ async def submit_billing(
             submitter_email=current_user.email,
             practice_url=current_user.practice_url,
             billing_sheet_filename=billing_sheet.filename or "billing-sheet.png",
-            billing_sheet_content_type=billing_sheet.content_type,
+            billing_sheet_content_type=sheet_content_type,
             billing_sheet_bytes=image_bytes,
         )
     except Exception as exc:
@@ -256,7 +287,10 @@ async def update_billing_submission(
     sheet_bytes: bytes | None = None
 
     if billing_sheet is not None and billing_sheet.filename:
-        if billing_sheet.content_type not in ALLOWED_CONTENT_TYPES:
+        sheet_content_type = _normalize_billing_sheet_content_type(
+            billing_sheet.content_type, billing_sheet.filename
+        )
+        if not sheet_content_type:
             raise HTTPException(status_code=400, detail="Billing sheet must be a supported image file.")
         sheet_bytes = await billing_sheet.read()
         await billing_sheet.close()
@@ -265,7 +299,6 @@ async def update_billing_submission(
         if len(sheet_bytes) > MAX_IMAGE_BYTES:
             raise HTTPException(status_code=400, detail="Billing sheet image exceeds the 10MB limit.")
         sheet_filename = billing_sheet.filename or "billing-sheet.png"
-        sheet_content_type = billing_sheet.content_type
 
     try:
         entry = update_submission(

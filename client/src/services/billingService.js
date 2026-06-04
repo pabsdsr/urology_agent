@@ -1,4 +1,5 @@
 import apiClient from "./apiClient.js";
+import { normalizeBillingImageFile } from "../utils/billingImageFile.js";
 
 export const billingService = {
   submitBilling: async (payload) => {
@@ -10,7 +11,9 @@ export const billingService = {
     formData.append("provider_name", payload.providerName || "");
     formData.append("cpt_code", payload.cptCode);
     formData.append("icd10_code", payload.icd10Code);
-    formData.append("billing_sheet", payload.billingSheetFile);
+    const sheet =
+      normalizeBillingImageFile(payload.billingSheetFile) || payload.billingSheetFile;
+    formData.append("billing_sheet", sheet);
 
     const response = await apiClient.post("/billing/submit", formData);
     return response.data;
@@ -35,7 +38,9 @@ export const billingService = {
     formData.append("cpt_code", payload.cptCode);
     formData.append("icd10_code", payload.icd10Code);
     if (payload.billingSheetFile) {
-      formData.append("billing_sheet", payload.billingSheetFile);
+      const sheet =
+        normalizeBillingImageFile(payload.billingSheetFile) || payload.billingSheetFile;
+      formData.append("billing_sheet", sheet);
     }
 
     const response = await apiClient.patch(`/billing/submissions/${submissionId}`, formData);

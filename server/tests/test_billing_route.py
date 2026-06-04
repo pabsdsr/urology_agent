@@ -48,6 +48,35 @@ def test_submit_billing_success(monkeypatch, authenticated_client):
     assert save_mock.call_args.kwargs["submitter_email"] == "test@example.com"
 
 
+def test_submit_billing_accepts_heif_and_heic_filename(monkeypatch, authenticated_client):
+    save_mock = Mock(return_value={"id": "sub-heic", "submitted_at": "2026-05-28T12:00:00+00:00"})
+    monkeypatch.setattr("app.routes.billing.save_submission", save_mock)
+
+    for upload in (
+        ("photo.heic", b"heic-bytes", "image/heif"),
+        ("photo.heic", b"heic-bytes", ""),
+    ):
+        save_mock.reset_mock()
+        response = authenticated_client.post(
+            "/billing/submit",
+            data={
+                "patient_name": "Jane Doe",
+                "patient_dob": "1990-01-01",
+                "location": "North Pod",
+                "date_of_service": "2026-05-10",
+                "provider_name": "Dr. Urologist",
+                "cpt_code": "51798",
+                "icd10_code": "N40.1",
+            },
+            files={"billing_sheet": upload},
+        )
+        assert response.status_code == 200, upload
+        assert save_mock.call_args.kwargs["billing_sheet_content_type"] in {
+            "image/heic",
+            "image/heif",
+        }
+
+
 def test_submit_billing_rejects_non_image(authenticated_client):
     response = authenticated_client.post(
         "/billing/submit",
