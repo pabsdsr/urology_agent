@@ -1,5 +1,6 @@
-import apiClient, { getAuthHeaders } from './apiClient.js';
+import apiClient, { requireAuthToken } from './apiClient.js';
 import API_CONFIG from '../config/api.js';
+import { throwExpiredSession } from './sessionLogout.js';
 
 export const callScheduleService = {
   /**
@@ -59,7 +60,8 @@ export const callScheduleService = {
   uploadSchedule: async (file) => {
     const formData = new FormData();
     formData.append('file', file);
-    const { Authorization } = await getAuthHeaders();
+    const token = await requireAuthToken();
+    const Authorization = `Bearer ${token}`;
 
     const baseUrl = (API_CONFIG.BASE_URL || '').replace(/\/+$/, '');
     const uploadUrl = `${baseUrl}/call-schedule/upload`;
@@ -71,9 +73,7 @@ export const callScheduleService = {
     try {
       response = await fetch(uploadUrl, {
         method: 'POST',
-        headers: {
-          ...(Authorization ? { Authorization } : {}),
-        },
+        headers: { Authorization },
         body: formData,
         signal: controller.signal,
       });
@@ -86,6 +86,10 @@ export const callScheduleService = {
     }
 
     clearTimeout(timeoutId);
+
+    if (response.status === 401) {
+      await throwExpiredSession();
+    }
 
     if (!response.ok) {
       let detail = 'Failed to upload schedule';

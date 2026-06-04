@@ -1,12 +1,35 @@
-# React + Vite
+# UroAssist frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+React 19 + Vite SPA for UroAssist. See [CLIENT_ARCHITECTURE.md](./CLIENT_ARCHITECTURE.md) for routes, services, and auth flow.
 
-Currently, two official plugins are available:
+## Quick start
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+```bash
+npm install
+cp .env.development.example .env.development   # if you maintain an example file
+# Set VITE_API_URL=http://localhost:8080
+npm run dev
+```
 
-## Expanding the ESLint configuration
+Open http://localhost:5173 and sign in with Microsoft (Entra).
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+## Scripts
+
+| Command | Description |
+|---------|-------------|
+| `npm run dev` | Dev server (port 5173) |
+| `npm run build` | Production build → `dist/` |
+| `npm run preview` | Preview production build |
+| `npm run lint` | ESLint |
+| `npm test` | Vitest unit tests |
+
+## Main features
+
+- Clinical assistant chat with patient search (`/`)
+- Practitioner schedule (`/schedule`)
+- Billing sheet submit + submissions inbox (`/billing`, `/billing/submissions`)
+- Admin on-call schedule editor and changelog
+
+## Deployment
+
+[CLIENT_DEPLOYMENT.md](./CLIENT_DEPLOYMENT.md) — S3 + CloudFront, `uroassist.net`.

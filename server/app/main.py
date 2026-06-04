@@ -10,7 +10,7 @@ import logging
 import os
 from app.services.client_service import client
 from app.crew.crew import ClinicalAssistantCrew
-from app.routes import auth, run_crew, patients, appointments, call_schedule
+from app.routes import auth, run_crew, patients, appointments, call_schedule, billing
 
 
 warnings.filterwarnings("ignore", category=SyntaxWarning, module="pysbd")
@@ -45,7 +45,7 @@ def create_app():
 
     # CORS allowlist (TLS is enforced at the load balancer / reverse proxy in production).
     allowed_origins = []
-    
+
     if os.getenv('ENVIRONMENT') == 'production':
         # Production domains - using actual deployed domains
         allowed_origins = [
@@ -75,6 +75,7 @@ def create_app():
     app.include_router(patients.router)
     app.include_router(appointments.router)
     app.include_router(call_schedule.router)
+    app.include_router(billing.router)
 
     @app.get("/")
     def read_root():

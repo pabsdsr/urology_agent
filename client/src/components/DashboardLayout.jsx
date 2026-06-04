@@ -12,6 +12,7 @@ function DashboardLayout() {
 
   const isChat = location.pathname === "/";
   const isSchedule = location.pathname === "/schedule";
+  const isBilling = location.pathname.startsWith("/billing");
 
   const handleLogoutRedirect = async () => {
     try {
@@ -66,6 +67,16 @@ function DashboardLayout() {
                 }`}
               >
                 Schedule
+              </button>
+              <button
+                onClick={() => navigate("/billing")}
+                className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                  isBilling
+                    ? "bg-teal-600 text-white"
+                    : "text-gray-700 bg-gray-100 hover:bg-teal-600 hover:text-white"
+                }`}
+              >
+                Billing
               </button>
               <button
                 onClick={handleLogoutRedirect}

@@ -4,11 +4,12 @@ import os
 import json
 import hashlib
 import uuid
-import base64
 import xmltodict
 import copy
 from io import BytesIO
-from PyPDF2 import PdfReader
+
+import pdfplumber
+
 from app.services.client_service import client
 from app.services.patient_embedder import PatientDataEmbedder
 from fastapi import HTTPException
@@ -16,15 +17,34 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-def parse_base64_pdf(base64_string):
-    """Parse base64 encoded PDF string and extract text"""
-    pdf_bytes = base64.b64decode(base64_string)
-    reader = PdfReader(BytesIO(pdf_bytes))
-    text = ""
-    for page in reader.pages:
-        text += page.extract_text() or ""
+def _extract_page_text(page: pdfplumber.page.Page) -> str:
+    """Extract narrative text and table rows from a single PDF page."""
+    parts: list[str] = []
+    page_text = page.extract_text()
+    if page_text:
+        parts.append(page_text.strip())
 
-    return text
+    for table in page.extract_tables() or []:
+        for row in table:
+            if not row:
+                continue
+            cells = [str(cell).strip() if cell is not None else "" for cell in row]
+            if any(cells):
+                parts.append("\t".join(cells))
+
+    return "\n".join(parts)
+
+
+def parse_pdf_bytes(pdf_bytes: bytes) -> str:
+    """Extract text from PDF bytes using pdfplumber."""
+    page_texts: list[str] = []
+    with pdfplumber.open(BytesIO(pdf_bytes)) as pdf:
+        for page in pdf.pages:
+            text = _extract_page_text(page)
+            if text:
+                page_texts.append(text)
+    return "\n\n".join(page_texts)
+
 
 def parse_xml_blocking(xml_text: str):
     """Parse XML safely in a blocking thread."""
@@ -228,7 +248,7 @@ async def get_patient_info(id: str, modmed_token: str = None, practice_url: str 
                     if content_type == "application/pdf":
                         file_bytes = file_resp.content
                         # Use raw bytes for PDF parsing
-                        file_text = await asyncio.to_thread(lambda: parse_base64_pdf(base64.b64encode(file_bytes).decode("utf-8")))
+                        file_text = await asyncio.to_thread(parse_pdf_bytes, file_bytes)
                         files.append({
                             "title": title,
                             "content_text": file_text,
@@ -253,7 +273,7 @@ async def get_patient_info(id: str, modmed_token: str = None, practice_url: str 
             qdrant_api_key=os.getenv("QDRANT_API_KEY")
         )
 
-        # user_qdrant_tool.delete_all_points()
+        user_qdrant_tool.delete_all_points()
         
         all_sections_to_embed = []
 

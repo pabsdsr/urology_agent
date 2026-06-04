@@ -7,6 +7,8 @@ import MainApp from "./components/MainApp";
 import PractitionerSchedule from "./components/PractitionerSchedule";
 import CallScheduleAdmin from "./components/CallScheduleAdmin";
 import CallScheduleChangeLog from "./components/CallScheduleChangeLog";
+import BillingPage from "./components/BillingPage";
+import BillingSubmissionsInbox from "./components/BillingSubmissionsInbox";
 
 function App() {
   return (
@@ -23,6 +25,8 @@ function App() {
         >
           <Route index element={<MainApp />} />
           <Route path="schedule" element={<PractitionerSchedule />} />
+          <Route path="billing" element={<BillingPage />} />
+          <Route path="billing/submissions" element={<BillingSubmissionsInbox />} />
           <Route
             path="call-schedule-admin"
             element={

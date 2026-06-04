@@ -26,8 +26,8 @@ UroAssist backend is a FastAPI-based clinical assistant system that integrates w
 ┌─────────────────────────────────────────────────────────────────┐
 │                   FastAPI Application Layer                      │
 │  ┌──────────────┐  ┌──────────────┐  ┌────────────────────┐   │
-│  │   Auth       │  │   Patients   │  │   Crew Runner      │   │
-│  │   Routes     │  │   Routes     │  │   Routes           │   │
+│  │   Auth       │  │   Patients   │  │   Crew / Billing     │   │
+│  │   Routes     │  │   Routes     │  │   Routes             │   │
 │  └──────┬───────┘  └──────┬───────┘  └─────────┬──────────┘   │
 │         │                  │                     │               │
 │         ↓                  ↓                     ↓               │
@@ -61,7 +61,13 @@ server/
 │   │   ├── patients.py            # /patients (FHIR name search)
 │   │   ├── run_crew.py            # /run_crew (clinical assistant)
 │   │   ├── appointments.py       # /schedule (practitioner schedule)
-│   │   └── call_schedule.py       # /call-schedule (on-call grid + change log)
+│   │   ├── call_schedule.py       # /call-schedule (on-call grid + change log)
+│   │   └── billing.py             # /billing (sheet submit, inbox, codes)
+│   │
+│   ├── data/                      # Local JSON (dev / bundled reference data)
+│   │   ├── billing_cpt_codes.json
+│   │   ├── billing_icd10_codes.json
+│   │   └── (call schedule + billing index when not using S3)
 │   │
 │   ├── services/                  # Business logic
 │   │   ├── auth_service.py        # Entra token validation + ModMed bootstrap
@@ -75,7 +81,9 @@ server/
 │   │   ├── patient_embedder.py    # Qdrant vector operations
 │   │   ├── patient_info_service.py # Patient FHIR fetch, embed, aggregate
 │   │   ├── patient_name_cache_store.py  # DynamoDB-backed display-name cache (optional)
-│   │   └── patient_name_refresh.py      # Background cache refresh helpers
+│   │   ├── patient_name_refresh.py      # Background cache refresh helpers
+│   │   ├── billing_submission_store.py  # Billing index + sheet images (local or S3)
+│   │   └── billing_codes_service.py   # Curated CPT/ICD-10 search
 │   │
 │   └── crew/                      # CrewAI agents
 │       ├── crew.py                # Crew configuration
@@ -124,6 +132,7 @@ def create_app():
     app.include_router(patients.router)
     app.include_router(appointments.router)
     app.include_router(call_schedule.router)
+    app.include_router(billing.router)
 
     return app
 ```
@@ -269,6 +278,24 @@ clinical_query_task:
 - `call_schedule_service.py` stores the on-call grid as JSON (`call_schedule.json` under `app/data/` locally, or `CALL_SCHEDULE_S3_KEY` in the bucket set by `CALL_SCHEDULE_S3_BUCKET`).
 - `call_schedule_changelog.py` stores append-only JSON change records (`call_schedule_changelog.json` locally, or `CALL_SCHEDULE_CHANGELOG_S3_KEY` in the same bucket when configured).
 
+#### **Billing Routes** (`routes/billing.py`)
+
+**Endpoints**:
+- `POST /billing/submit`: Multipart billing sheet + patient/location/CPT/ICD metadata (any authenticated user)
+- `GET /billing/submissions`: Paginated list (`limit`, `offset`), newest first
+- `GET /billing/submissions/{id}/sheet`: Billing sheet image bytes (inline `Content-Disposition` safe for Unicode filenames)
+- `PATCH /billing/submissions/{id}/processed`: `{ "processed": true | false }`
+- `PATCH /billing/submissions/{id}`: Edit submission (admin email `wkim@urologymedical.com` only; optional new image)
+- `DELETE /billing/submissions/{id}`: Delete submission + sheet (same admin email)
+- `GET /billing/codes/cpt?q=...`: Search curated CPT list
+- `GET /billing/codes/icd10?q=...`: Search curated ICD-10 list
+
+**Persistence (billing)**:
+- `billing_submission_store.py` — index JSON + per-submission sheet images.
+- **Local dev** (no `BILLING_S3_BUCKET`): `app/data/billing_submissions.json` + `app/data/billing_sheets/`.
+- **Production**: dedicated bucket only (`BILLING_S3_BUCKET`, default region `us-west-2`) — **not** the call-schedule bucket.
+- Curated codes ship in `app/data/billing_cpt_codes.json` and `billing_icd10_codes.json` (redeploy to update lists).
+
 #### **Crew Routes** (`routes/run_crew.py`)
 
 **Endpoints**:
@@ -405,6 +432,14 @@ MODEL                    # Bedrock model id (see pyproject / env)
 CALL_SCHEDULE_S3_BUCKET           # If set, on-call grid + changelog read/write use S3
 CALL_SCHEDULE_S3_KEY              # default: call_schedule.json
 CALL_SCHEDULE_CHANGELOG_S3_KEY    # default: call_schedule_changelog.json
+```
+
+**Billing S3 (production)**:
+```bash
+BILLING_S3_BUCKET                 # Required in prod (e.g. uroassist-billing); separate from call schedule
+BILLING_S3_REGION                 # default: us-west-2
+BILLING_SUBMISSIONS_INDEX_KEY     # default: billing_submissions.json
+BILLING_SHEETS_S3_PREFIX          # default: billing_sheets/
 ```
 
 **DynamoDB caches (optional)**:
@@ -562,6 +597,15 @@ python -m app.main
 
 ### Testing
 
+**Automated tests** (`server/tests/`):
+```bash
+cd server
+uv sync --group dev
+uv run pytest
+```
+
+Covers auth, patients, call schedule, billing routes/store/validation, PDF helpers, and related services.
+
 **Manual Testing**:
 ```bash
 # Health check
@@ -571,8 +615,6 @@ curl http://localhost:8080/health
 curl http://localhost:8080/auth/me \
   -H "Authorization: Bearer <ENTRA_ACCESS_TOKEN>"
 ```
-
-**Unit Tests**: Not implemented (TODO)
 
 ### CI/CD
 
@@ -631,7 +673,7 @@ curl localhost:8080/health
 ## Future Enhancements
 
 ### Short-term
-- [ ] Add unit tests (pytest)
+- [ ] Wire CI (`test.yml`) to run `uv run pytest` and client `npm test`
 - [ ] Implement Redis caching
 - [ ] Add rate limiting middleware
 - [ ] Comprehensive error logging

@@ -53,11 +53,32 @@ export function getDatesInRange(startStr, endStr) {
   return dates;
 }
 
+export const PACIFIC_TIME_ZONE = "America/Los_Angeles";
+
+/**
+ * Format an ISO timestamp for display in Pacific time (e.g. "May 28, 2026, 10:30 AM PDT").
+ */
+export function formatPacificDateTime(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return String(iso);
+  return d.toLocaleString("en-US", {
+    timeZone: PACIFIC_TIME_ZONE,
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+    timeZoneName: "short",
+  });
+}
+
 /** Today's date in America/Los_Angeles as YYYY-MM-DD. */
 export function getPacificDateString() {
   const now = new Date();
   const pacificDateParts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/Los_Angeles",
+    timeZone: PACIFIC_TIME_ZONE,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",

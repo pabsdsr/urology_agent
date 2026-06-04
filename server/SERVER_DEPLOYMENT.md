@@ -263,8 +263,12 @@ eb setenv \
   ENTRA_CLIENT_ID="your-spa-app-client-id" \
   AUTHORIZED_EMAILS="user@org.com:uropmsandbox460" \
   AWS_REGION="us-west-2" \
-  "PRACTICE_uropmsandbox460=fhir_WpKHZ,Urd6RwiU3c,83529f51-4952-4749-8fb9-31c2170cdf0b"
+  "PRACTICE_uropmsandbox460=fhir_WpKHZ,Urd6RwiU3c,83529f51-4952-4749-8fb9-31c2170cdf0b" \
+  BILLING_S3_BUCKET="uroassist-billing" \
+  BILLING_S3_REGION="us-west-2"
 ```
+
+**Billing storage**: Use a **dedicated** S3 bucket (`BILLING_S3_BUCKET`), not the call-schedule bucket. The EC2 instance profile needs `s3:GetObject`, `s3:PutObject`, and `s3:DeleteObject` on that bucket. See [README.md](./README.md) for layout and troubleshooting.
 
 **Environment Variable Format**:
 - `PRACTICE_<firm_name>=<username>,<firm_name>,<api_key>`
@@ -382,3 +386,4 @@ eb ssh         # SSH and check: curl localhost:8080/health
 - AWS Bedrock (LLMs)
 - Qdrant Cloud (Vector DB)
 - ModMed API integration
+- Billing submissions (dedicated S3 bucket when `BILLING_S3_BUCKET` is set)

@@ -9,6 +9,7 @@ import { InteractionStatus } from "@azure/msal-browser";
 import { MsalProvider, useMsal } from "@azure/msal-react";
 import { adminAppRole } from "../authConfig.js";
 import { msalInstance } from "../msalInstance.js";
+import { redirectToLogin } from "../services/sessionLogout.js";
 
 const AuthContext = createContext(null);
 
@@ -25,11 +26,8 @@ function AuthStateProvider({ children }) {
   const activeAccount = instance.getActiveAccount();
 
   useEffect(() => {
-    const onUnauthorized = () => {
-      window.location.assign("/login");
-    };
-    window.addEventListener("auth:unauthorized", onUnauthorized);
-    return () => window.removeEventListener("auth:unauthorized", onUnauthorized);
+    window.addEventListener("auth:unauthorized", redirectToLogin);
+    return () => window.removeEventListener("auth:unauthorized", redirectToLogin);
   }, []);
   const loading = inProgress !== InteractionStatus.None;
   const isAuthenticated = !!activeAccount;

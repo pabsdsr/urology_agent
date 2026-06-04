@@ -2,7 +2,7 @@
 
 ## Overview
 
-UroAssist frontend is a React single-page application (SPA) that provides a chat-based interface for healthcare providers to query patient medical information using AI.
+UroAssist frontend is a React single-page application (SPA) for urology staff: clinical assistant chat, practitioner schedule, on-call schedule admin, and billing sheet capture with a submissions inbox.
 
 - **Framework:** React 19
 - **Build Tool:** Vite 6
@@ -36,6 +36,8 @@ UroAssist frontend is a React single-page application (SPA) that provides a chat
 │  │   │   │              │                                 │   │ │  │
 │  │   │   │              ├─ / (index) ──► MainApp (chat)      │   │ │  │
 │  │   │   │              ├─ /schedule ─ PractitionerSchedule│   │ │  │
+│  │   │   │              ├─ /billing ──► BillingPage          │   │ │  │
+│  │   │   │              ├─ /billing/submissions ─ inbox    │   │ │  │
 │  │   │   │              ├─ /call-schedule-admin (admin)   │   │ │  │
 │  │   │   │              └─ /call-schedule-change-log (adm)│   │ │  │
 │  │   │   └─────────────────────────────────────────────────┘   │ │  │
@@ -44,8 +46,8 @@ UroAssist frontend is a React single-page application (SPA) that provides a chat
 │                                                                      │
 │  ┌───────────────────────────────────────────────────────────────┐  │
 │  │                         Services                               │  │
-│  │   apiClient.js ──► authService.js, patientService.js,          │  │
-│  │   scheduleService.js, callScheduleService.js                    │  │
+│  │   apiClient.js ──► auth, patient, schedule, callSchedule,     │  │
+│  │   billingService, billingCodesService, sessionLogout            │  │
 │  └───────────────────────────────────────────────────────────────┘  │
 └───────────────────────────────────┬─────────────────────────────────┘
                                     │
@@ -79,6 +81,13 @@ client/
 │   │   ├── PractitionerSchedule.jsx
 │   │   ├── CallScheduleAdmin.jsx
 │   │   ├── CallScheduleChangeLog.jsx
+│   │   ├── BillingPage.jsx
+│   │   ├── BillingSubmissionsInbox.jsx
+│   │   ├── BillingSubmissionModal.jsx
+│   │   ├── BillingProcessedToggle.jsx
+│   │   ├── BillingSheetImage.jsx
+│   │   ├── MedicalCodeCombobox.jsx
+│   │   ├── LocationCombobox.jsx
 │   │   └── ProtectedRoute.jsx     # Auth / optional requireAdmin
 │   ├── config/
 │   │   └── api.js             # API base URL and timeouts
@@ -89,9 +98,16 @@ client/
 │   │   ├── authService.js     # /auth/me, /auth/logout
 │   │   ├── patientService.js  # /patients, /run_crew
 │   │   ├── scheduleService.js # /schedule (practitioner calendar)
-│   │   └── callScheduleService.js  # /call-schedule (grid, upload, changelog)
+│   │   ├── callScheduleService.js  # /call-schedule (grid, upload, changelog)
+│   │   ├── billingService.js       # /billing (submit, list, update, delete)
+│   │   ├── billingCodesService.js  # /billing/codes/cpt, icd10
+│   │   ├── sessionLogout.js        # session expiry → MSAL sign-out → /login
+│   │   └── authTokenUtils.js       # JWT exp / expiring-soon helpers
 │   └── utils/
-│       └── calendarPacific.js
+│       ├── calendarPacific.js
+│       ├── billingSubmissionUtils.js
+│       ├── billingFormValidation.js
+│       └── billingSubmissionsCsv.js
 ├── dist/                      # Production build output
 ├── index.html
 ├── package.json
@@ -118,6 +134,8 @@ Nested routes use `DashboardLayout` as the authenticated shell; `MainApp` is the
       <Route path="schedule" element={<PractitionerSchedule />} />
       <Route path="call-schedule-admin" element={<ProtectedRoute requireAdmin><CallScheduleAdmin /></ProtectedRoute>} />
       <Route path="call-schedule-change-log" element={<ProtectedRoute requireAdmin><CallScheduleChangeLog /></ProtectedRoute>} />
+      <Route path="billing" element={<BillingPage />} />
+      <Route path="billing/submissions" element={<BillingSubmissionsInbox />} />
     </Route>
     <Route path="*" element={<Navigate to="/login" replace />} />
   </Routes>
@@ -137,7 +155,9 @@ Manages authentication state globally using **Microsoft Entra** via **MSAL** (`@
 | `loading` | Boolean | MSAL interaction in progress |
 | `isAuthenticated` | Boolean | Whether an MSAL account is active |
 
-API calls attach tokens through `apiClient` → `getAuthHeaders()` (MSAL-acquired token used as `Authorization: Bearer ...` for the backend).
+API calls attach tokens through `apiClient` interceptors (`acquireAuthToken()` → `Authorization: Bearer <Entra id token>`).
+
+On session expiry (`401` after one silent refresh, missing account, or expired token), `sessionLogout.js` signs out via MSAL and redirects to `/login`. `AuthContext` also listens for `auth:unauthorized`.
 
 ### 3. LoginPage.jsx - Authentication UI
 
@@ -155,7 +175,7 @@ Protects routes that require authentication:
 
 ### 5. DashboardLayout.jsx - Authenticated shell
 
-Wraps nested routes with shared navigation (e.g. links to chat, practitioner schedule, call schedule admin for admins).
+Wraps nested routes with shared navigation (chat, schedule, billing, call schedule admin/changelog for admins).
 
 ### 6. MainApp.jsx - Clinical assistant
 
@@ -173,6 +193,18 @@ Default route (`/`). Main sections:
 | `CallScheduleAdmin.jsx` | `/call-schedule-admin` | `callScheduleService` → `/call-schedule`, `/call-schedule/week`, upload |
 | `CallScheduleChangeLog.jsx` | `/call-schedule-change-log` | `callScheduleService.getChangelog` → `GET /call-schedule/changelog` (admin) |
 
+### 8. Billing pages
+
+| Component | Route | Description |
+|-----------|-------|-------------|
+| `BillingPage.jsx` | `/billing` | Patient search (name + DOB only in UI), location/DOS/provider, CPT/ICD comboboxes, billing sheet camera/upload → `POST /billing/submit` |
+| `BillingSubmissionsInbox.jsx` | `/billing/submissions` | Table, processed toggle, CSV export (Pacific times, no images), row click opens modal |
+| `BillingSubmissionModal.jsx` | (modal) | Detail view, sheet preview, processed toggle; admin edit/delete |
+| `MedicalCodeCombobox.jsx` | (shared) | Typeahead against curated CPT/ICD lists + custom free-text codes |
+| `LocationCombobox.jsx` | (shared) | Location picker (same pattern as call schedule) |
+
+Admin edit/delete in the UI is gated by `BILLING_ADMIN_EMAIL` in `billingSubmissionUtils.js` (must match server `wkim@urologymedical.com`).
+
 ## Services Layer
 
 ### apiClient.js - HTTP Client
@@ -186,14 +218,13 @@ config.headers.Authorization = `Bearer ${token}`;
 ```
 
 **Response Interceptor:**
-- Handles 401 errors (clears token, dispatches `auth:unauthorized` event)
-- Handles network errors
-- Handles 5xx server errors
+- On **401**: one retry with `forceRefresh: true`; if still unauthorized → `logoutOnSessionExpired()` (MSAL sign-out, redirect `/login`, `auth:unauthorized` event)
+- Network errors: user-facing connection message (does **not** log the user out)
+- **5xx**: surfaces server `detail` when present
 
-**Retry Logic:**
-- Retries failed requests up to 3 times
-- Exponential backoff (1s, 2s, 3s)
-- Only retries network errors and 5xx errors
+**Multipart:** `FormData` uploads (billing submit/edit) strip default `Content-Type` so the browser sets the boundary. `billingService` uses `requireAuthToken()` for sheet image GETs outside axios when needed.
+
+**Note:** `API_CONFIG.RETRY_ATTEMPTS` / `RETRY_DELAY` exist in config but axios does not auto-retry; only the 401 refresh path retries once.
 
 ### authService.js - Authentication API
 
@@ -224,6 +255,23 @@ config.headers.Authorization = `Bearer ${token}`;
 | `saveWeek(weekStart, days)` | POST `/call-schedule/week` | Save a week from the editor |
 | `uploadSchedule(file)` | POST `/call-schedule/upload` | Import CSV/XLSX |
 | `getChangelog(limit, offset)` | GET `/call-schedule/changelog` | Admin change log (newest first) |
+
+### billingService.js - Billing API
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `submitBilling(formData)` | POST `/billing/submit` | Multipart billing sheet + metadata |
+| `listSubmissions(limit, offset)` | GET `/billing/submissions` | Paginated inbox list |
+| `updateSubmission(id, formData)` | PATCH `/billing/submissions/{id}` | Admin edit (optional new image) |
+| `deleteSubmission(id)` | DELETE `/billing/submissions/{id}` | Admin delete |
+| `setSubmissionProcessed(id, processed)` | PATCH `/billing/submissions/{id}/processed` | Mark processed |
+
+### billingCodesService.js - Code search
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `searchCpt(q)` | GET `/billing/codes/cpt` | Curated CPT typeahead |
+| `searchIcd10(q)` | GET `/billing/codes/icd10` | Curated ICD-10 typeahead |
 
 ## Data Flow
 
@@ -271,6 +319,15 @@ config.headers.Authorization = `Bearer ${token}`;
 6. Response displayed in chat as bot message
 ```
 
+### Billing submit flow
+
+```
+1. User searches patient (FHIR name + DOB; patient ID not shown in UI)
+2. User fills location, DOS, provider, CPT/ICD (search or custom), billing sheet image
+3. billingService.submitBilling(FormData) → POST /billing/submit
+4. Reviewers open /billing/submissions → toggle processed, export CSV, open row for modal + sheet image
+```
+
 ## Configuration
 
 ### Environment Variables
@@ -292,9 +349,9 @@ Vite exposes only variables prefixed with `VITE_`. Values are inlined at **build
 ```javascript
 const API_CONFIG = {
   BASE_URL: import.meta.env.VITE_API_URL || 'http://localhost:8080',
-  TIMEOUT: 35000,      // 35 seconds
-  RETRY_ATTEMPTS: 3,   // Max retries
-  RETRY_DELAY: 1000,   // 1 second base delay
+  TIMEOUT: 120000,     // 120 seconds (AI / large uploads)
+  RETRY_ATTEMPTS: 3,   // Reserved in config (not wired to axios retry)
+  RETRY_DELAY: 1000,
 };
 ```
 
@@ -344,14 +401,14 @@ The application uses React's built-in state management:
 ### Token Management
 - Tokens are managed by **MSAL** (browser cache/session storage per `msal` config)
 - `apiClient` attaches `Authorization` via `getAuthHeaders()` on each request
-- On `401`, the client dispatches `auth:unauthorized` (optional listeners; MSAL re-auth may be required)
+- On `401` after refresh failure, `logoutOnSessionExpired()` clears the session and redirects to `/login`
 
 ### Protected Routes
 - ProtectedRoute component guards authenticated pages
 - Redirects to login if no valid session
 
 ### Event-Based Auth
-- `auth:unauthorized` custom event is dispatched on 401 responses (see `apiClient.js`); wire a listener if you want global redirect to sign-in
+- `auth:unauthorized` is dispatched from `sessionLogout.js`; `AuthContext` listens and calls `redirectToLogin()`
 
 ## Build & Development
 
@@ -362,6 +419,7 @@ npm run dev      # Start development server (port 5173)
 npm run build    # Production build to dist/
 npm run preview  # Preview production build
 npm run lint     # Run ESLint
+npm test         # Vitest unit tests
 ```
 
 ### Build Output
@@ -411,7 +469,7 @@ See [CLIENT_DEPLOYMENT.md](./CLIENT_DEPLOYMENT.md) for detailed deployment instr
 - Disabled inputs during loading
 
 ### Error Handling
-- Network error messages
-- API error display in chat
-- Automatic retry for transient failures
+- Network error messages (no session logout)
+- API error display in chat / billing forms
+- Session expiry: single token refresh then sign-out
 

@@ -441,6 +441,10 @@ aws s3 ls s3://uroassist-frontend-logs/
   2. Rebuild: `npm run build`
   3. Check backend CORS allows `https://uroassist.net`
 
+### **Billing sheet upload slow or timing out**
+- **Problem**: Large camera photos or slow networks exceed client timeout.
+- **Solution**: The SPA uses a **120s** axios timeout (`config/api.js`). If uploads still fail, check API logs for S3/`BILLING_S3_BUCKET` errors and image size (server limit 10MB).
+
 ### **Call schedule upload: "file not found" or 404 in production**
 - **Problem**: Upload works locally but production shows file not found / 404.
 - **Solution**:
