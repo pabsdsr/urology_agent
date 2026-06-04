@@ -151,7 +151,12 @@ apiClient.interceptors.response.use(
 
     if (!error.response && !isSessionExpiredError(error)) {
       console.error('Network error:', error.message);
-      error.message = 'Network error. Please check your connection.';
+      if (error.code === 'ECONNABORTED') {
+        error.message =
+          'Upload timed out. Try a smaller photo, Wi‑Fi, or Settings → Camera → Formats → Most Compatible (JPEG).';
+      } else {
+        error.message = 'Network error. Please check your connection.';
+      }
     }
 
     if (error.response?.status >= 500) {

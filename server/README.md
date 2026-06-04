@@ -76,7 +76,7 @@ No separate bucket is required for codes.
 
 ### Billing troubleshooting
 
-- `400 Billing sheet must be a supported image file` — upload must be `jpeg/png/webp/heic`.
+- `400 Billing sheet must be a supported image file` — upload must be JPEG, PNG, WebP, or HEIC/HEIF (iOS may send `image/heif` or an empty MIME with a `.heic` name).
 - `400 Billing sheet image exceeds the 10MB limit` — attachment is too large.
 - `404 Billing sheet not found` — index row exists but the image object is missing in `BILLING_S3_BUCKET`.
 - `500 Failed to save billing submission` — check logs for S3 permission or `BILLING_S3_BUCKET` misconfiguration.
