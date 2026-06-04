@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 
 export const CALL_SCHEDULE_LOCATIONS_STORAGE_KEY = "callScheduleCustomLocations";
 export const BILLING_LOCATIONS_STORAGE_KEY = "billingCustomLocations";
+export const BILLING_PROVIDERS_STORAGE_KEY = "billingCustomProviders";
 
 function loadCustomLocations(storageKey) {
   if (typeof window === "undefined") return [];
@@ -71,6 +72,7 @@ export default function LocationCombobox({
   onChange,
   label = "Location",
   placeholder = "Location",
+  addOptionSuffix = "location",
   required = false,
   inputClassName = "w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-teal-500 focus:border-teal-500",
 }) {
@@ -188,7 +190,7 @@ export default function LocationCombobox({
             onClick={addCurrentAsLocation}
             disabled={!trimmedValue}
           >
-            + Add “{trimmedValue || " "}” as location
+            + Add “{trimmedValue || " "}” as {addOptionSuffix}
           </button>
         </div>
       </DropdownPortal>

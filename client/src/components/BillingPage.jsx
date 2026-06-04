@@ -4,6 +4,7 @@ import { billingService } from "../services/billingService.js";
 import { patientService } from "../services/patientService.js";
 import LocationCombobox, {
   BILLING_LOCATIONS_STORAGE_KEY,
+  BILLING_PROVIDERS_STORAGE_KEY,
 } from "./LocationCombobox.jsx";
 import MedicalCodeCombobox from "./MedicalCodeCombobox.jsx";
 import {
@@ -263,16 +264,19 @@ function BillingPage() {
                 required
               />
             </label>
-            <label className="block">
-              <span className="text-sm font-medium text-gray-700">Provider Name</span>
-              <input
-                name="providerName"
+            <div className="block">
+              <LocationCombobox
+                storageKey={BILLING_PROVIDERS_STORAGE_KEY}
+                label="Provider Name"
+                placeholder="Select or type a provider"
+                addOptionSuffix="provider"
                 value={form.providerName}
-                onChange={onInputChange}
-                className="mt-1 w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                onChange={(providerName) =>
+                  setForm((prev) => ({ ...prev, providerName }))
+                }
                 required
               />
-            </label>
+            </div>
             <div className="block">
               <LocationCombobox
                 storageKey={BILLING_LOCATIONS_STORAGE_KEY}
@@ -300,7 +304,7 @@ function BillingPage() {
             <MedicalCodeCombobox
               codeType="cpt"
               label="CPT Code"
-              placeholder="Search or type e.g. 51798"
+              placeholder="Select, search, or type a CPT code"
               value={form.cptCode}
               onChange={(cptCode) => setForm((prev) => ({ ...prev, cptCode }))}
               required
@@ -308,7 +312,7 @@ function BillingPage() {
             <MedicalCodeCombobox
               codeType="icd10"
               label="ICD-10 Code"
-              placeholder="Search or type e.g. N40.1"
+              placeholder="Select, search, or type an ICD-10 code"
               value={form.icd10Code}
               onChange={(icd10Code) => setForm((prev) => ({ ...prev, icd10Code }))}
               required
