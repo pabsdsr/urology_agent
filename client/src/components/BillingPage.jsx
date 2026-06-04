@@ -8,11 +8,10 @@ import LocationCombobox, {
 } from "./LocationCombobox.jsx";
 import MedicalCodeCombobox from "./MedicalCodeCombobox.jsx";
 import {
-  isAllowedBillingImageFile,
+  ALLOWED_BILLING_IMAGE_TYPES,
   MAX_BILLING_IMAGE_BYTES,
-  normalizeBillingImageFile,
-} from "../utils/billingImageFile.js";
-import { validateBillingForm } from "../utils/billingFormValidation.js";
+  validateBillingForm,
+} from "../utils/billingFormValidation.js";
 
 const EMPTY_FORM = {
   patientName: "",
@@ -113,9 +112,9 @@ function BillingPage() {
   const onFileChange = (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
-    if (!isAllowedBillingImageFile(file)) {
+    if (!ALLOWED_BILLING_IMAGE_TYPES.includes(file.type)) {
       setBillingSheetFile(null);
-      setError("Please upload a JPEG, PNG, WebP, or HEIC/HEIF image.");
+      setError("Please upload a JPEG, PNG, WEBP, or HEIC image.");
       return;
     }
     if (file.size > MAX_BILLING_IMAGE_BYTES) {
@@ -123,7 +122,7 @@ function BillingPage() {
       setError("Billing sheet image must be 10MB or less.");
       return;
     }
-    setBillingSheetFile(normalizeBillingImageFile(file) || file);
+    setBillingSheetFile(file);
     setError("");
   };
 
@@ -335,7 +334,7 @@ function BillingPage() {
             </div>
             <input
               type="file"
-              accept="image/jpeg,image/png,image/webp,image/heic,image/heif,image/*"
+              accept="image/*"
               capture={supportsCapture && cameraPreferred ? "environment" : undefined}
               onChange={onFileChange}
               className="mt-1 block w-full text-sm text-gray-700 file:mr-3 file:px-3 file:py-2 file:border-0 file:rounded-md file:bg-teal-600 file:text-white hover:file:bg-teal-700"

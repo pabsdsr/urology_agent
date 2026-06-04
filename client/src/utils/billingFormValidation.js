@@ -1,12 +1,12 @@
-import {
-  isAllowedBillingImageFile,
-  MAX_BILLING_IMAGE_BYTES,
-} from "./billingImageFile.js";
-
-export { MAX_BILLING_IMAGE_BYTES } from "./billingImageFile.js";
-
 const CPT_REGEX = /^[0-9]{5}([A-Z]{1})?$/;
 const ICD10_REGEX = /^[A-TV-Z][0-9][0-9AB]\.?[0-9A-TV-Z]{0,4}$/i;
+export const MAX_BILLING_IMAGE_BYTES = 10 * 1024 * 1024;
+export const ALLOWED_BILLING_IMAGE_TYPES = [
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/heic",
+];
 
 /**
  * @param {{ patientName: string, patientDob: string, providerName: string, location: string, dateOfService: string, cptCode: string, icd10Code: string }} form
@@ -24,8 +24,8 @@ export function validateBillingForm(form, { billingSheetFile = null, requireShee
   }
   if (requireSheet && !billingSheetFile) return "Billing sheet image is required.";
   if (billingSheetFile) {
-    if (!isAllowedBillingImageFile(billingSheetFile)) {
-      return "Billing sheet must be a JPEG, PNG, WebP, or HEIC/HEIF image.";
+    if (!ALLOWED_BILLING_IMAGE_TYPES.includes(billingSheetFile.type)) {
+      return "Billing sheet must be a JPEG, PNG, WebP, or HEIC image.";
     }
     if (billingSheetFile.size > MAX_BILLING_IMAGE_BYTES) {
       return "Billing sheet image exceeds the 10MB limit.";

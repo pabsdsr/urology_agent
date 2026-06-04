@@ -270,7 +270,7 @@ eb setenv \
 
 **Billing storage**: Use a **dedicated** S3 bucket (`BILLING_S3_BUCKET`), not the call-schedule bucket. The EC2 instance profile needs `s3:GetObject`, `s3:PutObject`, and `s3:DeleteObject` on that bucket. See [README.md](./README.md) for layout and troubleshooting.
 
-**Billing photo uploads**: EB’s nginx proxy defaults to a **1MB** request body. This repo sets **`client_max_body_size 15M`** via `server/.platform/nginx/conf.d/upload_body_size.conf` (plus upload timeouts under `elasticbeanstalk/`). **Redeploy the backend** (`eb deploy`) so new instances pick this up; otherwise large phone photos may fail with a browser “network error”.
+**Large uploads**: `server/.platform/nginx/` raises the default 1MB body limit for billing sheet photos. Redeploy after changing those files.
 
 **Environment Variable Format**:
 - `PRACTICE_<firm_name>=<username>,<firm_name>,<api_key>`
