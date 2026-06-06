@@ -37,7 +37,6 @@ export default function BillingSubmissionFields({
           value={form.patientDob}
           onChange={onInputChange}
           placeholder={BILLING_DATE_PLACEHOLDER}
-          inputMode="numeric"
           autoComplete="bday"
           className={inputClassName}
           required
@@ -72,7 +71,6 @@ export default function BillingSubmissionFields({
           value={form.dateOfService}
           onChange={onInputChange}
           placeholder={BILLING_DATE_PLACEHOLDER}
-          inputMode="numeric"
           className={inputClassName}
           required
         />
