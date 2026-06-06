@@ -57,6 +57,17 @@ export default function MedicalCodeCombobox({
   const [loading, setLoading] = useState(false);
   const [searchError, setSearchError] = useState("");
   const rootRef = useRef(null);
+  const inputRef = useRef(null);
+
+  const handleQueryChange = (event) => {
+    const next = event.target.value;
+    setQuery(next);
+    if (next.trim()) {
+      setOpenPicker({ anchorEl: event.currentTarget });
+    } else {
+      setOpenPicker(null);
+    }
+  };
 
   useEffect(() => {
     const handleDocumentClick = (event) => {
@@ -200,9 +211,10 @@ export default function MedicalCodeCombobox({
 
       <div className="relative mt-1">
         <input
+          ref={inputRef}
           type="text"
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={handleQueryChange}
           placeholder={placeholder}
           className={`${inputClassName} pr-8`}
           autoComplete="off"
@@ -210,12 +222,11 @@ export default function MedicalCodeCombobox({
         <button
           type="button"
           className="absolute inset-y-0 right-0 px-2 text-gray-400 hover:text-gray-600 text-xs"
-          onClick={(e) => {
-            const inputEl = e.currentTarget?.parentElement?.querySelector("input");
+          onClick={() => {
             if (openPicker) {
               setOpenPicker(null);
-            } else if (inputEl) {
-              setOpenPicker({ anchorEl: inputEl });
+            } else if (inputRef.current) {
+              setOpenPicker({ anchorEl: inputRef.current });
             }
           }}
           tabIndex={-1}
