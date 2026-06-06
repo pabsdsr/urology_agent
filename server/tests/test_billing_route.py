@@ -2,12 +2,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from app.routes.billing import (
-    _inline_content_disposition,
-    _validate_cpt_code,
-    _validate_cpt_modifier,
-    _validate_icd10_code,
-)
+from app.routes.billing import _inline_content_disposition, _validate_icd10_code
 
 
 def test_inline_content_disposition_strips_unicode_from_camera_filenames():
@@ -21,17 +16,6 @@ def test_inline_content_disposition_strips_unicode_from_camera_filenames():
     assert "filename=" in header
 
 
-def test_validate_cpt_code_accepts_5_or_6():
-    assert _validate_cpt_code("51798")
-    assert _validate_cpt_code("1234F")
-
-
-def test_validate_cpt_code_rejects_bad_values():
-    assert not _validate_cpt_code("")
-    assert not _validate_cpt_code("123")
-    assert not _validate_cpt_code("ABCDE")
-
-
 def test_validate_icd10_accepts_valid_codes():
     assert _validate_icd10_code("N40.1")
     assert _validate_icd10_code("a01")
@@ -40,18 +24,6 @@ def test_validate_icd10_accepts_valid_codes():
 def test_validate_icd10_rejects_bad_values():
     assert not _validate_icd10_code("12")
     assert not _validate_icd10_code("123.4")
-
-
-def test_validate_cpt_modifier_accepts_common_values():
-    assert _validate_cpt_modifier("25")
-    assert _validate_cpt_modifier("-57")
-    assert _validate_cpt_modifier("50")
-
-
-def test_validate_cpt_modifier_rejects_bad_values():
-    assert not _validate_cpt_modifier("")
-    assert not _validate_cpt_modifier("123")
-    assert not _validate_cpt_modifier("A")
 
 
 def test_submit_billing_success(monkeypatch, authenticated_client):
@@ -86,6 +58,27 @@ def test_submit_billing_success(monkeypatch, authenticated_client):
     assert save_mock.call_args.kwargs["submitter_email"] == "test@example.com"
 
 
+def test_submit_billing_success_without_sheet(monkeypatch, authenticated_client):
+    save_mock = Mock(return_value={"id": "sub-no-sheet"})
+    monkeypatch.setattr("app.routes.billing.save_submission", save_mock)
+
+    response = authenticated_client.post(
+        "/billing/submit",
+        data={
+            "patient_name": "Jane Doe",
+            "patient_dob": "1990-01-01",
+            "location": "North Pod",
+            "date_of_service": "2026-05-10",
+            "provider_name": "Dr. Urologist",
+            "cpt_code": "51798",
+            "icd10_code": "N40.1",
+        },
+    )
+
+    assert response.status_code == 200
+    assert save_mock.call_args.kwargs["billing_sheet_bytes"] is None
+
+
 def test_submit_billing_accepts_multiple_codes(monkeypatch, authenticated_client):
     save_mock = Mock(return_value={"id": "sub-multi"})
     monkeypatch.setattr("app.routes.billing.save_submission", save_mock)
@@ -109,6 +102,34 @@ def test_submit_billing_accepts_multiple_codes(monkeypatch, authenticated_client
     assert save_mock.call_args.kwargs["cpt_modifiers"] == ""
 
 
+def test_submit_billing_accepts_cpt_lines_json(authenticated_client, monkeypatch):
+    save_mock = Mock(return_value={"id": "sub-lines"})
+    monkeypatch.setattr("app.routes.billing.save_submission", save_mock)
+
+    response = authenticated_client.post(
+        "/billing/submit",
+        data={
+            "patient_name": "Jane Doe",
+            "patient_dob": "01/15/1990",
+            "location": "North Pod",
+            "date_of_service": "2026-05-10",
+            "provider_name": "Dr. Urologist",
+            "cpt_lines": '[{"code":"51798","modifiers":["25"]},{"code":"99213","modifiers":["57"]}]',
+            "icd10_code": "N40.1",
+        },
+        files={"billing_sheet": ("sheet.png", b"png-bytes", "image/png")},
+    )
+
+    assert response.status_code == 200
+    kwargs = save_mock.call_args.kwargs
+    assert kwargs["cpt_code"] == "51798, 99213"
+    assert kwargs["cpt_modifiers"] == "25, 57"
+    assert kwargs["cpt_lines"] == [
+        {"code": "51798", "modifiers": ["25"]},
+        {"code": "99213", "modifiers": ["57"]},
+    ]
+
+
 def test_submit_billing_accepts_cpt_modifiers(authenticated_client, monkeypatch):
     save_mock = Mock(return_value={"id": "sub-modifiers"})
     monkeypatch.setattr("app.routes.billing.save_submission", save_mock)
@@ -130,6 +151,7 @@ def test_submit_billing_accepts_cpt_modifiers(authenticated_client, monkeypatch)
 
     assert response.status_code == 200
     assert save_mock.call_args.kwargs["cpt_modifiers"] == "25, 57"
+    assert save_mock.call_args.kwargs["cpt_lines"] == [{"code": "51798", "modifiers": ["25", "57"]}]
 
 
 @pytest.mark.parametrize(
@@ -186,11 +208,14 @@ def test_submit_billing_requires_fields(authenticated_client):
             "patient_name": "Jane Doe",
             "patient_dob": "1990-01-01",
             "location": "North Pod",
+            "date_of_service": "2026-05-10",
+            "provider_name": "Dr. Urologist",
             "icd10_code": "N40.1",
         },
         files={"billing_sheet": ("sheet.png", b"png-bytes", "image/png")},
     )
-    assert response.status_code == 422
+    assert response.status_code == 400
+    assert "cpt" in response.json()["detail"].lower()
 
 
 def test_submit_billing_rejects_large_image(monkeypatch, authenticated_client):

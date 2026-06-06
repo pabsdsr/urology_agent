@@ -23,9 +23,8 @@ describe('billingService', () => {
       location: 'North Pod',
       dateOfService: '2026-05-20',
       providerName: 'Dr. U',
-      cptCode: '51798',
+      cptLinesJson: '[{"code":"51798","modifiers":["25","57"]}]',
       icd10Code: 'N40.1',
-      cptModifiers: '25, 57',
       billingSheetFile: file,
     });
 
@@ -33,7 +32,9 @@ describe('billingService', () => {
     const [url, formData] = postMock.mock.calls[0];
     expect(url).toBe('/billing/submit');
     expect(formData.get('patient_name')).toBe('Jane Doe');
-    expect(formData.get('cpt_modifiers')).toBe('25, 57');
+    expect(formData.get('cpt_lines')).toBe('[{"code":"51798","modifiers":["25","57"]}]');
+    expect(formData.get('cpt_code')).toBeNull();
+    expect(formData.get('cpt_modifiers')).toBeNull();
     expect(formData.get('billing_sheet')).toBe(file);
   });
 
@@ -48,7 +49,7 @@ describe('billingService', () => {
       location: 'South Pod',
       dateOfService: '2026-05-20',
       providerName: 'Dr. U',
-      cptCode: '51798',
+      cptLinesJson: '[{"code":"51798","modifiers":[]}]',
       icd10Code: 'N40.1',
     });
 

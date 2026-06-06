@@ -43,6 +43,7 @@ export default function MedicalCodeCombobox({
   onChangeValues,
   label,
   placeholder,
+  maxCodes,
   inputClassName = "w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-teal-500 focus:border-teal-500",
 }) {
   const storageKey = CUSTOM_CODE_STORAGE_KEYS[codeType];
@@ -134,7 +135,12 @@ export default function MedicalCodeCombobox({
   }, [results, savedCodeOptions, selectedSet]);
 
   const addCode = (code) => {
-    const next = parseCodeValues(codeType, [...selectedCodes, code]);
+    const upper = String(code).trim().toUpperCase();
+    if (!upper) return;
+    let next =
+      maxCodes === 1
+        ? [upper]
+        : parseCodeValues(codeType, [...selectedCodes, upper]);
     onChangeValues(next);
     setQuery("");
     setOpenPicker(null);
@@ -169,7 +175,7 @@ export default function MedicalCodeCombobox({
 
   return (
     <div ref={rootRef} className="block">
-      <span className="text-sm font-medium text-gray-700">{label}</span>
+      {label ? <span className="text-sm font-medium text-gray-700">{label}</span> : null}
 
       {selectedCodes.length > 0 && (
         <div className="mt-1 flex flex-wrap gap-1.5">

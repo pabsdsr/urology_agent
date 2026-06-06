@@ -1,9 +1,13 @@
 import {
   formatBillingCodeList,
-  formatBillingModifierList,
+  formatBillingDateUs,
   parseBillingCodeList,
-  parseBillingModifierList,
 } from "./billingFormValidation.js";
+import {
+  cptLinesFromSubmission,
+  normalizeCptLines,
+  serializeCptLinesForApi,
+} from "./cptLines.js";
 
 export function submitterDisplay(submission) {
   return submission?.submitter_email || submission?.submitted_by || "";
@@ -17,27 +21,26 @@ export function lastUpdatedAt(submission) {
 export function submissionToEditForm(submission) {
   return {
     patientName: submission.patient_name || "",
-    patientDob: submission.patient_dob || "",
+    patientDob: formatBillingDateUs(submission.patient_dob || ""),
     providerName: submission.provider_name || "",
     location: submission.location || "",
-    dateOfService: submission.date_of_service || "",
-    cptCodes: parseBillingCodeList(submission.cpt_code),
+    dateOfService: formatBillingDateUs(submission.date_of_service || ""),
+    cptLines: cptLinesFromSubmission(submission),
     icd10Codes: parseBillingCodeList(submission.icd10_code),
-    cptModifiers: parseBillingModifierList(submission.cpt_modifiers),
   };
 }
 
 /** Map billing form state to the API payload shape. */
 export function formToSubmissionPayload(form, billingSheetFile = null) {
+  const cptLines = normalizeCptLines(form.cptLines);
   return {
     patientName: form.patientName.trim(),
-    patientDob: form.patientDob.trim(),
+    patientDob: formatBillingDateUs(form.patientDob),
     location: form.location.trim(),
-    dateOfService: form.dateOfService,
+    dateOfService: formatBillingDateUs(form.dateOfService),
     providerName: form.providerName.trim(),
-    cptCode: formatBillingCodeList(form.cptCodes),
+    cptLinesJson: serializeCptLinesForApi(cptLines),
     icd10Code: formatBillingCodeList(form.icd10Codes),
-    cptModifiers: formatBillingModifierList(form.cptModifiers),
     billingSheetFile,
   };
 }

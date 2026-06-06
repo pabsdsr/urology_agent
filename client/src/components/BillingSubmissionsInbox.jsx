@@ -4,7 +4,8 @@ import { billingService } from "../services/billingService.js";
 import BillingProcessedToggle from "./BillingProcessedToggle.jsx";
 import BillingSubmissionModal from "./BillingSubmissionModal.jsx";
 import { formatPacificDateTime } from "../utils/calendarPacific.js";
-import { formatBillingModifierDisplay } from "../utils/billingFormValidation.js";
+import { formatBillingDateUs } from "../utils/billingFormValidation.js";
+import { formatCptLinesDisplay } from "../utils/cptLines.js";
 import { downloadBillingSubmissionsCsv } from "../utils/billingSubmissionsCsv.js";
 import { submitterDisplay } from "../utils/billingSubmissionUtils.js";
 
@@ -149,7 +150,6 @@ function BillingSubmissionsInbox() {
                   <th className="px-3 py-2 font-medium">Location</th>
                   <th className="px-3 py-2 font-medium">DOS</th>
                   <th className="px-3 py-2 font-medium">CPT</th>
-                  <th className="px-3 py-2 font-medium">Modifiers</th>
                   <th className="px-3 py-2 font-medium">ICD-10</th>
                   <th className="px-3 py-2 font-medium">Processed</th>
                   <th className="px-3 py-2 font-medium">By</th>
@@ -167,13 +167,16 @@ function BillingSubmissionsInbox() {
                       {formatPacificDateTime(row.submitted_at) || "—"}
                     </td>
                     <td className="px-3 py-2 font-medium text-gray-900">{row.patient_name}</td>
-                    <td className="px-3 py-2 whitespace-nowrap">{row.patient_dob || "—"}</td>
+                    <td className="px-3 py-2 whitespace-nowrap">
+                      {formatBillingDateUs(row.patient_dob) || "—"}
+                    </td>
                     <td className="px-3 py-2">{row.provider_name || "—"}</td>
                     <td className="px-3 py-2">{row.location || "—"}</td>
-                    <td className="px-3 py-2 whitespace-nowrap">{row.date_of_service || "—"}</td>
-                    <td className="px-3 py-2 font-mono">{row.cpt_code}</td>
+                    <td className="px-3 py-2 whitespace-nowrap">
+                      {formatBillingDateUs(row.date_of_service) || "—"}
+                    </td>
                     <td className="px-3 py-2 font-mono">
-                      {formatBillingModifierDisplay(row.cpt_modifiers) || "—"}
+                      {formatCptLinesDisplay(row) || "—"}
                     </td>
                     <td className="px-3 py-2 font-mono">{row.icd10_code}</td>
                     <td className="px-3 py-2 whitespace-nowrap">

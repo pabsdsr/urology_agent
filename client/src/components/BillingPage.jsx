@@ -1,10 +1,12 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { billingService } from "../services/billingService.js";
 import { usePatientSearch } from "../hooks/usePatientSearch.js";
 import BillingSubmissionFields from "./BillingSubmissionFields.jsx";
-import { validateBillingForm, validateBillingSheetFile, BILLING_IMAGE_ACCEPT } from "../utils/billingFormValidation.js";
+import BillingSheetInput from "./BillingSheetInput.jsx";
+import { validateBillingForm, validateBillingSheetFile, formatBillingDateUs } from "../utils/billingFormValidation.js";
 import { formToSubmissionPayload } from "../utils/billingSubmissionUtils.js";
+import { EMPTY_CPT_LINE } from "../utils/cptLines.js";
 
 const EMPTY_FORM = {
   patientName: "",
@@ -12,9 +14,8 @@ const EMPTY_FORM = {
   location: "",
   dateOfService: "",
   providerName: "",
-  cptCodes: [],
+  cptLines: [{ ...EMPTY_CPT_LINE }],
   icd10Codes: [],
-  cptModifiers: [],
 };
 
 function BillingPage() {
@@ -34,15 +35,8 @@ function BillingPage() {
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [cameraPreferred, setCameraPreferred] = useState(true);
 
-  const supportsCapture = useMemo(() => {
-    if (typeof navigator === "undefined") return false;
-    return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-  }, []);
-
-  const validate = () =>
-    validateBillingForm(form, { billingSheetFile, requireSheet: true });
+  const validate = () => validateBillingForm(form, { billingSheetFile });
 
   const onInputChange = (event) => {
     const { name, value } = event.target;
@@ -56,7 +50,7 @@ function BillingPage() {
     setForm((prev) => ({
       ...prev,
       patientName: `${patient.givenName} ${patient.familyName}`.trim(),
-      patientDob: patient.dob || "",
+      patientDob: formatBillingDateUs(patient.dob || ""),
     }));
     setError("");
   };
@@ -73,8 +67,7 @@ function BillingPage() {
     }));
   };
 
-  const onFileChange = (event) => {
-    const file = event.target.files?.[0];
+  const onFileChange = (file) => {
     if (!file) return;
     const fileError = validateBillingSheetFile(file);
     if (fileError) {
@@ -165,7 +158,9 @@ function BillingPage() {
                         {patient.givenName} {patient.familyName}
                       </div>
                       {patient.dob && (
-                        <div className="text-sm text-gray-500">DOB: {patient.dob}</div>
+                        <div className="text-sm text-gray-500">
+                          DOB: {formatBillingDateUs(patient.dob)}
+                        </div>
                       )}
                     </button>
                   ))
@@ -183,7 +178,9 @@ function BillingPage() {
                     {selectedPatient.givenName} {selectedPatient.familyName}
                   </p>
                   {selectedPatient.dob && (
-                    <p className="text-sm text-teal-700">DOB: {selectedPatient.dob}</p>
+                    <p className="text-sm text-teal-700">
+                      DOB: {formatBillingDateUs(selectedPatient.dob)}
+                    </p>
                   )}
                 </div>
                 <button
@@ -204,29 +201,15 @@ function BillingPage() {
           />
 
           <div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium text-gray-700">Billing Sheet Image</span>
-              {supportsCapture && (
-                <button
-                  type="button"
-                  onClick={() => setCameraPreferred((prev) => !prev)}
-                  className="text-sm text-teal-700 hover:text-teal-800"
-                >
-                  {cameraPreferred ? "Switch to file upload" : "Switch to camera"}
-                </button>
-              )}
+            <span className="text-sm font-medium text-gray-700">
+              Face Sheet <span className="font-normal text-gray-500">(optional)</span>
+            </span>
+            <div className="mt-1">
+              <BillingSheetInput
+                file={billingSheetFile}
+                onFileChange={onFileChange}
+              />
             </div>
-            <input
-              type="file"
-              accept={BILLING_IMAGE_ACCEPT}
-              capture={supportsCapture && cameraPreferred ? "environment" : undefined}
-              onChange={onFileChange}
-              className="mt-1 block w-full text-sm text-gray-700 file:mr-3 file:px-3 file:py-2 file:border-0 file:rounded-md file:bg-teal-600 file:text-white hover:file:bg-teal-700"
-              required
-            />
-            {billingSheetFile && (
-              <p className="mt-2 text-sm text-gray-600">Selected file: {billingSheetFile.name}</p>
-            )}
           </div>
 
           {error && (

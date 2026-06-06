@@ -1,5 +1,54 @@
+import { validateCptLines } from "./cptLines.js";
+
 const ICD10_REGEX = /^[A-TV-Z][0-9][0-9AB]\.?[0-9A-TV-Z]{0,4}$/i;
-const CPT_MODIFIER_REGEX = /^[A-Z0-9]{2}$/;
+const ISO_DATE_REGEX = /^(\d{4})-(\d{2})-(\d{2})$/;
+const US_DATE_REGEX = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/;
+
+export const BILLING_DATE_PLACEHOLDER = "MM/DD/YYYY";
+
+/** Parse MM/DD/YYYY or legacy YYYY-MM-DD into calendar parts. */
+export function parseBillingDateParts(value) {
+  const trimmed = String(value || "").trim();
+  const usMatch = trimmed.match(US_DATE_REGEX);
+  if (usMatch) {
+    return {
+      month: Number(usMatch[1]),
+      day: Number(usMatch[2]),
+      year: Number(usMatch[3]),
+    };
+  }
+  const isoMatch = trimmed.match(ISO_DATE_REGEX);
+  if (isoMatch) {
+    return {
+      month: Number(isoMatch[2]),
+      day: Number(isoMatch[3]),
+      year: Number(isoMatch[1]),
+    };
+  }
+  return null;
+}
+
+export function isValidBillingDate(value) {
+  const parts = parseBillingDateParts(value);
+  if (!parts) return false;
+  const { month, day, year } = parts;
+  if (month < 1 || month > 12 || day < 1 || day > 31) return false;
+  const date = new Date(year, month - 1, day);
+  return (
+    date.getFullYear() === year &&
+    date.getMonth() === month - 1 &&
+    date.getDate() === day
+  );
+}
+
+/** Normalize to MM/DD/YYYY for storage and display. */
+export function formatBillingDateUs(value) {
+  const parts = parseBillingDateParts(value);
+  if (!parts) return String(value || "").trim();
+  const month = String(parts.month).padStart(2, "0");
+  const day = String(parts.day).padStart(2, "0");
+  return `${month}/${day}/${parts.year}`;
+}
 
 export const MAX_BILLING_IMAGE_BYTES = 10 * 1024 * 1024;
 export const ALLOWED_BILLING_IMAGE_TYPES = [
@@ -9,13 +58,6 @@ export const ALLOWED_BILLING_IMAGE_TYPES = [
   "image/heic",
 ];
 export const BILLING_IMAGE_ACCEPT = ALLOWED_BILLING_IMAGE_TYPES.join(",");
-
-/** Matches server `_validate_cpt_code`: 5–6 chars with all but the last being digits. */
-export function isValidCptCode(code) {
-  const normalized = String(code).trim().toUpperCase();
-  if (normalized.length !== 5 && normalized.length !== 6) return false;
-  return [...normalized.slice(0, -1)].every((ch) => ch >= "0" && ch <= "9");
-}
 
 export function parseBillingCodeList(value) {
   if (Array.isArray(value)) {
@@ -50,15 +92,6 @@ export function parseBillingModifierList(value) {
   ];
 }
 
-export function formatBillingModifierList(codes) {
-  return parseBillingModifierList(codes).join(", ");
-}
-
-export function formatBillingModifierDisplay(value) {
-  const codes = parseBillingModifierList(value);
-  return codes.length ? codes.map((code) => `-${code}`).join(", ") : "";
-}
-
 /** @returns {string} Empty string when valid, otherwise an error message. */
 export function validateBillingSheetFile(file) {
   if (!file) return "";
@@ -72,32 +105,29 @@ export function validateBillingSheetFile(file) {
 }
 
 /**
- * @param {{ patientName: string, patientDob: string, providerName: string, location: string, dateOfService: string, cptCodes: string[], icd10Codes: string[], cptModifiers?: string[] }} form
+ * @param {{ patientName: string, patientDob: string, providerName: string, location: string, dateOfService: string, cptLines: Array, icd10Codes: string[] }} form
  * @param {{ billingSheetFile?: File | null, requireSheet?: boolean }} [options]
  */
 export function validateBillingForm(form, { billingSheetFile = null, requireSheet = false } = {}) {
   if (!form.patientName.trim()) return "Patient name is required.";
   if (!form.patientDob?.trim()) return "Patient DOB is required.";
+  if (!isValidBillingDate(form.patientDob)) {
+    return `Patient DOB must be a valid date in ${BILLING_DATE_PLACEHOLDER} format.`;
+  }
   if (!form.providerName.trim()) return "Provider name is required.";
   if (!form.location.trim()) return "Location is required.";
-  if (!form.dateOfService) return "Date of service is required.";
-
-  const cptCodes = parseBillingCodeList(form.cptCodes);
-  if (cptCodes.length === 0) return "At least one CPT code is required.";
-  for (const code of cptCodes) {
-    if (!isValidCptCode(code)) return `CPT code format is invalid: ${code}`;
+  if (!form.dateOfService?.trim()) return "Date of service is required.";
+  if (!isValidBillingDate(form.dateOfService)) {
+    return `Date of service must be a valid date in ${BILLING_DATE_PLACEHOLDER} format.`;
   }
+
+  const cptLinesError = validateCptLines(form.cptLines);
+  if (cptLinesError) return cptLinesError;
 
   const icd10Codes = parseBillingCodeList(form.icd10Codes);
   if (icd10Codes.length === 0) return "At least one ICD-10 code is required.";
   for (const code of icd10Codes) {
     if (!ICD10_REGEX.test(code)) return `ICD-10 code format is invalid: ${code}`;
-  }
-
-  for (const modifier of parseBillingModifierList(form.cptModifiers)) {
-    if (!CPT_MODIFIER_REGEX.test(modifier)) {
-      return `CPT modifier format is invalid: ${modifier}`;
-    }
   }
 
   if (requireSheet && !billingSheetFile) return "Billing sheet image is required.";

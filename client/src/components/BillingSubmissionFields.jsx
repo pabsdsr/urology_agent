@@ -3,6 +3,8 @@ import LocationCombobox, {
   BILLING_PROVIDERS_STORAGE_KEY,
 } from "./LocationCombobox.jsx";
 import MedicalCodeCombobox from "./MedicalCodeCombobox.jsx";
+import CptLinesEditor from "./CptLinesEditor.jsx";
+import { BILLING_DATE_PLACEHOLDER } from "../utils/billingFormValidation.js";
 
 const inputClassName =
   "mt-1 w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-teal-500 focus:border-teal-500";
@@ -12,7 +14,7 @@ export default function BillingSubmissionFields({
   onInputChange,
   setForm,
   className = "grid grid-cols-1 md:grid-cols-2 gap-4",
-  modifierPlaceholder = "Search or type a modifier",
+  cptLinesResetKey,
   children,
 }) {
   return (
@@ -30,10 +32,13 @@ export default function BillingSubmissionFields({
       <label className="block">
         <span className="text-sm font-medium text-gray-700">Patient DOB</span>
         <input
-          type="date"
+          type="text"
           name="patientDob"
           value={form.patientDob}
           onChange={onInputChange}
+          placeholder={BILLING_DATE_PLACEHOLDER}
+          inputMode="numeric"
+          autoComplete="bday"
           className={inputClassName}
           required
         />
@@ -62,20 +67,20 @@ export default function BillingSubmissionFields({
       <label className="block">
         <span className="text-sm font-medium text-gray-700">Date Of Service</span>
         <input
-          type="date"
+          type="text"
           name="dateOfService"
           value={form.dateOfService}
           onChange={onInputChange}
+          placeholder={BILLING_DATE_PLACEHOLDER}
+          inputMode="numeric"
           className={inputClassName}
           required
         />
       </label>
-      <MedicalCodeCombobox
-        codeType="cpt"
-        label="CPT Codes"
-        placeholder="Search or type a CPT code"
-        values={form.cptCodes}
-        onChangeValues={(cptCodes) => setForm((prev) => ({ ...prev, cptCodes }))}
+      <CptLinesEditor
+        lines={form.cptLines}
+        onChange={(cptLines) => setForm((prev) => ({ ...prev, cptLines }))}
+        resetKey={cptLinesResetKey}
       />
       <MedicalCodeCombobox
         codeType="icd10"
@@ -83,14 +88,6 @@ export default function BillingSubmissionFields({
         placeholder="Search or type an ICD-10 code"
         values={form.icd10Codes}
         onChangeValues={(icd10Codes) => setForm((prev) => ({ ...prev, icd10Codes }))}
-      />
-      <MedicalCodeCombobox
-        codeType="modifier"
-        label="CPT Modifiers"
-        placeholder={modifierPlaceholder}
-        values={form.cptModifiers}
-        onChangeValues={(cptModifiers) => setForm((prev) => ({ ...prev, cptModifiers }))}
-        inputClassName="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
       />
       {children}
     </div>

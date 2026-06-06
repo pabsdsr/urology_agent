@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import BillingSheetImage from "./BillingSheetImage.jsx";
 import BillingProcessedToggle from "./BillingProcessedToggle.jsx";
 import BillingSubmissionFields from "./BillingSubmissionFields.jsx";
-import { validateBillingForm, formatBillingModifierDisplay, validateBillingSheetFile, BILLING_IMAGE_ACCEPT } from "../utils/billingFormValidation.js";
+import { validateBillingForm, validateBillingSheetFile, BILLING_IMAGE_ACCEPT, formatBillingDateUs } from "../utils/billingFormValidation.js";
+import { formatCptLinesDisplay } from "../utils/cptLines.js";
 import { formatPacificDateTime } from "../utils/calendarPacific.js";
 import {
   formToSubmissionPayload,
@@ -177,8 +178,8 @@ export default function BillingSubmissionModal({
               form={form}
               onInputChange={onInputChange}
               setForm={setForm}
+              cptLinesResetKey={submission.id}
               className="grid grid-cols-1 sm:grid-cols-2 gap-4"
-              modifierPlaceholder="Search or type a modifier (e.g. 25 or -25)"
             >
               <label className="block sm:col-span-2">
                 <span className="text-sm font-medium text-gray-700">
@@ -221,17 +222,16 @@ export default function BillingSubmissionModal({
 
               <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
                 <DetailRow label="Patient name" value={submission.patient_name} />
-                <DetailRow label="Patient DOB" value={submission.patient_dob} />
+                <DetailRow label="Patient DOB" value={formatBillingDateUs(submission.patient_dob)} />
                 <DetailRow label="Provider" value={submission.provider_name} />
                 <DetailRow label="Location" value={submission.location} />
-                <DetailRow label="Date of service" value={submission.date_of_service} />
-                <DetailRow label="CPT codes" value={submission.cpt_code} mono />
-                <DetailRow label="ICD-10 codes" value={submission.icd10_code} mono />
+                <DetailRow label="Date of service" value={formatBillingDateUs(submission.date_of_service)} />
                 <DetailRow
-                  label="CPT modifiers"
-                  value={formatBillingModifierDisplay(submission.cpt_modifiers)}
+                  label="CPT codes"
+                  value={formatCptLinesDisplay(submission)}
                   mono
                 />
+                <DetailRow label="ICD-10 codes" value={submission.icd10_code} mono />
                 <DetailRow label="Submitted by" value={submitterDisplay(submission)} />
               </dl>
 

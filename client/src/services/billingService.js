@@ -7,9 +7,8 @@ function buildBillingFormData(payload, { includeSheet = true } = {}) {
   formData.append("location", payload.location);
   formData.append("date_of_service", payload.dateOfService || "");
   formData.append("provider_name", payload.providerName || "");
-  formData.append("cpt_code", payload.cptCode);
+  formData.append("cpt_lines", payload.cptLinesJson || "[]");
   formData.append("icd10_code", payload.icd10Code);
-  formData.append("cpt_modifiers", payload.cptModifiers || "");
   if (includeSheet && payload.billingSheetFile) {
     formData.append("billing_sheet", payload.billingSheetFile);
   }
@@ -20,7 +19,7 @@ export const billingService = {
   submitBilling: async (payload) => {
     const response = await apiClient.post(
       "/billing/submit",
-      buildBillingFormData(payload, { includeSheet: true })
+      buildBillingFormData(payload, { includeSheet: Boolean(payload.billingSheetFile) })
     );
     return response.data;
   },

@@ -26,6 +26,10 @@ function BillingSheetImage({ submissionId, reloadKey = 0 }) {
         }
       } catch (err) {
         if (!cancelled) {
+          if (err.response?.status === 404) {
+            setError("missing");
+            return;
+          }
           const detail = err.response?.data;
           let message = err.message || "Failed to load image.";
           if (detail instanceof Blob) {
@@ -53,7 +57,11 @@ function BillingSheetImage({ submissionId, reloadKey = 0 }) {
   }, [submissionId, reloadKey]);
 
   if (error) {
-    return <p className="text-sm text-red-600">{error}</p>;
+    return (
+      <p className="text-sm text-gray-500">
+        {error === "missing" ? "No billing sheet attached." : error}
+      </p>
+    );
   }
   if (!src) {
     return <p className="text-sm text-gray-500">Loading image...</p>;

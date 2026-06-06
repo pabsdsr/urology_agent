@@ -1,6 +1,7 @@
 import { formatPacificDateTime } from "./calendarPacific.js";
 import { lastUpdatedAt, submitterDisplay } from "./billingSubmissionUtils.js";
-import { formatBillingModifierDisplay } from "./billingFormValidation.js";
+import { formatBillingDateUs } from "./billingFormValidation.js";
+import { formatCptLinesDisplay } from "./cptLines.js";
 
 const CSV_COLUMNS = [
   { key: "id", header: "Submission ID" },
@@ -11,8 +12,7 @@ const CSV_COLUMNS = [
   { key: "provider_name", header: "Provider" },
   { key: "location", header: "Location" },
   { key: "date_of_service", header: "Date of Service" },
-  { key: "cpt_code", header: "CPT Code" },
-  { key: "cpt_modifiers", header: "CPT Modifiers" },
+  { key: "cpt_lines", header: "CPT Codes" },
   { key: "icd10_code", header: "ICD-10 Code" },
   { key: "processed", header: "Processed" },
   { key: "submitted_by", header: "Submitted By" },
@@ -32,12 +32,11 @@ function submissionToCsvRow(submission) {
     submitted_at: formatPacificDateTime(submission.submitted_at),
     last_updated_at: formatPacificDateTime(lastUpdatedAt(submission)),
     patient_name: submission.patient_name ?? "",
-    patient_dob: submission.patient_dob ?? "",
+    patient_dob: formatBillingDateUs(submission.patient_dob ?? ""),
     provider_name: submission.provider_name ?? "",
     location: submission.location ?? "",
-    date_of_service: submission.date_of_service ?? "",
-    cpt_code: submission.cpt_code ?? "",
-    cpt_modifiers: formatBillingModifierDisplay(submission.cpt_modifiers),
+    date_of_service: formatBillingDateUs(submission.date_of_service ?? ""),
+    cpt_lines: formatCptLinesDisplay(submission),
     icd10_code: submission.icd10_code ?? "",
     processed: submission.processed ? "Yes" : "No",
     submitted_by: submitterDisplay(submission),

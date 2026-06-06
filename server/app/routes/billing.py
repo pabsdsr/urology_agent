@@ -9,6 +9,11 @@ from pydantic import BaseModel
 from app.models import SessionUser
 from app.routes.auth import get_current_user
 from app.services.billing_codes_service import search_cpt_codes, search_cpt_modifiers, search_icd10_codes
+from app.services.billing_cpt_lines import (
+    derive_legacy_cpt_fields,
+    parse_cpt_lines_json,
+    validate_cpt_lines,
+)
 from app.services.billing_submission_store import (
     delete_submission,
     list_submissions,
@@ -31,16 +36,6 @@ ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp", "image/heic"}
 
 def _split_billing_codes(raw: str) -> list[str]:
     return [part.strip() for part in re.split(r"[,;]+", raw or "") if part.strip()]
-
-
-def _validate_cpt_code(code: str) -> bool:
-    normalized = code.strip().upper()
-    return normalized[:-1].isdigit() and len(normalized) in {5, 6} if normalized else False
-
-
-def _validate_cpt_modifier(code: str) -> bool:
-    normalized = code.strip().upper().lstrip("-")
-    return len(normalized) == 2 and normalized.isalnum()
 
 
 def _validate_billing_sheet(content_type: str | None, size: int) -> None:
@@ -80,10 +75,11 @@ def _parse_billing_form_fields(
     location: str,
     date_of_service: str,
     provider_name: str,
-    cpt_code: str,
     icd10_code: str,
+    cpt_lines: str = "",
+    cpt_code: str = "",
     cpt_modifiers: str = "",
-) -> dict[str, str]:
+) -> dict:
     patient_name = patient_name.strip()
     patient_dob = patient_dob.strip()
     location = location.strip()
@@ -99,12 +95,13 @@ def _parse_billing_form_fields(
     if not provider_name:
         raise HTTPException(status_code=400, detail="Provider name is required.")
 
-    cpt_codes = [c.upper() for c in _split_billing_codes(cpt_code)]
-    if not cpt_codes:
-        raise HTTPException(status_code=400, detail="At least one CPT code is required.")
-    for code in cpt_codes:
-        if not _validate_cpt_code(code):
-            raise HTTPException(status_code=400, detail=f"Invalid CPT code format: {code}")
+    parsed_lines = parse_cpt_lines_json(
+        cpt_lines,
+        cpt_code=cpt_code,
+        cpt_modifiers=cpt_modifiers,
+    )
+    validated_lines = validate_cpt_lines(parsed_lines)
+    legacy_cpt_code, legacy_cpt_modifiers = derive_legacy_cpt_fields(validated_lines)
 
     icd10_codes = [c.upper() for c in _split_billing_codes(icd10_code)]
     if not icd10_codes:
@@ -113,23 +110,16 @@ def _parse_billing_form_fields(
         if not _validate_icd10_code(code):
             raise HTTPException(status_code=400, detail=f"Invalid ICD-10 code format: {code}")
 
-    modifier_codes: list[str] = []
-    for raw in _split_billing_codes(cpt_modifiers):
-        mod = raw.upper().lstrip("-")
-        if not _validate_cpt_modifier(mod):
-            raise HTTPException(status_code=400, detail=f"Invalid CPT modifier format: {raw}")
-        if mod not in modifier_codes:
-            modifier_codes.append(mod)
-
     return {
         "patient_name": patient_name,
         "patient_dob": patient_dob,
         "location": location,
         "date_of_service": date_of_service,
         "provider_name": provider_name,
-        "cpt_code": ", ".join(cpt_codes),
+        "cpt_lines": validated_lines,
+        "cpt_code": legacy_cpt_code,
         "icd10_code": ", ".join(icd10_codes),
-        "cpt_modifiers": ", ".join(modifier_codes),
+        "cpt_modifiers": legacy_cpt_modifiers,
     }
 
 
@@ -150,10 +140,11 @@ async def submit_billing(
     location: str = Form(...),
     date_of_service: str = Form(""),
     provider_name: str = Form(""),
-    cpt_code: str = Form(...),
+    cpt_lines: str = Form(""),
+    cpt_code: str = Form(""),
     icd10_code: str = Form(...),
     cpt_modifiers: str = Form(""),
-    billing_sheet: UploadFile = File(...),
+    billing_sheet: UploadFile | None = File(default=None),
     current_user: SessionUser = Depends(get_current_user),
 ):
     fields = _parse_billing_form_fields(
@@ -162,11 +153,17 @@ async def submit_billing(
         location=location,
         date_of_service=date_of_service,
         provider_name=provider_name,
+        cpt_lines=cpt_lines,
         cpt_code=cpt_code,
         icd10_code=icd10_code,
         cpt_modifiers=cpt_modifiers,
     )
-    image_bytes, content_type, filename = await _read_billing_sheet(billing_sheet)
+
+    sheet_filename: str | None = None
+    sheet_content_type: str | None = None
+    sheet_bytes: bytes | None = None
+    if billing_sheet is not None and billing_sheet.filename:
+        sheet_bytes, sheet_content_type, sheet_filename = await _read_billing_sheet(billing_sheet)
 
     try:
         entry = save_submission(
@@ -174,9 +171,9 @@ async def submit_billing(
             submitted_by=current_user.username,
             submitter_email=current_user.email,
             practice_url=current_user.practice_url,
-            billing_sheet_filename=filename,
-            billing_sheet_content_type=content_type,
-            billing_sheet_bytes=image_bytes,
+            billing_sheet_filename=sheet_filename,
+            billing_sheet_content_type=sheet_content_type,
+            billing_sheet_bytes=sheet_bytes,
         )
     except Exception as exc:
         logger.exception("billing_submission_save_failed")
@@ -272,7 +269,8 @@ async def update_billing_submission(
     location: str = Form(...),
     date_of_service: str = Form(""),
     provider_name: str = Form(""),
-    cpt_code: str = Form(...),
+    cpt_lines: str = Form(""),
+    cpt_code: str = Form(""),
     icd10_code: str = Form(...),
     cpt_modifiers: str = Form(""),
     billing_sheet: UploadFile | None = File(default=None),
@@ -284,6 +282,7 @@ async def update_billing_submission(
         location=location,
         date_of_service=date_of_service,
         provider_name=provider_name,
+        cpt_lines=cpt_lines,
         cpt_code=cpt_code,
         icd10_code=icd10_code,
         cpt_modifiers=cpt_modifiers,

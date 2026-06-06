@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from app.services.local_file_lock import local_file_lock
+from app.services.billing_cpt_lines import ensure_entry_cpt_lines
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +53,7 @@ def _utc_now_iso() -> str:
 
 def _normalize_entry(entry: Dict[str, Any]) -> Dict[str, Any]:
     """Ensure expected fields exist for API responses (older index rows may omit them)."""
-    normalized = dict(entry)
+    normalized = ensure_entry_cpt_lines(dict(entry))
     normalized["processed"] = bool(entry.get("processed"))
     normalized.setdefault("cpt_modifiers", "")
     return normalized
@@ -170,21 +171,24 @@ def save_submission(
     cpt_code: str,
     icd10_code: str,
     cpt_modifiers: str = "",
+    cpt_lines: Optional[List[Dict[str, Any]]] = None,
     submitted_by: str,
     submitter_email: Optional[str],
     practice_url: str,
-    billing_sheet_filename: str,
-    billing_sheet_content_type: str,
-    billing_sheet_bytes: bytes,
+    billing_sheet_filename: Optional[str] = None,
+    billing_sheet_content_type: Optional[str] = None,
+    billing_sheet_bytes: Optional[bytes] = None,
 ) -> Dict[str, Any]:
     submission_id = str(uuid.uuid4())
     submitted_at = _utc_now_iso()
-    storage_key = _save_sheet_bytes(
-        submission_id,
-        billing_sheet_bytes,
-        billing_sheet_content_type,
-        billing_sheet_filename,
-    )
+    storage_key = ""
+    if billing_sheet_bytes:
+        storage_key = _save_sheet_bytes(
+            submission_id,
+            billing_sheet_bytes,
+            billing_sheet_content_type or "application/octet-stream",
+            billing_sheet_filename or "billing-sheet.png",
+        )
     entry = {
         "id": submission_id,
         "submitted_at": submitted_at,
@@ -196,11 +200,12 @@ def save_submission(
         "cpt_code": cpt_code,
         "icd10_code": icd10_code,
         "cpt_modifiers": cpt_modifiers,
+        "cpt_lines": cpt_lines or [],
         "submitted_by": submitted_by,
         "submitter_email": submitter_email or "",
         "practice_url": practice_url,
-        "billing_sheet_filename": billing_sheet_filename,
-        "billing_sheet_content_type": billing_sheet_content_type,
+        "billing_sheet_filename": billing_sheet_filename or "",
+        "billing_sheet_content_type": billing_sheet_content_type or "",
         "billing_sheet_storage_key": storage_key,
         "processed": False,
     }
@@ -332,6 +337,7 @@ def _apply_submission_update(
     cpt_code: str,
     icd10_code: str,
     cpt_modifiers: str,
+    cpt_lines: Optional[List[Dict[str, Any]]] = None,
     billing_sheet_filename: Optional[str],
     billing_sheet_content_type: Optional[str],
     billing_sheet_bytes: Optional[bytes],
@@ -344,6 +350,7 @@ def _apply_submission_update(
     entry["cpt_code"] = cpt_code
     entry["icd10_code"] = icd10_code
     entry["cpt_modifiers"] = cpt_modifiers
+    entry["cpt_lines"] = cpt_lines or []
     entry["updated_at"] = _utc_now_iso()
 
     if billing_sheet_bytes:
@@ -370,6 +377,7 @@ def update_submission(
     cpt_code: str,
     icd10_code: str,
     cpt_modifiers: str = "",
+    cpt_lines: Optional[List[Dict[str, Any]]] = None,
     billing_sheet_filename: Optional[str] = None,
     billing_sheet_content_type: Optional[str] = None,
     billing_sheet_bytes: Optional[bytes] = None,
@@ -388,6 +396,7 @@ def update_submission(
             cpt_code=cpt_code,
             icd10_code=icd10_code,
             cpt_modifiers=cpt_modifiers,
+            cpt_lines=cpt_lines,
             billing_sheet_filename=billing_sheet_filename,
             billing_sheet_content_type=billing_sheet_content_type,
             billing_sheet_bytes=billing_sheet_bytes,
