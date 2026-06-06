@@ -1,10 +1,9 @@
-/** Admin email allowed to edit/delete billing submissions. */
-export const BILLING_ADMIN_EMAIL = "wkim@urologymedical.com";
-
-export function canManageBillingSubmissions(user) {
-  const email = (user?.username || "").trim().toLowerCase();
-  return email === BILLING_ADMIN_EMAIL.toLowerCase();
-}
+import {
+  formatBillingCodeList,
+  formatBillingModifierList,
+  parseBillingCodeList,
+  parseBillingModifierList,
+} from "./billingFormValidation.js";
 
 export function submitterDisplay(submission) {
   return submission?.submitter_email || submission?.submitted_by || "";
@@ -22,7 +21,23 @@ export function submissionToEditForm(submission) {
     providerName: submission.provider_name || "",
     location: submission.location || "",
     dateOfService: submission.date_of_service || "",
-    cptCode: submission.cpt_code || "",
-    icd10Code: submission.icd10_code || "",
+    cptCodes: parseBillingCodeList(submission.cpt_code),
+    icd10Codes: parseBillingCodeList(submission.icd10_code),
+    cptModifiers: parseBillingModifierList(submission.cpt_modifiers),
+  };
+}
+
+/** Map billing form state to the API payload shape. */
+export function formToSubmissionPayload(form, billingSheetFile = null) {
+  return {
+    patientName: form.patientName.trim(),
+    patientDob: form.patientDob.trim(),
+    location: form.location.trim(),
+    dateOfService: form.dateOfService,
+    providerName: form.providerName.trim(),
+    cptCode: formatBillingCodeList(form.cptCodes),
+    icd10Code: formatBillingCodeList(form.icd10Codes),
+    cptModifiers: formatBillingModifierList(form.cptModifiers),
+    billingSheetFile,
   };
 }

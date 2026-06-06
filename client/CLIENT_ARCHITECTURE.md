@@ -230,9 +230,7 @@ config.headers.Authorization = `Bearer ${token}`;
 
 | Method | Description |
 |--------|-------------|
-| `loginWithEntra()` | Start Entra sign-in via MSAL (`loginRedirect`) |
-| `logout()` | POST `/auth/logout` (clears server-side cache; client should also MSAL sign-out) |
-| `checkAuth()` | GET `/auth/me` — load profile with current bearer token |
+| `logoutSession()` | POST `/auth/logout` — clears server-side session cache (MSAL sign-out runs in `DashboardLayout`) |
 
 ### patientService.js - Patient API
 

@@ -3,7 +3,7 @@
 ![Backend Deploy](https://github.com/pabsdsr/urology_agent/actions/workflows/deploy-backend.yml/badge.svg)
 ![Frontend Deploy](https://github.com/pabsdsr/urology_agent/actions/workflows/deploy-frontend.yml/badge.svg)
 
-Clinical assistant for urology practices: Entra sign-in, ModMed patient search, AI chat (CrewAI + Qdrant), practitioner schedule, on-call schedule admin, and **billing sheet submissions** with a review inbox.
+Clinical assistant for urology practices: Entra sign-in, ModMed patient search, AI chat (CrewAI + Qdrant), practitioner schedule, on-call schedule admin, and **billing sheet submissions** with an in-app review inbox (S3-backed; no outbound email).
 
 ## Documentation
 

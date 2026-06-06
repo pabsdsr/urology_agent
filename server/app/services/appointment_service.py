@@ -49,10 +49,8 @@ def aggregate_practitioner_schedule(appointments: list) -> dict:
     """
     schedule = defaultdict(lambda: defaultdict(lambda: {"AM": {}, "PM": {}}))
     earliest: dict[tuple, datetime] = {}
-    try:
-        from zoneinfo import ZoneInfo
-    except ImportError:
-        from backports.zoneinfo import ZoneInfo  # For Python <3.9
+    from zoneinfo import ZoneInfo
+
     pacific = ZoneInfo("America/Los_Angeles")
 
     for appt in appointments:
@@ -165,9 +163,7 @@ async def _fetch_all_practitioners(base_url: str, headers: dict, logger) -> Tupl
     roles: Dict[str, str] = {}
     types: Dict[str, str] = {}
     next_page = None
-    request_count = 0
     while True:
-        request_count += 1
         params = [("_count", 50)]
         if next_page is not None:
             params.append(("page", str(next_page)))
@@ -207,9 +203,7 @@ async def _fetch_all_locations(base_url: str, headers: dict, logger) -> Dict[str
     url = f"{base_url}/Location"
     result = {}
     next_page = None
-    request_count = 0
     while True:
-        request_count += 1
         params = [("_count", 50)]
         if next_page is not None:
             params.append(("page", str(next_page)))

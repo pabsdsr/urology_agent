@@ -52,10 +52,6 @@ def _get_table():
         return None
 
 
-def dynamodb_cache_enabled() -> bool:
-    return bool(SCHEDULE_CACHE_DYNAMODB_TABLE) and _get_table() is not None
-
-
 def _key(base_url: str) -> Dict[str, str]:
     k = {SCHEDULE_CACHE_DYNAMODB_PK: base_url}
     if SCHEDULE_CACHE_DYNAMODB_SK:

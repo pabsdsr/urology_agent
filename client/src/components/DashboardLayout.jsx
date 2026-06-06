@@ -1,7 +1,7 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { useNavigate, useLocation, Outlet } from "react-router-dom";
 import { useMsal } from '@azure/msal-react';
-import { authService } from '../services/authService.js';
+import { logoutSession } from '../services/authService.js';
 import { msalConfig } from '../authConfig.js';
 
 function DashboardLayout() {
@@ -16,7 +16,7 @@ function DashboardLayout() {
 
   const handleLogoutRedirect = async () => {
     try {
-      await authService.logout();
+      await logoutSession();
     } catch (e) {
       console.error(e);
     }

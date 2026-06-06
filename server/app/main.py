@@ -12,35 +12,30 @@ from app.services.client_service import client
 from app.crew.crew import ClinicalAssistantCrew
 from app.routes import auth, run_crew, patients, appointments, call_schedule, billing
 
-
 warnings.filterwarnings("ignore", category=SyntaxWarning, module="pysbd")
 
-# Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.StreamHandler(),  # Console output
-        logging.FileHandler('app.log')  # File output
+        logging.StreamHandler(),
+        logging.FileHandler('app.log')
     ]
 )
-# Reduce httpx noise (every GET/POST logged at INFO)
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
-# Create logger instance
-logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup code (if any) runs here before server starts handling requests
     yield
-    # Shutdown code runs here after server stops handling requests
     await client.aclose()
+
 
 def create_app():
     """Build FastAPI app with CORS and route modules."""
     app = FastAPI(
-        title="UroAssist Backend"
+        title="UroAssist Backend",
+        lifespan=lifespan,
     )
 
     # CORS allowlist (TLS is enforced at the load balancer / reverse proxy in production).
@@ -102,22 +97,12 @@ def run(query: str, patient_id: str, practice_url: str = None, user_qdrant_tool 
         if user_qdrant_tool:
             crew_instance.user_qdrant_tool = user_qdrant_tool
         
-        # Get the crew and execute
         crew = crew_instance.crew()
-        
-        # Update agent tools after crew creation
-        if user_qdrant_tool:
-            for agent in crew.agents:
-                if hasattr(agent, 'tools'):
-                    agent.tools = [user_qdrant_tool]
-        
         result = crew.kickoff(inputs=inputs)
     except Exception as e:
         raise Exception(f"An error occurred while running the crew: {e}")
 
     result_dict = result.model_dump()
-
-    token_usage = result_dict.get("token_usage", {})
 
     tasks_output = result_dict.get("tasks_output", [])
     for task in tasks_output:

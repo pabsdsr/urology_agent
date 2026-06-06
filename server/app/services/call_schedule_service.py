@@ -1,14 +1,12 @@
-"""
-Single-tenant on-call schedule: one JSON file locally and/or one S3 object.
-"""
+"""Single-tenant on-call schedule: one JSON file locally and/or one S3 object."""
 import copy
-import contextlib
 import json
 import logging
 import os
-import sys
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
+
+from app.services.local_file_lock import local_file_lock
 
 logger = logging.getLogger(__name__)
 
@@ -30,26 +28,6 @@ if CALL_SCHEDULE_S3_BUCKET:
         _s3_client = boto3.client("s3")
     except Exception:
         _s3_client = None
-
-
-@contextlib.contextmanager
-def _local_file_lock(path: str):
-    """Exclusive lock around local schedule read/write (Unix). No-op on Windows."""
-    if sys.platform == "win32":
-        yield
-        return
-    import fcntl
-
-    directory = os.path.dirname(path)
-    if directory:
-        os.makedirs(directory, exist_ok=True)
-    lock_path = path + ".lock"
-    with open(lock_path, "a+", encoding="utf-8") as lf:
-        fcntl.flock(lf.fileno(), fcntl.LOCK_EX)
-        try:
-            yield
-        finally:
-            fcntl.flock(lf.fileno(), fcntl.LOCK_UN)
 
 
 def _load_call_schedule_from_s3() -> Dict[str, Dict[str, str]]:
@@ -102,9 +80,7 @@ def _load_call_schedule() -> Dict[str, Dict[str, str]]:
     return _load_call_schedule_disk()
 
 
-def _save_call_schedule(data: Dict[str, Dict[str, str]]) -> None:
-    if _s3_client and CALL_SCHEDULE_S3_BUCKET:
-        _save_call_schedule_to_s3(data)
+def _write_call_schedule_disk(data: Dict[str, Dict[str, str]]) -> None:
     directory = os.path.dirname(CALL_SCHEDULE_PATH)
     os.makedirs(directory, exist_ok=True)
     try:
@@ -149,7 +125,7 @@ def update_week(
         schedule = apply_merge(schedule)
         _save_call_schedule_to_s3(schedule)
     else:
-        with _local_file_lock(CALL_SCHEDULE_PATH):
+        with local_file_lock(CALL_SCHEDULE_PATH):
             schedule = dict(_load_call_schedule_disk())
             previous_by_date = {}
             if changelog_meta and norm_days:
@@ -157,12 +133,7 @@ def update_week(
                     prev = schedule.get(k)
                     previous_by_date[k] = copy.deepcopy(prev) if prev is not None else None
             schedule = apply_merge(schedule)
-            try:
-                os.makedirs(os.path.dirname(CALL_SCHEDULE_PATH), exist_ok=True)
-                with open(CALL_SCHEDULE_PATH, "w", encoding="utf-8") as f:
-                    json.dump(schedule, f, indent=2, sort_keys=True)
-            except Exception as e:
-                logger.error("Write call schedule failed path=%s: %s", CALL_SCHEDULE_PATH, e)
+            _write_call_schedule_disk(schedule)
 
     if changelog_meta and norm_days:
         from app.services.call_schedule_changelog import append_changelog_entry
@@ -201,7 +172,7 @@ def get_call_schedule_range(
     if _s3_client and CALL_SCHEDULE_S3_BUCKET:
         raw = _load_call_schedule()
     else:
-        with _local_file_lock(CALL_SCHEDULE_PATH):
+        with local_file_lock(CALL_SCHEDULE_PATH):
             raw = _load_call_schedule_disk()
 
     result: Dict[str, Dict[str, Any]] = {}

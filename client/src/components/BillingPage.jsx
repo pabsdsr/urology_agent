@@ -1,17 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { billingService } from "../services/billingService.js";
-import { patientService } from "../services/patientService.js";
-import LocationCombobox, {
-  BILLING_LOCATIONS_STORAGE_KEY,
-  BILLING_PROVIDERS_STORAGE_KEY,
-} from "./LocationCombobox.jsx";
-import MedicalCodeCombobox from "./MedicalCodeCombobox.jsx";
-import {
-  ALLOWED_BILLING_IMAGE_TYPES,
-  MAX_BILLING_IMAGE_BYTES,
-  validateBillingForm,
-} from "../utils/billingFormValidation.js";
+import { usePatientSearch } from "../hooks/usePatientSearch.js";
+import BillingSubmissionFields from "./BillingSubmissionFields.jsx";
+import { validateBillingForm, validateBillingSheetFile, BILLING_IMAGE_ACCEPT } from "../utils/billingFormValidation.js";
+import { formToSubmissionPayload } from "../utils/billingSubmissionUtils.js";
 
 const EMPTY_FORM = {
   patientName: "",
@@ -19,62 +12,33 @@ const EMPTY_FORM = {
   location: "",
   dateOfService: "",
   providerName: "",
-  cptCode: "",
-  icd10Code: "",
+  cptCodes: [],
+  icd10Codes: [],
+  cptModifiers: [],
 };
 
 function BillingPage() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [selectedPatient, setSelectedPatient] = useState(null);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [searchResults, setSearchResults] = useState([]);
-  const [showResults, setShowResults] = useState(false);
-  const [searchLoading, setSearchLoading] = useState(false);
+  const {
+    searchTerm,
+    setSearchTerm,
+    results: searchResults,
+    setResults: setSearchResults,
+    showResults,
+    setShowResults,
+    loading: searchLoading,
+    searchRef,
+  } = usePatientSearch();
   const [billingSheetFile, setBillingSheetFile] = useState(null);
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [cameraPreferred, setCameraPreferred] = useState(true);
-  const searchRef = useRef(null);
 
   const supportsCapture = useMemo(() => {
     if (typeof navigator === "undefined") return false;
     return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-  }, []);
-
-  useEffect(() => {
-    const searchPatients = async () => {
-      if (searchTerm.trim().length < 2) {
-        setSearchResults([]);
-        setShowResults(false);
-        return;
-      }
-      setSearchLoading(true);
-      try {
-        const data = await patientService.searchPatients(searchTerm);
-        setSearchResults(data);
-        setShowResults(true);
-      } catch (searchError) {
-        console.error("Failed to search patients:", searchError);
-        setSearchResults([]);
-        setShowResults(false);
-      } finally {
-        setSearchLoading(false);
-      }
-    };
-
-    const timeout = setTimeout(searchPatients, 250);
-    return () => clearTimeout(timeout);
-  }, [searchTerm]);
-
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (searchRef.current && !searchRef.current.contains(event.target)) {
-        setShowResults(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
   const validate = () =>
@@ -112,14 +76,10 @@ function BillingPage() {
   const onFileChange = (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
-    if (!ALLOWED_BILLING_IMAGE_TYPES.includes(file.type)) {
+    const fileError = validateBillingSheetFile(file);
+    if (fileError) {
       setBillingSheetFile(null);
-      setError("Please upload a JPEG, PNG, WEBP, or HEIC image.");
-      return;
-    }
-    if (file.size > MAX_BILLING_IMAGE_BYTES) {
-      setBillingSheetFile(null);
-      setError("Billing sheet image must be 10MB or less.");
+      setError(fileError);
       return;
     }
     setBillingSheetFile(file);
@@ -138,12 +98,7 @@ function BillingPage() {
     setError("");
     setSubmitting(true);
     try {
-      const result = await billingService.submitBilling({
-        ...form,
-        cptCode: form.cptCode.trim().toUpperCase(),
-        icd10Code: form.icd10Code.trim().toUpperCase(),
-        billingSheetFile,
-      });
+      await billingService.submitBilling(formToSubmissionPayload(form, billingSheetFile));
       setSuccessMessage("Billing submission saved.");
       setForm(EMPTY_FORM);
       setSelectedPatient(null);
@@ -242,82 +197,11 @@ function BillingPage() {
             )}
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <label className="block">
-              <span className="text-sm font-medium text-gray-700">Patient Name</span>
-              <input
-                name="patientName"
-                value={form.patientName}
-                onChange={onInputChange}
-                className="mt-1 w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
-                required
-              />
-            </label>
-            <label className="block">
-              <span className="text-sm font-medium text-gray-700">Patient DOB</span>
-              <input
-                type="date"
-                name="patientDob"
-                value={form.patientDob}
-                onChange={onInputChange}
-                className="mt-1 w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
-                required
-              />
-            </label>
-            <div className="block">
-              <LocationCombobox
-                storageKey={BILLING_PROVIDERS_STORAGE_KEY}
-                label="Provider Name"
-                placeholder="Select or type a provider"
-                addOptionSuffix="provider"
-                value={form.providerName}
-                onChange={(providerName) =>
-                  setForm((prev) => ({ ...prev, providerName }))
-                }
-                required
-              />
-            </div>
-            <div className="block">
-              <LocationCombobox
-                storageKey={BILLING_LOCATIONS_STORAGE_KEY}
-                label="Location"
-                placeholder="Select or type a location"
-                value={form.location}
-                onChange={(location) => setForm((prev) => ({ ...prev, location }))}
-                required
-              />
-            </div>
-            <label className="block">
-              <span className="text-sm font-medium text-gray-700">Date Of Service</span>
-              <input
-                type="date"
-                name="dateOfService"
-                value={form.dateOfService}
-                onChange={onInputChange}
-                className="mt-1 w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
-                required
-              />
-            </label>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <MedicalCodeCombobox
-              codeType="cpt"
-              label="CPT Code"
-              placeholder="Select, search, or type a CPT code"
-              value={form.cptCode}
-              onChange={(cptCode) => setForm((prev) => ({ ...prev, cptCode }))}
-              required
-            />
-            <MedicalCodeCombobox
-              codeType="icd10"
-              label="ICD-10 Code"
-              placeholder="Select, search, or type an ICD-10 code"
-              value={form.icd10Code}
-              onChange={(icd10Code) => setForm((prev) => ({ ...prev, icd10Code }))}
-              required
-            />
-          </div>
+          <BillingSubmissionFields
+            form={form}
+            onInputChange={onInputChange}
+            setForm={setForm}
+          />
 
           <div>
             <div className="flex items-center justify-between">
@@ -334,7 +218,7 @@ function BillingPage() {
             </div>
             <input
               type="file"
-              accept="image/*"
+              accept={BILLING_IMAGE_ACCEPT}
               capture={supportsCapture && cameraPreferred ? "environment" : undefined}
               onChange={onFileChange}
               className="mt-1 block w-full text-sm text-gray-700 file:mr-3 file:px-3 file:py-2 file:border-0 file:rounded-md file:bg-teal-600 file:text-white hover:file:bg-teal-700"

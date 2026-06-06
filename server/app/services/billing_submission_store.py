@@ -4,15 +4,15 @@ Persist billing submissions (metadata index + sheet images).
 Local dev (no ``BILLING_S3_BUCKET``): ``app/data/billing_submissions.json`` and ``app/data/billing_sheets/``.
 Production: dedicated S3 bucket via ``BILLING_S3_BUCKET`` only (not the call-schedule bucket).
 """
-import contextlib
 import json
 import logging
 import mimetypes
 import os
-import sys
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional, Tuple
+
+from app.services.local_file_lock import local_file_lock
 
 logger = logging.getLogger(__name__)
 
@@ -33,38 +33,17 @@ _billing_s3_region = (os.getenv("BILLING_S3_REGION") or "us-west-2").strip()
 MAX_SUBMISSIONS = 5000
 
 _s3_client = None
-_s3_init_failed = False
 if BILLING_S3_BUCKET:
     try:
         import boto3  # type: ignore
 
         _s3_client = boto3.client("s3", region_name=_billing_s3_region)
     except Exception as e:
-        _s3_init_failed = True
         logger.error("Billing S3 client init failed bucket=%s: %s", BILLING_S3_BUCKET, e)
 
 
 def billing_uses_s3() -> bool:
     return bool(BILLING_S3_BUCKET and _s3_client)
-
-
-@contextlib.contextmanager
-def _local_file_lock(path: str):
-    if sys.platform == "win32":
-        yield
-        return
-    import fcntl
-
-    directory = os.path.dirname(path)
-    if directory:
-        os.makedirs(directory, exist_ok=True)
-    lock_path = path + ".lock"
-    with open(lock_path, "a+", encoding="utf-8") as lf:
-        fcntl.flock(lf.fileno(), fcntl.LOCK_EX)
-        try:
-            yield
-        finally:
-            fcntl.flock(lf.fileno(), fcntl.LOCK_UN)
 
 
 def _utc_now_iso() -> str:
@@ -75,6 +54,7 @@ def _normalize_entry(entry: Dict[str, Any]) -> Dict[str, Any]:
     """Ensure expected fields exist for API responses (older index rows may omit them)."""
     normalized = dict(entry)
     normalized["processed"] = bool(entry.get("processed"))
+    normalized.setdefault("cpt_modifiers", "")
     return normalized
 
 
@@ -189,6 +169,7 @@ def save_submission(
     provider_name: str,
     cpt_code: str,
     icd10_code: str,
+    cpt_modifiers: str = "",
     submitted_by: str,
     submitter_email: Optional[str],
     practice_url: str,
@@ -214,6 +195,7 @@ def save_submission(
         "provider_name": provider_name,
         "cpt_code": cpt_code,
         "icd10_code": icd10_code,
+        "cpt_modifiers": cpt_modifiers,
         "submitted_by": submitted_by,
         "submitter_email": submitter_email or "",
         "practice_url": practice_url,
@@ -228,7 +210,7 @@ def save_submission(
         entries.append(entry)
         _save_index_unlocked(entries)
     else:
-        with _local_file_lock(LOCAL_INDEX_PATH):
+        with local_file_lock(LOCAL_INDEX_PATH):
             entries = _load_index_unlocked()
             entries.append(entry)
             _save_index_unlocked(entries)
@@ -241,7 +223,7 @@ def list_submissions(limit: int = 100, offset: int = 0) -> List[Dict[str, Any]]:
     if billing_uses_s3():
         entries = _load_index_unlocked()
     else:
-        with _local_file_lock(LOCAL_INDEX_PATH):
+        with local_file_lock(LOCAL_INDEX_PATH):
             entries = list(_load_index_unlocked())
     rev = list(reversed(entries))
     return [_normalize_entry(e) for e in rev[offset : offset + limit]]
@@ -260,7 +242,7 @@ def get_submission(submission_id: str) -> Optional[Dict[str, Any]]:
     if billing_uses_s3():
         entries = _load_index_unlocked()
     else:
-        with _local_file_lock(LOCAL_INDEX_PATH):
+        with local_file_lock(LOCAL_INDEX_PATH):
             entries = _load_index_unlocked()
     idx = _find_submission_in_index(entries, submission_id)
     if idx is None:
@@ -282,7 +264,7 @@ def _update_index_entry(
         _save_index_unlocked(entries)
         return _normalize_entry(entries[idx])
 
-    with _local_file_lock(LOCAL_INDEX_PATH):
+    with local_file_lock(LOCAL_INDEX_PATH):
         entries = _load_index_unlocked()
         idx = _find_submission_in_index(entries, submission_id)
         if idx is None:
@@ -349,6 +331,7 @@ def _apply_submission_update(
     provider_name: str,
     cpt_code: str,
     icd10_code: str,
+    cpt_modifiers: str,
     billing_sheet_filename: Optional[str],
     billing_sheet_content_type: Optional[str],
     billing_sheet_bytes: Optional[bytes],
@@ -360,6 +343,7 @@ def _apply_submission_update(
     entry["provider_name"] = provider_name
     entry["cpt_code"] = cpt_code
     entry["icd10_code"] = icd10_code
+    entry["cpt_modifiers"] = cpt_modifiers
     entry["updated_at"] = _utc_now_iso()
 
     if billing_sheet_bytes:
@@ -385,6 +369,7 @@ def update_submission(
     provider_name: str,
     cpt_code: str,
     icd10_code: str,
+    cpt_modifiers: str = "",
     billing_sheet_filename: Optional[str] = None,
     billing_sheet_content_type: Optional[str] = None,
     billing_sheet_bytes: Optional[bytes] = None,
@@ -402,6 +387,7 @@ def update_submission(
             provider_name=provider_name,
             cpt_code=cpt_code,
             icd10_code=icd10_code,
+            cpt_modifiers=cpt_modifiers,
             billing_sheet_filename=billing_sheet_filename,
             billing_sheet_content_type=billing_sheet_content_type,
             billing_sheet_bytes=billing_sheet_bytes,
@@ -424,7 +410,7 @@ def delete_submission(submission_id: str) -> bool:
         _delete_sheet_file(entry, submission_id)
         _save_index_unlocked(entries)
     else:
-        with _local_file_lock(LOCAL_INDEX_PATH):
+        with local_file_lock(LOCAL_INDEX_PATH):
             entries = _load_index_unlocked()
             idx = _find_submission_in_index(entries, submission_id)
             if idx is None:

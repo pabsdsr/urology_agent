@@ -1,4 +1,6 @@
 [
+  {"code": "N10", "description": "Acute pyelonephritis"},
+  {"code": "N13.30", "description": "Unspecified hydronephrosis"},
   {"code": "N20.0", "description": "Calculus of kidney"},
   {"code": "N20.1", "description": "Calculus of ureter"},
   {"code": "N20.2", "description": "Calculus of kidney with calculus of ureter"},
@@ -53,6 +55,7 @@
   {"code": "N46.9", "description": "Male infertility, unspecified"},
   {"code": "N47.1", "description": "Phimosis"},
   {"code": "N48.0", "description": "Leukoplakia of penis"},
+  {"code": "N48.30", "description": "Priapism, unspecified"},
   {"code": "N48.5", "description": "Ulcer of penis"},
   {"code": "N48.6", "description": "Induration penis plastica (Peyronie disease)"},
   {"code": "N49.0", "description": "Inflammatory disorders of seminal vesicle"},

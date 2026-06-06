@@ -61,7 +61,6 @@ class QdrantVectorSearchTool(BaseTool):
     filter_by: Optional[str] = None
     filter_value: Optional[str] = None
     collection_name: str
-    hashed_collection_name: Optional[str] = None
     limit: Optional[int] = Field(default=5)
     score_threshold: float = Field(default=0.2)
     qdrant_url: str = Field(
@@ -185,22 +184,20 @@ class QdrantVectorSearchTool(BaseTool):
 
         delete_selector = FilterSelector(filter=delete_filter)
 
-        delete_response = self.client.delete(
-            collection_name = self.collection_name,
-            points_selector = delete_selector
+        self.client.delete(
+            collection_name=self.collection_name,
+            points_selector=delete_selector,
         )
 
     
     def delete_all_points(self):
-        from qdrant_client.http.models import Filter, FilterSelector
-
         delete_selector = FilterSelector(
             filter=Filter(must=[])
         )
 
-        response = self.client.delete(
+        self.client.delete(
             collection_name=self.collection_name,
-            points_selector=delete_selector
+            points_selector=delete_selector,
         )
 
     

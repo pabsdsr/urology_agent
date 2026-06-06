@@ -1,4 +1,4 @@
-from app.services.billing_codes_service import search_cpt_codes, search_icd10_codes
+from app.services.billing_codes_service import search_cpt_codes, search_cpt_modifiers, search_icd10_codes
 
 
 def test_search_cpt_by_code_prefix():
@@ -25,3 +25,8 @@ def test_search_empty_query_returns_limited_list():
 def test_search_no_match_returns_empty():
     results = search_cpt_codes("ZZZZNOTACODE", limit=10)
     assert results == []
+
+
+def test_search_modifiers_by_description():
+    results = search_cpt_modifiers("bilateral", limit=10)
+    assert any(item["code"] == "50" for item in results)

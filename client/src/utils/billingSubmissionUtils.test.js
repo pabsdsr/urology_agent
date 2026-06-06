@@ -1,16 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
-  canManageBillingSubmissions,
   lastUpdatedAt,
   submitterDisplay,
 } from "./billingSubmissionUtils.js";
 
 describe("billingSubmissionUtils", () => {
-  it("canManageBillingSubmissions matches admin email", () => {
-    expect(canManageBillingSubmissions({ username: "wkim@urologymedical.com" })).toBe(true);
-    expect(canManageBillingSubmissions({ username: "other@test.com" })).toBe(false);
-  });
-
   it("submitterDisplay prefers email over username", () => {
     expect(
       submitterDisplay({

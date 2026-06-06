@@ -1,54 +1,23 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { patientService } from "../services/patientService.js";
+import { usePatientSearch } from "../hooks/usePatientSearch.js";
 
 function MainApp() {
   const [selectedId, setSelectedId] = useState("");
   const [selectedPatient, setSelectedPatient] = useState(null);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [filteredPatients, setFilteredPatients] = useState([]);
-  const [showResults, setShowResults] = useState(false);
+  const {
+    searchTerm,
+    setSearchTerm,
+    results: filteredPatients,
+    showResults,
+    setShowResults,
+    searchRef,
+  } = usePatientSearch();
+
+  const messagesEndRef = useRef(null);
   const [messages, setMessages] = useState([]);
   const [inputMessage, setInputMessage] = useState("");
   const [loading, setLoading] = useState(false);
-  const searchRef = useRef(null);
-  const messagesEndRef = useRef(null);
-
-  // Server-side typeahead search for patients
-  useEffect(() => {
-    const fetchSearchedPatients = async () => {
-      if (searchTerm.trim().length < 2) {
-        setFilteredPatients([]);
-        setShowResults(false);
-        return;
-      }
-      try {
-        const data = await patientService.searchPatients(searchTerm);
-        setFilteredPatients(data);
-        setShowResults(true);
-      } catch (error) {
-        setFilteredPatients([]);
-        setShowResults(false);
-        console.error("Failed to search patients:", error);
-      }
-    };
-    // Debounce input
-    const timeout = setTimeout(fetchSearchedPatients, 250);
-    return () => clearTimeout(timeout);
-  }, [searchTerm]);
-
-  // Close search results when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (searchRef.current && !searchRef.current.contains(event.target)) {
-        setShowResults(false);
-      }
-    };
-
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, []);
 
   // Auto-scroll to bottom when new messages are added
   useEffect(() => {

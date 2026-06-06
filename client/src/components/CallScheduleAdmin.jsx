@@ -1,13 +1,17 @@
-import React, {
+import {
   useEffect,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
 } from "react";
-import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import { callScheduleService } from "../services/callScheduleService";
+import DropdownPortal from "./DropdownPortal.jsx";
+import {
+  CALL_SCHEDULE_LOCATIONS_STORAGE_KEY,
+  CALL_SCHEDULE_PRACTITIONERS_STORAGE_KEY,
+} from "./LocationCombobox.jsx";
+import { readJsonStorage, writeJsonStorage } from "../utils/jsonStorage.js";
 import {
   formatYMD,
   addDays,
@@ -15,41 +19,39 @@ import {
   getPacificDateString,
 } from "../utils/calendarPacific.js";
 
-function startOfWeek(dateStr) {
-  return startOfWeekSundayUTC(dateStr);
-}
-
 export default function CallScheduleAdmin() {
   const today = useMemo(() => getPacificDateString(), []);
 
-  const [customLocations, setCustomLocations] = useState(() => {
-    if (typeof window === "undefined") return [];
-    try {
-      const raw = window.localStorage.getItem("callScheduleCustomLocations");
-      const parsed = raw ? JSON.parse(raw) : [];
-      return Array.isArray(parsed) ? parsed : [];
-    } catch {
-      return [];
-    }
-  });
+  const [customLocations, setCustomLocations] = useState(() =>
+    readJsonStorage(CALL_SCHEDULE_LOCATIONS_STORAGE_KEY)
+  );
 
-  const [customPractitioners, setCustomPractitioners] = useState(() => {
-    if (typeof window === "undefined") return [];
-    try {
-      const raw = window.localStorage.getItem("callScheduleCustomPractitioners");
-      const parsed = raw ? JSON.parse(raw) : [];
-      return Array.isArray(parsed) ? parsed : [];
-    } catch {
-      return [];
-    }
-  });
+  const [customPractitioners, setCustomPractitioners] = useState(() =>
+    readJsonStorage(CALL_SCHEDULE_PRACTITIONERS_STORAGE_KEY)
+  );
+
+  const updateCustomLocations = (updater) => {
+    setCustomLocations((prev) => {
+      const next = updater(prev);
+      writeJsonStorage(CALL_SCHEDULE_LOCATIONS_STORAGE_KEY, next);
+      return next;
+    });
+  };
+
+  const updateCustomPractitioners = (updater) => {
+    setCustomPractitioners((prev) => {
+      const next = updater(prev);
+      writeJsonStorage(CALL_SCHEDULE_PRACTITIONERS_STORAGE_KEY, next);
+      return next;
+    });
+  };
 
   const [openLocationPicker, setOpenLocationPicker] = useState(null); // { rowIdx, podKey } | null
   const [openPractitionerPicker, setOpenPractitionerPicker] = useState(null); // { rowIdx, podKey } | null
   const containerRef = useRef(null);
   const fileInputRef = useRef(null);
 
-  const [weekStart, setWeekStart] = useState(startOfWeek(today));
+  const [weekStart, setWeekStart] = useState(startOfWeekSundayUTC(today));
   const [rows, setRows] = useState([]);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
@@ -86,54 +88,9 @@ export default function CallScheduleAdmin() {
     };
   }, []);
 
-  const DropdownPortal = ({ open, anchorEl, children }) => {
-    const [style, setStyle] = useState(null);
-
-    useLayoutEffect(() => {
-      if (!open || !anchorEl) return;
-
-      const update = () => {
-        const rect = anchorEl.getBoundingClientRect();
-        const MENU_MAX_HEIGHT_PX = 192; // Tailwind max-h-48
-        const GAP_PX = 4;
-        const availableBelow = Math.max(80, window.innerHeight - rect.bottom - GAP_PX - 8);
-        const maxHeight = Math.min(MENU_MAX_HEIGHT_PX, availableBelow);
-
-        const nextStyle = {
-          position: "fixed",
-          top: rect.bottom + GAP_PX,
-          left: rect.left,
-          width: rect.width,
-          maxHeight,
-          overflow: "auto",
-        };
-
-        setStyle(nextStyle);
-      };
-
-      update();
-      window.addEventListener("resize", update);
-      window.addEventListener("scroll", update, true);
-      return () => {
-        window.removeEventListener("resize", update);
-        window.removeEventListener("scroll", update, true);
-      };
-    }, [open, anchorEl]);
-
-    if (!open || !anchorEl || !style) return null;
-
-    return createPortal(
-      <div data-dropdown-root="true" style={style} className="z-[99999]">
-        {children}
-      </div>,
-      document.body
-    );
-  };
-
   const handleWeekStartChange = (val) => {
     if (!val) return;
-    const start = startOfWeek(val);
-    setWeekStart(start);
+    setWeekStart(startOfWeekSundayUTC(val));
   };
 
   // Load existing schedule for the selected week and populate rows.
@@ -631,14 +588,14 @@ export default function CallScheduleAdmin() {
           <DropdownPortal
             open={!!openLocationPicker}
             anchorEl={openLocationPicker?.anchorEl}
+            menuMaxHeightPx={192}
           >
             <div className="rounded-md border border-gray-200 bg-white shadow-lg text-xs">
-              {allLocationOptions.map((opt) => {
-                return (
+              {allLocationOptions.map((opt) => (
+                <div key={opt} className="flex items-center hover:bg-gray-100">
                   <button
-                    key={opt}
                     type="button"
-                    className="block w-full text-left px-2 py-1 hover:bg-gray-100"
+                    className="flex-1 text-left px-2 py-1"
                     onClick={() => {
                       if (!openLocationPicker) return;
                       handleEntryChange(
@@ -651,32 +608,20 @@ export default function CallScheduleAdmin() {
                       setOpenLocationPicker(null);
                     }}
                   >
-                    <div className="flex items-center justify-between gap-2">
-                      <span>{opt}</span>
-                      <button
-                        type="button"
-                        className="text-gray-400 hover:text-red-500 text-[10px] px-1"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setCustomLocations((prev) => {
-                            const next = prev.filter((x) => x !== opt);
-                            if (typeof window !== "undefined") {
-                              window.localStorage.setItem(
-                                "callScheduleCustomLocations",
-                                JSON.stringify(next)
-                              );
-                            }
-                            return next;
-                          });
-                        }}
-                        aria-label={`Delete ${opt} from locations`}
-                      >
-                        ×
-                      </button>
-                    </div>
+                    {opt}
                   </button>
-                );
-              })}
+                  <button
+                    type="button"
+                    className="shrink-0 text-gray-400 hover:text-red-500 text-[10px] px-2 py-1"
+                    onClick={() =>
+                      updateCustomLocations((prev) => prev.filter((x) => x !== opt))
+                    }
+                    aria-label={`Delete ${opt} from locations`}
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
               <button
                 type="button"
                 className="block w-full text-left px-2 py-1 border-t border-gray-200 text-teal-700 hover:bg-gray-50"
@@ -688,16 +633,7 @@ export default function CallScheduleAdmin() {
                     ]?.[openLocationPicker.entryIdx]?.location || ""
                   ).trim();
                   if (!value) return;
-                  setCustomLocations((prev) => {
-                    const next = Array.from(new Set([...prev, value]));
-                    if (typeof window !== "undefined") {
-                      window.localStorage.setItem(
-                        "callScheduleCustomLocations",
-                        JSON.stringify(next)
-                      );
-                    }
-                    return next;
-                  });
+                  updateCustomLocations((prev) => Array.from(new Set([...prev, value])));
                   setOpenLocationPicker(null);
                 }}
               >
@@ -715,49 +651,39 @@ export default function CallScheduleAdmin() {
           <DropdownPortal
             open={!!openPractitionerPicker}
             anchorEl={openPractitionerPicker?.anchorEl}
+            menuMaxHeightPx={192}
           >
             <div className="rounded-md border border-gray-200 bg-white shadow-lg text-xs">
               {allPractitionerOptions.map((opt) => (
-                <button
-                  key={opt}
-                  type="button"
-                  className="block w-full text-left px-2 py-1 hover:bg-gray-100"
-                  onClick={() => {
-                    if (!openPractitionerPicker) return;
-                    handleEntryChange(
-                      openPractitionerPicker.rowIdx,
-                      openPractitionerPicker.podKey,
-                      openPractitionerPicker.entryIdx,
-                      "practitioner",
-                      opt
-                    );
-                    setOpenPractitionerPicker(null);
-                  }}
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <span>{opt}</span>
-                    <button
-                      type="button"
-                      className="text-gray-400 hover:text-red-500 text-[10px] px-1"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setCustomPractitioners((prev) => {
-                          const next = prev.filter((x) => x !== opt);
-                          if (typeof window !== "undefined") {
-                            window.localStorage.setItem(
-                              "callScheduleCustomPractitioners",
-                              JSON.stringify(next)
-                            );
-                          }
-                          return next;
-                        });
-                      }}
-                      aria-label={`Delete ${opt} from practitioners`}
-                    >
-                      ×
-                    </button>
-                  </div>
-                </button>
+                <div key={opt} className="flex items-center hover:bg-gray-100">
+                  <button
+                    type="button"
+                    className="flex-1 text-left px-2 py-1"
+                    onClick={() => {
+                      if (!openPractitionerPicker) return;
+                      handleEntryChange(
+                        openPractitionerPicker.rowIdx,
+                        openPractitionerPicker.podKey,
+                        openPractitionerPicker.entryIdx,
+                        "practitioner",
+                        opt
+                      );
+                      setOpenPractitionerPicker(null);
+                    }}
+                  >
+                    {opt}
+                  </button>
+                  <button
+                    type="button"
+                    className="shrink-0 text-gray-400 hover:text-red-500 text-[10px] px-2 py-1"
+                    onClick={() =>
+                      updateCustomPractitioners((prev) => prev.filter((x) => x !== opt))
+                    }
+                    aria-label={`Delete ${opt} from practitioners`}
+                  >
+                    ×
+                  </button>
+                </div>
               ))}
               <button
                 type="button"
@@ -770,16 +696,7 @@ export default function CallScheduleAdmin() {
                     ]?.[openPractitionerPicker.entryIdx]?.practitioner || ""
                   ).trim();
                   if (!value) return;
-                  setCustomPractitioners((prev) => {
-                    const next = Array.from(new Set([...prev, value]));
-                    if (typeof window !== "undefined") {
-                      window.localStorage.setItem(
-                        "callScheduleCustomPractitioners",
-                        JSON.stringify(next)
-                      );
-                    }
-                    return next;
-                  });
+                  updateCustomPractitioners((prev) => Array.from(new Set([...prev, value])));
                   setOpenPractitionerPicker(null);
                 }}
               >

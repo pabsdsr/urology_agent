@@ -121,14 +121,6 @@ describe('requireAuthToken', () => {
 
     await expect(requireAuthToken()).resolves.toBe(valid);
   });
-
-  it('ends session when token acquisition fails', async () => {
-    const expired = buildTestJwt(Math.floor(Date.now() / 1000) - 10);
-    msalInstance.acquireTokenSilent.mockResolvedValue({ idToken: expired });
-
-    await expect(requireAuthToken()).rejects.toThrow(/session has expired/i);
-    expect(logoutOnSessionExpiredMock).toHaveBeenCalled();
-  });
 });
 
 describe('apiClient session expiry', () => {

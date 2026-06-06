@@ -15,7 +15,6 @@ export const patientService = {
   searchPatients: async (input) => {
     if (!input || input.trim() === "") return [];
     const parts = input.trim().split(/\s+/);
-    let params = "";
     if (parts.length === 1) {
       // Try as given and as family, merge results client-side
       const [single] = parts;
@@ -35,7 +34,7 @@ export const patientService = {
       // Assume first is given, last is family
       const given = parts.slice(0, -1).join(" ");
       const family = parts[parts.length - 1];
-      params = `given=${encodeURIComponent(given)}&family=${encodeURIComponent(family)}`;
+      const params = `given=${encodeURIComponent(given)}&family=${encodeURIComponent(family)}`;
       const response = await apiClient.get(`/patients?${params}`);
       return response.data;
     }

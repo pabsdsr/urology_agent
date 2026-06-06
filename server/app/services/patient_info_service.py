@@ -3,7 +3,6 @@ import asyncio
 import os
 import json
 import hashlib
-import uuid
 import xmltodict
 import copy
 from io import BytesIO
@@ -273,7 +272,7 @@ async def get_patient_info(id: str, modmed_token: str = None, practice_url: str 
             qdrant_api_key=os.getenv("QDRANT_API_KEY")
         )
 
-        user_qdrant_tool.delete_all_points()
+        # user_qdrant_tool.delete_all_points()
         
         all_sections_to_embed = []
 

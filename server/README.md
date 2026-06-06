@@ -23,7 +23,7 @@ uv run --project server pytest
 
 ## Billing submissions storage
 
-Billing uses a **dedicated S3 bucket** (separate from call schedule). The inbox list and billing sheet images both live in that bucket.
+Billing uses a **dedicated S3 bucket** (separate from call schedule). Submissions are stored for in-app review; **no outbound email is sent**. The inbox list and billing sheet images both live in that bucket.
 
 ### Environment variables
 
@@ -56,10 +56,11 @@ s3://your-billing-bucket/
 
 ### Curated CPT / ICD-10 codes
 
-Urology-focused code lists ship with the API (`app/data/billing_cpt_codes.json`, `billing_icd10_codes.json`). Search endpoints:
+Urology-focused code lists ship with the API (`app/data/billing_cpt_codes.json`, `billing_icd10_codes.json`, `billing_cpt_modifiers.json`). Search endpoints:
 
 - `GET /billing/codes/cpt?q=...`
 - `GET /billing/codes/icd10?q=...`
+- `GET /billing/codes/modifiers?q=...`
 
 No separate bucket is required for codes.
 

@@ -1,7 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 import httpx
-import os
-import asyncio
 from app.routes.auth import require_modmed_session
 from app.models import SessionUser
 
@@ -62,5 +60,5 @@ async def search_patients(
             return patients
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         raise HTTPException(status_code=500, detail="Failed to fetch patient list")

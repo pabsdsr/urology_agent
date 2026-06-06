@@ -5,12 +5,12 @@ Env:
   CALL_SCHEDULE_S3_BUCKET — if set, store log in S3
   CALL_SCHEDULE_CHANGELOG_S3_KEY — object key (default ``call_schedule_changelog.json``)
 """
-import contextlib
 import json
 import logging
 import os
-import sys
 from typing import Any, Dict, List
+
+from app.services.local_file_lock import local_file_lock
 
 logger = logging.getLogger(__name__)
 
@@ -32,25 +32,6 @@ if CALL_SCHEDULE_S3_BUCKET:
         _s3_client = boto3.client("s3")
     except Exception:
         _s3_client = None
-
-
-@contextlib.contextmanager
-def _local_file_lock(path: str):
-    if sys.platform == "win32":
-        yield
-        return
-    import fcntl
-
-    directory = os.path.dirname(path)
-    if directory:
-        os.makedirs(directory, exist_ok=True)
-    lock_path = path + ".lock"
-    with open(lock_path, "a+", encoding="utf-8") as lf:
-        fcntl.flock(lf.fileno(), fcntl.LOCK_EX)
-        try:
-            yield
-        finally:
-            fcntl.flock(lf.fileno(), fcntl.LOCK_UN)
 
 
 def _load_changelog_from_s3() -> List[Dict[str, Any]]:
@@ -121,7 +102,7 @@ def append_changelog_entry(entry: Dict[str, Any]) -> None:
                 entries = entries[-MAX_CHANGELOG_ENTRIES:]
             _save_changelog_to_s3(entries)
         else:
-            with _local_file_lock(CALL_SCHEDULE_CHANGELOG_PATH):
+            with local_file_lock(CALL_SCHEDULE_CHANGELOG_PATH):
                 entries = list(load_changelog())
                 entries.append(entry)
                 if len(entries) > MAX_CHANGELOG_ENTRIES:
@@ -138,7 +119,7 @@ def get_changelog_entries(limit: int = 100, offset: int = 0) -> List[Dict[str, A
     if _s3_client and CALL_SCHEDULE_S3_BUCKET:
         entries = load_changelog()
     else:
-        with _local_file_lock(CALL_SCHEDULE_CHANGELOG_PATH):
+        with local_file_lock(CALL_SCHEDULE_CHANGELOG_PATH):
             entries = list(load_changelog())
     rev = list(reversed(entries))
     return rev[offset : offset + limit]

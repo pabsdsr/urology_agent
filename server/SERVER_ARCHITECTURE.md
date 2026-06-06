@@ -67,6 +67,7 @@ server/
 │   ├── data/                      # Local JSON (dev / bundled reference data)
 │   │   ├── billing_cpt_codes.json
 │   │   ├── billing_icd10_codes.json
+│   │   ├── billing_cpt_modifiers.json
 │   │   └── (call schedule + billing index when not using S3)
 │   │
 │   ├── services/                  # Business logic
@@ -281,7 +282,7 @@ clinical_query_task:
 #### **Billing Routes** (`routes/billing.py`)
 
 **Endpoints**:
-- `POST /billing/submit`: Multipart billing sheet + patient/location/CPT/ICD metadata (any authenticated user)
+- `POST /billing/submit`: Multipart billing sheet + patient/location/CPT/ICD/modifier metadata (any authenticated user). Stored for in-app review; **no outbound email**.
 - `GET /billing/submissions`: Paginated list (`limit`, `offset`), newest first
 - `GET /billing/submissions/{id}/sheet`: Billing sheet image bytes (inline `Content-Disposition` safe for Unicode filenames)
 - `PATCH /billing/submissions/{id}/processed`: `{ "processed": true | false }`
@@ -289,12 +290,13 @@ clinical_query_task:
 - `DELETE /billing/submissions/{id}`: Delete submission + sheet (same admin email)
 - `GET /billing/codes/cpt?q=...`: Search curated CPT list
 - `GET /billing/codes/icd10?q=...`: Search curated ICD-10 list
+- `GET /billing/codes/modifiers?q=...`: Search curated CPT modifiers
 
 **Persistence (billing)**:
 - `billing_submission_store.py` — index JSON + per-submission sheet images.
 - **Local dev** (no `BILLING_S3_BUCKET`): `app/data/billing_submissions.json` + `app/data/billing_sheets/`.
 - **Production**: dedicated bucket only (`BILLING_S3_BUCKET`, default region `us-west-2`) — **not** the call-schedule bucket.
-- Curated codes ship in `app/data/billing_cpt_codes.json` and `billing_icd10_codes.json` (redeploy to update lists).
+- Curated codes ship in `app/data/billing_cpt_codes.json`, `billing_icd10_codes.json`, and `billing_cpt_modifiers.json` (redeploy to update lists).
 
 #### **Crew Routes** (`routes/run_crew.py`)
 

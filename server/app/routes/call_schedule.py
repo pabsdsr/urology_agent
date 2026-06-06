@@ -1,10 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
 from pydantic import BaseModel, Field
 import asyncio
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from app.models import SessionUser
-from app.routes.auth import get_current_user, require_admin, require_modmed_session
+from app.routes.auth import require_admin, require_modmed_session
 from app.services.call_schedule_service import update_week, get_call_schedule_range
 from app.services.call_schedule_import import parse_call_schedule_upload
 from app.services.call_schedule_changelog import get_changelog_entries
@@ -14,18 +14,6 @@ router = APIRouter(
     prefix="/call-schedule",
     tags=["call-schedule"],
 )
-
-
-class CallScheduleEntry(BaseModel):
-    location: str = Field("", description="Location name or code")
-    practitioner: str = Field("", description="On-call practitioner display name")
-
-
-class CallScheduleDay(BaseModel):
-    date: str = Field(..., description="ISO date (YYYY-MM-DD)")
-    north: List[CallScheduleEntry] = Field(default_factory=list, description="Entries for North Pod")
-    central: List[CallScheduleEntry] = Field(default_factory=list, description="Entries for Central Pod")
-    south: List[CallScheduleEntry] = Field(default_factory=list, description="Entries for South Pod")
 
 
 class CallScheduleWeekRequest(BaseModel):
@@ -162,8 +150,6 @@ async def upload_call_schedule(
             timeout=UPLOAD_PARSE_SAVE_TIMEOUT_SECONDS,
         )
         return result
-    except HTTPException:
-        raise
     except asyncio.TimeoutError:
         raise HTTPException(
             status_code=408,

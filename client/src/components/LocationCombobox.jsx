@@ -1,73 +1,25 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { useEffect, useMemo, useState } from "react";
+import DropdownPortal from "./DropdownPortal.jsx";
+import { readJsonStorage, writeJsonStorage } from "../utils/jsonStorage.js";
 
 export const CALL_SCHEDULE_LOCATIONS_STORAGE_KEY = "callScheduleCustomLocations";
+export const CALL_SCHEDULE_PRACTITIONERS_STORAGE_KEY = "callScheduleCustomPractitioners";
 export const BILLING_LOCATIONS_STORAGE_KEY = "billingCustomLocations";
 export const BILLING_PROVIDERS_STORAGE_KEY = "billingCustomProviders";
 
 function loadCustomLocations(storageKey) {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = window.localStorage.getItem(storageKey);
-    const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
+  return readJsonStorage(storageKey);
 }
 
 function saveCustomLocations(storageKey, locations) {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(storageKey, JSON.stringify(locations));
-}
-
-function DropdownPortal({ open, anchorEl, children }) {
-  const [style, setStyle] = useState(null);
-
-  useLayoutEffect(() => {
-    if (!open || !anchorEl) return;
-
-    const update = () => {
-      const rect = anchorEl.getBoundingClientRect();
-      const menuMaxHeightPx = 192;
-      const gapPx = 4;
-      const availableBelow = Math.max(80, window.innerHeight - rect.bottom - gapPx - 8);
-      const maxHeight = Math.min(menuMaxHeightPx, availableBelow);
-
-      setStyle({
-        position: "fixed",
-        top: rect.bottom + gapPx,
-        left: rect.left,
-        width: rect.width,
-        maxHeight,
-        overflow: "auto",
-      });
-    };
-
-    update();
-    window.addEventListener("resize", update);
-    window.addEventListener("scroll", update, true);
-    return () => {
-      window.removeEventListener("resize", update);
-      window.removeEventListener("scroll", update, true);
-    };
-  }, [open, anchorEl]);
-
-  if (!open || !anchorEl || !style) return null;
-
-  return createPortal(
-    <div data-dropdown-root="true" style={style} className="z-[99999]">
-      {children}
-    </div>,
-    document.body
-  );
+  writeJsonStorage(storageKey, locations);
 }
 
 /**
  * Location text field with dropdown of saved custom locations.
  */
 export default function LocationCombobox({
-  storageKey = CALL_SCHEDULE_LOCATIONS_STORAGE_KEY,
+  storageKey,
   value,
   onChange,
   label = "Location",
@@ -80,7 +32,6 @@ export default function LocationCombobox({
     loadCustomLocations(storageKey)
   );
   const [openPicker, setOpenPicker] = useState(null);
-  const rootRef = useRef(null);
 
   useEffect(() => {
     const handleDocumentClick = (event) => {
@@ -126,7 +77,7 @@ export default function LocationCombobox({
   };
 
   return (
-    <div ref={rootRef} data-dropdown-root="true">
+    <div data-dropdown-root="true">
       <span className="text-sm font-medium text-gray-700">{label}</span>
       <div className="relative mt-1">
         <input
@@ -156,33 +107,32 @@ export default function LocationCombobox({
         </button>
       </div>
 
-      <DropdownPortal open={!!openPicker} anchorEl={openPicker?.anchorEl}>
+      <DropdownPortal open={!!openPicker} anchorEl={openPicker?.anchorEl} menuMaxHeightPx={192}>
         <div className="rounded-md border border-gray-200 bg-white shadow-lg text-sm">
           {allLocationOptions.map((opt) => (
-            <button
+            <div
               key={opt}
-              type="button"
-              className="block w-full text-left px-3 py-2 hover:bg-gray-100"
-              onClick={() => {
-                onChange(opt);
-                setOpenPicker(null);
-              }}
+              className="flex items-center hover:bg-gray-100"
             >
-              <div className="flex items-center justify-between gap-2">
-                <span>{opt}</span>
-                <button
-                  type="button"
-                  className="text-gray-400 hover:text-red-500 text-xs px-1"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    removeLocation(opt);
-                  }}
-                  aria-label={`Delete ${opt} from locations`}
-                >
-                  ×
-                </button>
-              </div>
-            </button>
+              <button
+                type="button"
+                className="flex-1 text-left px-3 py-2"
+                onClick={() => {
+                  onChange(opt);
+                  setOpenPicker(null);
+                }}
+              >
+                {opt}
+              </button>
+              <button
+                type="button"
+                className="shrink-0 text-gray-400 hover:text-red-500 text-xs px-2 py-2"
+                onClick={() => removeLocation(opt)}
+                aria-label={`Delete ${opt} from locations`}
+              >
+                ×
+              </button>
+            </div>
           ))}
           <button
             type="button"

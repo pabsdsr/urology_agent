@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import apiClient from "../services/apiClient.js";
+import { billingService } from "../services/billingService.js";
 
 function BillingSheetImage({ submissionId, reloadKey = 0 }) {
   const [src, setSrc] = useState(null);
@@ -13,10 +14,9 @@ function BillingSheetImage({ submissionId, reloadKey = 0 }) {
       setError("");
       setSrc(null);
       try {
-        const response = await apiClient.get(
-          `/billing/submissions/${submissionId}/sheet`,
-          { responseType: "blob" }
-        );
+        const response = await apiClient.get(billingService.billingSheetUrl(submissionId), {
+          responseType: "blob",
+        });
         if (!response.data || response.data.size === 0) {
           throw new Error("Billing sheet image is empty.");
         }

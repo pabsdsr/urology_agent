@@ -11,7 +11,6 @@ import os
 class PatchedBedrockLLM(BaseLLM):
     def call(self, prompt: str, **kwargs):
         if isinstance(prompt, str):
-            prompt_text = prompt
             messages = [{"role": "user", "content": prompt}]
         elif isinstance(prompt, list):
             prompt_text = "\n\n".join(

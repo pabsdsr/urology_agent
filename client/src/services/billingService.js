@@ -1,18 +1,27 @@
 import apiClient from "./apiClient.js";
 
+function buildBillingFormData(payload, { includeSheet = true } = {}) {
+  const formData = new FormData();
+  formData.append("patient_name", payload.patientName);
+  formData.append("patient_dob", payload.patientDob);
+  formData.append("location", payload.location);
+  formData.append("date_of_service", payload.dateOfService || "");
+  formData.append("provider_name", payload.providerName || "");
+  formData.append("cpt_code", payload.cptCode);
+  formData.append("icd10_code", payload.icd10Code);
+  formData.append("cpt_modifiers", payload.cptModifiers || "");
+  if (includeSheet && payload.billingSheetFile) {
+    formData.append("billing_sheet", payload.billingSheetFile);
+  }
+  return formData;
+}
+
 export const billingService = {
   submitBilling: async (payload) => {
-    const formData = new FormData();
-    formData.append("patient_name", payload.patientName);
-    formData.append("patient_dob", payload.patientDob);
-    formData.append("location", payload.location);
-    formData.append("date_of_service", payload.dateOfService || "");
-    formData.append("provider_name", payload.providerName || "");
-    formData.append("cpt_code", payload.cptCode);
-    formData.append("icd10_code", payload.icd10Code);
-    formData.append("billing_sheet", payload.billingSheetFile);
-
-    const response = await apiClient.post("/billing/submit", formData);
+    const response = await apiClient.post(
+      "/billing/submit",
+      buildBillingFormData(payload, { includeSheet: true })
+    );
     return response.data;
   },
 
@@ -26,19 +35,10 @@ export const billingService = {
   billingSheetUrl: (submissionId) => `/billing/submissions/${submissionId}/sheet`,
 
   updateSubmission: async (submissionId, payload) => {
-    const formData = new FormData();
-    formData.append("patient_name", payload.patientName);
-    formData.append("patient_dob", payload.patientDob);
-    formData.append("location", payload.location);
-    formData.append("date_of_service", payload.dateOfService || "");
-    formData.append("provider_name", payload.providerName || "");
-    formData.append("cpt_code", payload.cptCode);
-    formData.append("icd10_code", payload.icd10Code);
-    if (payload.billingSheetFile) {
-      formData.append("billing_sheet", payload.billingSheetFile);
-    }
-
-    const response = await apiClient.patch(`/billing/submissions/${submissionId}`, formData);
+    const response = await apiClient.patch(
+      `/billing/submissions/${submissionId}`,
+      buildBillingFormData(payload, { includeSheet: Boolean(payload.billingSheetFile) })
+    );
     return response.data;
   },
 

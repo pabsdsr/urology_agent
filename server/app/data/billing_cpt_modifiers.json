@@ -1,0 +1,7 @@
+[
+  {"code": "25", "description": "Significant, separately identifiable E/M service"},
+  {"code": "50", "description": "Bilateral procedure"},
+  {"code": "57", "description": "Decision for surgery with 90-day global period"},
+  {"code": "78", "description": "Return to the O.R. for related procedure during post-op period"},
+  {"code": "79", "description": "Unrelated procedure or service during post-op period"}
+]

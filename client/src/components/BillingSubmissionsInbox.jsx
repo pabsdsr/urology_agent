@@ -1,19 +1,14 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { useAuth } from "../context/AuthContext.jsx";
 import { billingService } from "../services/billingService.js";
 import BillingProcessedToggle from "./BillingProcessedToggle.jsx";
 import BillingSubmissionModal from "./BillingSubmissionModal.jsx";
 import { formatPacificDateTime } from "../utils/calendarPacific.js";
+import { formatBillingModifierDisplay } from "../utils/billingFormValidation.js";
 import { downloadBillingSubmissionsCsv } from "../utils/billingSubmissionsCsv.js";
-import {
-  canManageBillingSubmissions,
-  submitterDisplay,
-} from "../utils/billingSubmissionUtils.js";
+import { submitterDisplay } from "../utils/billingSubmissionUtils.js";
 
 function BillingSubmissionsInbox() {
-  const { user } = useAuth();
-  const showManageActions = canManageBillingSubmissions(user);
   const [submissions, setSubmissions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -154,12 +149,11 @@ function BillingSubmissionsInbox() {
                   <th className="px-3 py-2 font-medium">Location</th>
                   <th className="px-3 py-2 font-medium">DOS</th>
                   <th className="px-3 py-2 font-medium">CPT</th>
+                  <th className="px-3 py-2 font-medium">Modifiers</th>
                   <th className="px-3 py-2 font-medium">ICD-10</th>
                   <th className="px-3 py-2 font-medium">Processed</th>
                   <th className="px-3 py-2 font-medium">By</th>
-                  {showManageActions && (
-                    <th className="px-3 py-2 font-medium w-28"> </th>
-                  )}
+                  <th className="px-3 py-2 font-medium w-28"> </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -178,6 +172,9 @@ function BillingSubmissionsInbox() {
                     <td className="px-3 py-2">{row.location || "—"}</td>
                     <td className="px-3 py-2 whitespace-nowrap">{row.date_of_service || "—"}</td>
                     <td className="px-3 py-2 font-mono">{row.cpt_code}</td>
+                    <td className="px-3 py-2 font-mono">
+                      {formatBillingModifierDisplay(row.cpt_modifiers) || "—"}
+                    </td>
                     <td className="px-3 py-2 font-mono">{row.icd10_code}</td>
                     <td className="px-3 py-2 whitespace-nowrap">
                       <BillingProcessedToggle
@@ -190,8 +187,7 @@ function BillingSubmissionsInbox() {
                     <td className="px-3 py-2 text-gray-600">
                       {submitterDisplay(row) || "—"}
                     </td>
-                    {showManageActions && (
-                      <td className="px-3 py-2 whitespace-nowrap space-x-3">
+                    <td className="px-3 py-2 whitespace-nowrap space-x-3">
                         <button
                           type="button"
                           onClick={(event) => {
@@ -212,10 +208,9 @@ function BillingSubmissionsInbox() {
                           disabled={deletingId === row.id || savingId === row.id}
                           className="text-red-600 hover:text-red-800 font-medium disabled:text-gray-400 disabled:cursor-not-allowed"
                         >
-                          {deletingId === row.id ? "Deleting..." : "Delete"}
-                        </button>
-                      </td>
-                    )}
+                        {deletingId === row.id ? "Deleting..." : "Delete"}
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -236,7 +231,6 @@ function BillingSubmissionsInbox() {
           onUpdated={handleUpdate}
           onProcessedChange={handleProcessedChange}
           processingProcessed={processingId === selectedSubmission.id}
-          showManageActions={showManageActions}
           deleting={deletingId === selectedSubmission.id}
           saving={savingId === selectedSubmission.id}
         />

@@ -14,8 +14,6 @@ import {
   throwExpiredSession,
 } from './sessionLogout.js';
 
-export { SESSION_EXPIRED_MESSAGE } from './sessionLogout.js';
-
 function tokenFromAuthResult(response) {
   const token = response?.idToken || response?.accessToken || null;
   if (!token || isTokenExpired(token)) {

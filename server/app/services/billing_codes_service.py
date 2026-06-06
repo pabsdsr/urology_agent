@@ -1,14 +1,16 @@
 """Curated urology CPT and ICD-10 codes for billing form search."""
 import json
 import os
-from typing import Any, Dict, List
+from typing import Dict, List
 
 _DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data")
 _CPT_PATH = os.path.join(_DATA_DIR, "billing_cpt_codes.json")
 _ICD10_PATH = os.path.join(_DATA_DIR, "billing_icd10_codes.json")
+_MODIFIER_PATH = os.path.join(_DATA_DIR, "billing_cpt_modifiers.json")
 
 _cpt_cache: List[Dict[str, str]] | None = None
 _icd10_cache: List[Dict[str, str]] | None = None
+_modifier_cache: List[Dict[str, str]] | None = None
 
 
 def _load_codes(path: str) -> List[Dict[str, str]]:
@@ -37,6 +39,13 @@ def _icd10_codes() -> List[Dict[str, str]]:
     return _icd10_cache
 
 
+def _cpt_modifiers() -> List[Dict[str, str]]:
+    global _modifier_cache
+    if _modifier_cache is None:
+        _modifier_cache = _load_codes(_MODIFIER_PATH)
+    return _modifier_cache
+
+
 def search_codes(codes: List[Dict[str, str]], query: str, *, limit: int) -> List[Dict[str, str]]:
     q = (query or "").strip().lower()
     if not q:
@@ -61,3 +70,8 @@ def search_cpt_codes(query: str = "", limit: int = 20) -> List[Dict[str, str]]:
 def search_icd10_codes(query: str = "", limit: int = 20) -> List[Dict[str, str]]:
     limit = max(1, min(limit, 50))
     return search_codes(_icd10_codes(), query, limit=limit)
+
+
+def search_cpt_modifiers(query: str = "", limit: int = 20) -> List[Dict[str, str]]:
+    limit = max(1, min(limit, 50))
+    return search_codes(_cpt_modifiers(), query, limit=limit)

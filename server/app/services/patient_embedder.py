@@ -2,7 +2,7 @@ import os
 import uuid
 import json
 import logging
-from typing import Dict, List, Any
+import time
 import boto3
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.docstore.document import Document
@@ -51,9 +51,6 @@ class PatientDataEmbedder:
         )
 
         self.embedding_model = "amazon.titan-embed-text-v2:0"
-        self.vector_size = 1024
-        # Debug: Track number of embedding requests sent
-        self.request_count = 0
 
     def _json_to_text(self, patient_data):
         """
@@ -113,8 +110,6 @@ class PatientDataEmbedder:
                 "dimensions": 1024,  
                 "normalize": True  
             }
-            # Debug: Increment and log request count
-            self.request_count += 1
 
             response = self.bedrock_client.invoke_model(
                 modelId=self.embedding_model,
@@ -133,38 +128,17 @@ class PatientDataEmbedder:
             return []
 
     def chunk_and_embed(self, patient_data, patient_section, patient_id, patient_hash, collection_name: str, max_retries=5):
-        """Parallel chunking and embedding process with global rate limiting and retry logic"""
-        import time
-        import threading
-        # Use practice-specific collection name (required)
+        """Parallel chunking and embedding process with retry logic."""
         target_collection = collection_name
         chunks = self._chunk(patient_data)
         points = []
-
-        # Maximize parallelization (up to 13 workers, adjust as needed for your quota)
         max_workers = 13
-        # Track tokens sent in the past minute (thread-safe)
-        import threading
-        token_lock = threading.Lock()
-        token_timestamps = []  # List of (timestamp, token_count)
-
-        # No global rate or token limiting for fastest throughput
 
         def embed_with_retry(chunk, i):
             retries = 0
-            delay_seconds = 0.1  # Minimal delay on error for speed
+            delay_seconds = 0.1
             while retries < max_retries:
-                # Print token count for this chunk
                 token_count = self._count_tokens(chunk.page_content)
-                # Track and print total tokens sent in the past minute
-                import time
-                now = time.time()
-                with token_lock:
-                    # Remove tokens older than 60 seconds
-                    nonlocal token_timestamps
-                    token_timestamps = [(t, c) for t, c in token_timestamps if now - t < 60.0]
-                    tokens_last_min = sum(c for t, c in token_timestamps)
-                    token_timestamps.append((now, token_count))
                 embedding = self._embed(chunk.page_content)
                 if embedding:
                     return PointStruct(
