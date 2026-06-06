@@ -69,7 +69,7 @@ function DashboardLayout() {
                 Schedule
               </button>
               <button
-                onClick={() => navigate("/billing")}
+                onClick={() => navigate("/billing/submissions")}
                 className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
                   isBilling
                     ? "bg-teal-600 text-white"

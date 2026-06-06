@@ -34,6 +34,15 @@ Billing uses a **dedicated S3 bucket** (separate from call schedule). Submission
 | `BILLING_SUBMISSIONS_INDEX_KEY` | No | `billing_submissions.json` | JSON index of all submissions |
 | `BILLING_SHEETS_S3_PREFIX` | No | `billing_sheets/` | Prefix for image objects |
 
+Billing access uses **Microsoft Entra app roles** (same pattern as call schedule `admin`):
+
+| Variable | Default role value | Grants |
+|----------|-------------------|--------|
+| `ENTRA_BILLING_STAFF_APP_ROLE` | `practitioner` | Submit, edit, delete, code search |
+| `ENTRA_BILLING_PROCESSOR_APP_ROLE` | `billing` | Mark submissions processed |
+
+Assign these roles in Entra under your enterprise app → Users and groups. Users with either role can view the inbox and sheets.
+
 If `BILLING_S3_BUCKET` is **not** set, billing falls back to local files under `app/data/` (fine for local dev only).
 
 ### S3 bucket layout
@@ -68,12 +77,13 @@ No separate bucket is required for codes.
 
 | Method | Path | Auth | Notes |
 |--------|------|------|-------|
-| `POST` | `/billing/submit` | Any signed-in user | Multipart: patient fields + billing sheet image |
-| `GET` | `/billing/submissions` | Any signed-in user | Newest-first list |
-| `GET` | `/billing/submissions/{id}/sheet` | Any signed-in user | Inline image (safe `Content-Disposition`) |
-| `PATCH` | `/billing/submissions/{id}/processed` | Any signed-in user | JSON `{ "processed": true \| false }` |
-| `PATCH` | `/billing/submissions/{id}` | `wkim@urologymedical.com` only | Edit fields; optional new image |
-| `DELETE` | `/billing/submissions/{id}` | `wkim@urologymedical.com` only | Removes index row + sheet file |
+| `POST` | `/billing/submit` | `practitioner` role | Multipart: patient fields + optional face sheet |
+| `GET` | `/billing/submissions` | `practitioner` or `billing` | Newest-first list |
+| `GET` | `/billing/submissions/{id}/sheet` | `practitioner` or `billing` | Inline image |
+| `PATCH` | `/billing/submissions/{id}/processed` | `billing` role | JSON `{ "processed": true \| false }` |
+| `PATCH` | `/billing/submissions/{id}` | `practitioner` role | Edit fields; optional new image |
+| `DELETE` | `/billing/submissions/{id}` | `practitioner` role | Removes index row + sheet file |
+| `GET` | `/billing/codes/*` | `practitioner` role | CPT / ICD-10 / modifier search |
 
 ### Billing troubleshooting
 

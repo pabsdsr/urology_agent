@@ -1,11 +1,21 @@
 import { Navigate, useLocation } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/useAuth.js';
+
+function AccessDenied({ message }) {
+  return (
+    <div className="min-h-[50vh] flex items-center justify-center px-4">
+      <div className="text-center">
+        <h1 className="text-2xl font-bold text-gray-800 mb-2">Access Denied</h1>
+        <p className="text-gray-600">{message}</p>
+      </div>
+    </div>
+  );
+}
 
 const ProtectedRoute = ({ children, requireAdmin = false }) => {
   const { isAuthenticated, loading, user } = useAuth();
   const location = useLocation();
 
-  // Show loading spinner while checking authentication
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -14,24 +24,14 @@ const ProtectedRoute = ({ children, requireAdmin = false }) => {
     );
   }
 
-  // If not authenticated, redirect to login page
   if (!isAuthenticated) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  // If admin required but user is not admin, show access denied
   if (requireAdmin && !user?.is_admin) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-gray-800 mb-2">Access Denied</h1>
-          <p className="text-gray-600">You do not have permission to access this page.</p>
-        </div>
-      </div>
-    );
+    return <AccessDenied message="You do not have permission to access this page." />;
   }
 
-  // If authenticated, render the protected component
   return children;
 };
 

@@ -303,3 +303,47 @@ def test_update_billing_submission_success(monkeypatch, non_admin_client):
     )
     assert response.status_code == 200
     assert response.json()["submission"]["patient_name"] == "Jane Doe Updated"
+
+
+def test_submit_billing_forbidden_for_outsider(billing_outsider_client):
+    response = billing_outsider_client.post(
+        "/billing/submit",
+        data={
+            "patient_name": "Jane Doe",
+            "patient_dob": "1990-01-01",
+            "location": "North Pod",
+            "date_of_service": "2026-05-10",
+            "provider_name": "Dr. Urologist",
+            "cpt_code": "51798",
+            "icd10_code": "N40.1",
+        },
+    )
+    assert response.status_code == 403
+
+
+def test_billing_role_can_mark_processed_and_delete(billing_processor_client, monkeypatch):
+    monkeypatch.setattr(
+        "app.routes.billing.set_submission_processed",
+        Mock(return_value={"id": "sub-1", "processed": True}),
+    )
+    monkeypatch.setattr("app.routes.billing.delete_submission", Mock(return_value=True))
+    processed = billing_processor_client.patch(
+        "/billing/submissions/sub-1/processed",
+        json={"processed": True},
+    )
+    assert processed.status_code == 200
+
+    delete = billing_processor_client.delete("/billing/submissions/sub-1")
+    assert delete.status_code == 200
+
+
+def test_staff_can_delete_but_not_mark_processed(billing_staff_only_client, monkeypatch):
+    monkeypatch.setattr("app.routes.billing.delete_submission", Mock(return_value=True))
+    delete = billing_staff_only_client.delete("/billing/submissions/sub-1")
+    assert delete.status_code == 200
+
+    processed = billing_staff_only_client.patch(
+        "/billing/submissions/sub-1/processed",
+        json={"processed": True},
+    )
+    assert processed.status_code == 403

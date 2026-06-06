@@ -3,6 +3,7 @@ from typing import Optional
 
 from app.models import SessionUser
 from app.services.auth_service import auth_service
+from app.services.billing_access import billing_flags_from_roles
 
 router = APIRouter(
     prefix="/auth",
@@ -43,6 +44,30 @@ async def require_admin(
     """Require admin role for protected routes."""
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Admin access required")
+    return current_user
+
+
+async def require_billing_staff(
+    current_user: SessionUser = Depends(get_current_user),
+) -> SessionUser:
+    if not current_user.billing_staff:
+        raise HTTPException(status_code=403, detail="Billing submission access required")
+    return current_user
+
+
+async def require_billing_processor(
+    current_user: SessionUser = Depends(get_current_user),
+) -> SessionUser:
+    if not current_user.billing_processor:
+        raise HTTPException(status_code=403, detail="Billing processing access required")
+    return current_user
+
+
+async def require_billing_viewer(
+    current_user: SessionUser = Depends(get_current_user),
+) -> SessionUser:
+    if not (current_user.billing_staff or current_user.billing_processor):
+        raise HTTPException(status_code=403, detail="Billing access required")
     return current_user
 
 
@@ -87,4 +112,6 @@ async def get_current_user_info(current_user: SessionUser = Depends(get_current_
         "created_at": current_user.created_at,
         "auth_method": current_user.auth_method,
         "is_admin": current_user.is_admin,
+        "billing_staff": current_user.billing_staff,
+        "billing_processor": current_user.billing_processor,
     }

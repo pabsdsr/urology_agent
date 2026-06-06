@@ -20,7 +20,7 @@ export default function BillingProcessedToggle({
 
   return (
     <label
-      className={`inline-flex items-center gap-2 cursor-pointer ${compact ? "" : "text-sm text-gray-700"}`}
+      className={`inline-flex items-center gap-2 ${disabled ? "cursor-default opacity-75" : "cursor-pointer"} ${compact ? "" : "text-sm text-gray-700"}`}
       onClick={compact ? (event) => event.stopPropagation() : undefined}
     >
       <input

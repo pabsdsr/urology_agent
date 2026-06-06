@@ -7,7 +7,11 @@ from fastapi.responses import Response
 from pydantic import BaseModel
 
 from app.models import SessionUser
-from app.routes.auth import get_current_user
+from app.routes.auth import (
+    require_billing_processor,
+    require_billing_staff,
+    require_billing_viewer,
+)
 from app.services.billing_codes_service import search_cpt_codes, search_cpt_modifiers, search_icd10_codes
 from app.services.billing_cpt_lines import (
     derive_legacy_cpt_fields,
@@ -145,7 +149,7 @@ async def submit_billing(
     icd10_code: str = Form(...),
     cpt_modifiers: str = Form(""),
     billing_sheet: UploadFile | None = File(default=None),
-    current_user: SessionUser = Depends(get_current_user),
+    current_user: SessionUser = Depends(require_billing_staff),
 ):
     fields = _parse_billing_form_fields(
         patient_name=patient_name,
@@ -188,7 +192,7 @@ async def submit_billing(
 async def search_billing_cpt_codes(
     q: str = Query("", max_length=100),
     limit: int = Query(20, ge=1, le=50),
-    current_user: SessionUser = Depends(get_current_user),
+    current_user: SessionUser = Depends(require_billing_staff),
 ):
     """Search curated urology CPT codes (code or description)."""
     return {"codes": search_cpt_codes(q, limit)}
@@ -198,7 +202,7 @@ async def search_billing_cpt_codes(
 async def search_billing_icd10_codes(
     q: str = Query("", max_length=100),
     limit: int = Query(20, ge=1, le=50),
-    current_user: SessionUser = Depends(get_current_user),
+    current_user: SessionUser = Depends(require_billing_staff),
 ):
     """Search curated urology ICD-10 codes (code or description)."""
     return {"codes": search_icd10_codes(q, limit)}
@@ -208,7 +212,7 @@ async def search_billing_icd10_codes(
 async def search_billing_cpt_modifiers(
     q: str = Query("", max_length=100),
     limit: int = Query(20, ge=1, le=50),
-    current_user: SessionUser = Depends(get_current_user),
+    current_user: SessionUser = Depends(require_billing_staff),
 ):
     """Search curated CPT modifiers (code or description)."""
     return {"codes": search_cpt_modifiers(q, limit)}
@@ -218,7 +222,7 @@ async def search_billing_cpt_modifiers(
 async def get_billing_submissions(
     limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
-    current_user: SessionUser = Depends(get_current_user),
+    current_user: SessionUser = Depends(require_billing_viewer),
 ):
     """Newest-first list of billing submissions for review."""
     entries = list_submissions(limit=limit, offset=offset)
@@ -229,7 +233,7 @@ async def get_billing_submissions(
 async def set_billing_submission_processed(
     submission_id: str,
     body: ProcessedUpdate,
-    current_user: SessionUser = Depends(get_current_user),
+    current_user: SessionUser = Depends(require_billing_processor),
 ):
     """Mark a submission as processed (or unmark) for billing department tracking."""
     entry = set_submission_processed(submission_id, processed=body.processed)
@@ -247,7 +251,7 @@ async def set_billing_submission_processed(
 @router.get("/submissions/{submission_id}/sheet")
 async def get_billing_submission_sheet(
     submission_id: str,
-    current_user: SessionUser = Depends(get_current_user),
+    current_user: SessionUser = Depends(require_billing_viewer),
 ):
     loaded = load_billing_sheet(submission_id)
     if not loaded:
@@ -274,7 +278,7 @@ async def update_billing_submission(
     icd10_code: str = Form(...),
     cpt_modifiers: str = Form(""),
     billing_sheet: UploadFile | None = File(default=None),
-    current_user: SessionUser = Depends(get_current_user),
+    current_user: SessionUser = Depends(require_billing_staff),
 ):
     fields = _parse_billing_form_fields(
         patient_name=patient_name,
@@ -317,7 +321,7 @@ async def update_billing_submission(
 @router.delete("/submissions/{submission_id}")
 async def delete_billing_submission(
     submission_id: str,
-    current_user: SessionUser = Depends(get_current_user),
+    current_user: SessionUser = Depends(require_billing_staff),
 ):
     if not delete_submission(submission_id):
         raise HTTPException(status_code=404, detail="Billing submission not found.")

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { billingService } from "../services/billingService.js";
+import { useAuth } from "../context/useAuth.js";
 import BillingProcessedToggle from "./BillingProcessedToggle.jsx";
 import BillingSubmissionModal from "./BillingSubmissionModal.jsx";
 import { formatPacificDateTime } from "../utils/calendarPacific.js";
@@ -10,6 +11,10 @@ import { downloadBillingSubmissionsCsv } from "../utils/billingSubmissionsCsv.js
 import { submitterDisplay } from "../utils/billingSubmissionUtils.js";
 
 function BillingSubmissionsInbox() {
+  const { user } = useAuth();
+  const canView = Boolean(user?.can_view_billing);
+  const canManage = Boolean(user?.billing_staff);
+  const canProcess = Boolean(user?.billing_processor);
   const [submissions, setSubmissions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -33,8 +38,12 @@ function BillingSubmissionsInbox() {
   };
 
   useEffect(() => {
+    if (!canView) {
+      setLoading(false);
+      return;
+    }
     loadSubmissions();
-  }, []);
+  }, [canView]);
 
   const handleDelete = async (row) => {
     const label = row.patient_name || "this submission";
@@ -111,22 +120,31 @@ function BillingSubmissionsInbox() {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
-            <button
-              type="button"
-              onClick={() => downloadBillingSubmissionsCsv(submissions)}
-              disabled={loading || submissions.length === 0}
-              className="text-sm font-medium text-teal-700 hover:text-teal-900 disabled:text-gray-400 disabled:cursor-not-allowed"
-            >
-              Download CSV
-            </button>
+            {canView && (
+              <button
+                type="button"
+                onClick={() => downloadBillingSubmissionsCsv(submissions)}
+                disabled={loading || submissions.length === 0}
+                className="text-sm font-medium text-teal-700 hover:text-teal-900 disabled:text-gray-400 disabled:cursor-not-allowed"
+              >
+                Download CSV
+              </button>
+            )}
             <Link
               to="/billing"
-              className="text-sm font-medium text-teal-700 hover:text-teal-900"
+              className={`text-sm font-medium text-teal-700 hover:text-teal-900 ${canManage ? "" : "hidden"}`}
             >
               New submission →
             </Link>
           </div>
         </div>
+
+        {!canView && (
+          <p className="mt-4 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
+            You don&apos;t have permission to view billing submissions. Contact an administrator if
+            you need the practitioner or billing role.
+          </p>
+        )}
 
         {error && (
           <p className="mt-4 text-sm text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2">
@@ -134,11 +152,11 @@ function BillingSubmissionsInbox() {
           </p>
         )}
 
-        {loading ? (
+        {canView && loading ? (
           <p className="mt-6 text-sm text-gray-500">Loading submissions...</p>
-        ) : submissions.length === 0 ? (
+        ) : canView && submissions.length === 0 ? (
           <p className="mt-6 text-sm text-gray-500">No billing submissions yet.</p>
-        ) : (
+        ) : canView ? (
           <div className="mt-6 overflow-x-auto">
             <table className="min-w-full text-sm border border-gray-200 rounded-lg overflow-hidden">
               <thead className="bg-gray-50 text-left text-gray-700">
@@ -153,7 +171,7 @@ function BillingSubmissionsInbox() {
                   <th className="px-3 py-2 font-medium">ICD-10</th>
                   <th className="px-3 py-2 font-medium">Processed</th>
                   <th className="px-3 py-2 font-medium">By</th>
-                  <th className="px-3 py-2 font-medium w-28"> </th>
+                  {canManage && <th className="px-3 py-2 font-medium w-28"> </th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -183,6 +201,7 @@ function BillingSubmissionsInbox() {
                       <BillingProcessedToggle
                         checked={!!row.processed}
                         busy={processingId === row.id}
+                        disabled={!canProcess}
                         compact
                         onChange={(processed) => handleProcessedChange(row, processed)}
                       />
@@ -190,7 +209,8 @@ function BillingSubmissionsInbox() {
                     <td className="px-3 py-2 text-gray-600">
                       {submitterDisplay(row) || "—"}
                     </td>
-                    <td className="px-3 py-2 whitespace-nowrap space-x-3">
+                    {canManage && (
+                      <td className="px-3 py-2 whitespace-nowrap space-x-3">
                         <button
                           type="button"
                           onClick={(event) => {
@@ -211,15 +231,16 @@ function BillingSubmissionsInbox() {
                           disabled={deletingId === row.id || savingId === row.id}
                           className="text-red-600 hover:text-red-800 font-medium disabled:text-gray-400 disabled:cursor-not-allowed"
                         >
-                        {deletingId === row.id ? "Deleting..." : "Delete"}
-                      </button>
-                    </td>
+                          {deletingId === row.id ? "Deleting..." : "Delete"}
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-        )}
+        ) : null}
       </div>
 
       {selectedSubmission && (
@@ -234,6 +255,8 @@ function BillingSubmissionsInbox() {
           onUpdated={handleUpdate}
           onProcessedChange={handleProcessedChange}
           processingProcessed={processingId === selectedSubmission.id}
+          canManage={canManage}
+          canProcess={canProcess}
           deleting={deletingId === selectedSubmission.id}
           saving={savingId === selectedSubmission.id}
         />

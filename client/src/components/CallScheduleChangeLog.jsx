@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
+import { useAuth } from "../context/useAuth.js";
 import { callScheduleService } from "../services/callScheduleService";
 
 const POD_ORDER = ["North Pod", "Central Pod", "South Pod"];

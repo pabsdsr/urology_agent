@@ -30,6 +30,8 @@ export default function BillingSubmissionModal({
   onUpdated,
   onProcessedChange,
   processingProcessed = false,
+  canManage = false,
+  canProcess = false,
   initialEditing = false,
   deleting,
   saving,
@@ -217,6 +219,7 @@ export default function BillingSubmissionModal({
               <BillingProcessedToggle
                 checked={!!submission.processed}
                 busy={processingProcessed}
+                disabled={!canProcess}
                 onChange={(processed) => onProcessedChange(submission, processed)}
               />
 
@@ -245,22 +248,26 @@ export default function BillingSubmissionModal({
             </div>
 
             <div className="sticky bottom-0 flex justify-end gap-3 border-t border-gray-200 bg-gray-50 px-6 py-4">
-              <button
-                type="button"
-                onClick={startEditing}
-                disabled={deleting || saving}
-                className="mr-auto px-4 py-2 text-sm font-medium text-teal-700 hover:text-teal-900 disabled:text-gray-400"
-              >
-                Edit
-              </button>
-              <button
-                type="button"
-                onClick={() => onDelete(submission)}
-                disabled={deleting || saving}
-                className="px-4 py-2 text-sm font-medium text-red-600 hover:text-red-800 disabled:text-gray-400"
-              >
-                {deleting ? "Deleting..." : "Delete"}
-              </button>
+              {canManage && (
+                <button
+                  type="button"
+                  onClick={startEditing}
+                  disabled={deleting || saving}
+                  className="mr-auto px-4 py-2 text-sm font-medium text-teal-700 hover:text-teal-900 disabled:text-gray-400"
+                >
+                  Edit
+                </button>
+              )}
+              {canManage && (
+                <button
+                  type="button"
+                  onClick={() => onDelete(submission)}
+                  disabled={deleting || saving}
+                  className="px-4 py-2 text-sm font-medium text-red-600 hover:text-red-800 disabled:text-gray-400"
+                >
+                  {deleting ? "Deleting..." : "Delete"}
+                </button>
+              )}
               <button
                 type="button"
                 onClick={onClose}

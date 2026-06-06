@@ -6,8 +6,11 @@ from app.main import create_app
 def test_auth_me_returns_profile(authenticated_client):
     response = authenticated_client.get("/auth/me")
     assert response.status_code == 200
-    assert response.json()["username"] == "test-user"
-    assert response.json()["is_admin"] is True
+    body = response.json()
+    assert body["username"] == "test-user"
+    assert body["is_admin"] is True
+    assert body["billing_staff"] is True
+    assert body["billing_processor"] is True
 
 
 def test_auth_logout_always_returns_success(authenticated_client):

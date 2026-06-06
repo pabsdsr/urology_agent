@@ -11,6 +11,9 @@ class SessionUser(BaseModel):
     # Sign-in email derived from Microsoft Entra token claims.
     email: Optional[str] = None
     is_admin: bool = False
+    roles: list[str] = []
+    billing_staff: bool = False
+    billing_processor: bool = False
     modmed_access_token: Optional[str] = None
     modmed_refresh_token: Optional[str] = None
     modmed_expires_at: Optional[datetime] = None

@@ -10,6 +10,7 @@ import pytz
 from app.crew.tools.tools import QdrantVectorSearchTool
 from app.models import SessionUser
 from app.services.appointment_service import SCHEDULE_CACHE_WEEKS, _prewarm_schedule_cache
+from app.services.billing_access import billing_flags_from_roles
 from app.services.entra_jwt import EntraAccessTokenError, EntraAccessTokenValidator
 
 logger = logging.getLogger(__name__)
@@ -53,6 +54,14 @@ def _client_id() -> str:
 def _admin_role() -> str:
     """App role value that grants admin privileges."""
     return (os.getenv("ENTRA_ADMIN_APP_ROLE") or "admin").strip()
+
+
+def _apply_token_identity(user: SessionUser, email: str, roles: list[str]) -> None:
+    user.username = email
+    user.email = email
+    user.roles = list(roles)
+    user.is_admin = _admin_role() in roles
+    user.billing_staff, user.billing_processor = billing_flags_from_roles(roles)
 
 
 class AuthService:
@@ -113,6 +122,7 @@ class AuthService:
 
         roles = _roles_from_claims(claims)
         token_is_admin = _admin_role() in roles
+        billing_staff, billing_processor = billing_flags_from_roles(roles)
 
         async with self._cache_lock:
             cached = self._users_by_oid.get(oid)
@@ -122,9 +132,7 @@ class AuthService:
                 self._oid_bootstrap_locks[oid] = oid_lock
 
         if cached:
-            cached.is_admin = token_is_admin
-            cached.username = email
-            cached.email = email
+            _apply_token_identity(cached, email, roles)
             if (
                 cached.modmed_expires_at
                 and datetime.utcnow() > cached.modmed_expires_at
@@ -138,9 +146,7 @@ class AuthService:
             async with self._cache_lock:
                 cached = self._users_by_oid.get(oid)
             if cached:
-                cached.is_admin = token_is_admin
-                cached.username = email
-                cached.email = email
+                _apply_token_identity(cached, email, roles)
                 return cached
 
             entra_config = self._get_authorized_entra_config(email)
@@ -185,6 +191,9 @@ class AuthService:
                 auth_method="entra",
                 email=email,
                 is_admin=token_is_admin,
+                roles=list(roles),
+                billing_staff=billing_staff,
+                billing_processor=billing_processor,
                 modmed_access_token=modmed_access_token,
                 modmed_refresh_token=modmed_refresh_token,
                 modmed_expires_at=modmed_expires_at,
@@ -197,9 +206,7 @@ class AuthService:
             async with self._cache_lock:
                 existing = self._users_by_oid.get(oid)
                 if existing:
-                    existing.is_admin = token_is_admin
-                    existing.username = email
-                    existing.email = email
+                    _apply_token_identity(existing, email, roles)
                     return existing
                 self._users_by_oid[oid] = session_user
 

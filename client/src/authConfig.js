@@ -59,3 +59,8 @@ const appOrigin =
  * Override with VITE_ADMIN_APP_ROLE to match ENTRA_ADMIN_APP_ROLE on the API.
  */
 export const adminAppRole = import.meta.env.VITE_ADMIN_APP_ROLE || 'admin';
+
+/** Entra app roles for billing (must match ENTRA_BILLING_*_APP_ROLE on the API). */
+export const billingStaffAppRole = import.meta.env.VITE_BILLING_STAFF_APP_ROLE || 'practitioner';
+export const billingProcessorAppRole =
+  import.meta.env.VITE_BILLING_PROCESSOR_APP_ROLE || 'billing';

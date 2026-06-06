@@ -203,7 +203,6 @@ export default function MedicalCodeCombobox({
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          onFocus={(e) => setOpenPicker({ anchorEl: e.currentTarget })}
           placeholder={placeholder}
           className={`${inputClassName} pr-8`}
           autoComplete="off"

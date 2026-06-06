@@ -1,17 +1,10 @@
-import {
-  createContext,
-  useContext,
-  useState,
-  useEffect,
-  useMemo,
-} from "react";
+import { useEffect, useMemo, useState } from "react";
 import { InteractionStatus } from "@azure/msal-browser";
 import { MsalProvider, useMsal } from "@azure/msal-react";
-import { adminAppRole } from "../authConfig.js";
+import { adminAppRole, billingProcessorAppRole, billingStaffAppRole } from "../authConfig.js";
 import { msalInstance } from "../msalInstance.js";
 import { redirectToLogin } from "../services/sessionLogout.js";
-
-const AuthContext = createContext(null);
+import { AuthContext } from "./authContext.js";
 
 function parseRoles(claims) {
   if (!claims || typeof claims !== "object") return [];
@@ -29,6 +22,7 @@ function AuthStateProvider({ children }) {
     window.addEventListener("auth:unauthorized", redirectToLogin);
     return () => window.removeEventListener("auth:unauthorized", redirectToLogin);
   }, []);
+
   const loading = inProgress !== InteractionStatus.None;
   const isAuthenticated = !!activeAccount;
 
@@ -36,12 +30,18 @@ function AuthStateProvider({ children }) {
     if (!activeAccount) return null;
     const claims = activeAccount.idTokenClaims ?? {};
     const roles = parseRoles(claims);
-    const is_admin = roles.includes(adminAppRole);
+    const billingStaff =
+      roles.includes(billingStaffAppRole) || roles.includes(billingProcessorAppRole);
+    const billingProcessor = roles.includes(billingProcessorAppRole);
     return {
       name: activeAccount.name,
       username: activeAccount.username,
+      email: activeAccount.username,
       roles,
-      is_admin,
+      is_admin: roles.includes(adminAppRole),
+      billing_staff: billingStaff,
+      billing_processor: billingProcessor,
+      can_view_billing: billingStaff || billingProcessor,
     };
   }, [activeAccount]);
 
@@ -55,21 +55,10 @@ function AuthStateProvider({ children }) {
     [isAuthenticated, loading, user, activeAccount]
   );
 
-  return (
-    <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
-  );
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
-// eslint-disable-next-line react-refresh/only-export-components -- useAuth is tied to AuthProvider
-export function useAuth() {
-  const ctx = useContext(AuthContext);
-  if (!ctx) {
-    throw new Error("useAuth must be used within AuthProvider");
-  }
-  return ctx;
-}
-
-export const AuthProvider = ({ children }) => {
+export default function AuthProvider({ children }) {
   const [initialized, setInitialized] = useState(false);
 
   useEffect(() => {
@@ -103,4 +92,4 @@ export const AuthProvider = ({ children }) => {
       <AuthStateProvider>{children}</AuthStateProvider>
     </MsalProvider>
   );
-};
+}

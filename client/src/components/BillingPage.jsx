@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { billingService } from "../services/billingService.js";
+import { useAuth } from "../context/useAuth.js";
 import { usePatientSearch } from "../hooks/usePatientSearch.js";
 import BillingSubmissionFields from "./BillingSubmissionFields.jsx";
 import BillingSheetInput from "./BillingSheetInput.jsx";
@@ -19,6 +20,8 @@ const EMPTY_FORM = {
 };
 
 function BillingPage() {
+  const { user } = useAuth();
+  const canSubmit = Boolean(user?.billing_staff);
   const [form, setForm] = useState(EMPTY_FORM);
   const [selectedPatient, setSelectedPatient] = useState(null);
   const {
@@ -81,6 +84,7 @@ function BillingPage() {
 
   const onSubmit = async (event) => {
     event.preventDefault();
+    if (!canSubmit) return;
     setSuccessMessage("");
     const validationError = validate();
     if (validationError) {
@@ -123,7 +127,15 @@ function BillingPage() {
           </Link>
         </div>
 
+        {!canSubmit && (
+          <p className="mt-4 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
+            You don&apos;t have permission to submit billing. Contact an administrator if you need
+            the practitioner or billing role.
+          </p>
+        )}
+
         <form className="mt-6 space-y-5" onSubmit={onSubmit}>
+          <fieldset disabled={!canSubmit} className="space-y-5 disabled:opacity-60">
           <div ref={searchRef}>
             <label className="block">
               <span className="text-sm font-medium text-gray-700">Patient Lookup</span>
@@ -223,13 +235,16 @@ function BillingPage() {
             </p>
           )}
 
-          <button
-            type="submit"
-            disabled={submitting}
-            className="w-full md:w-auto px-5 py-2.5 bg-teal-600 text-white rounded-md font-medium hover:bg-teal-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
-          >
-            {submitting ? "Saving..." : "Submit Billing"}
-          </button>
+          {canSubmit && (
+            <button
+              type="submit"
+              disabled={submitting}
+              className="w-full md:w-auto px-5 py-2.5 bg-teal-600 text-white rounded-md font-medium hover:bg-teal-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+            >
+              {submitting ? "Saving..." : "Submit Billing"}
+            </button>
+          )}
+          </fieldset>
         </form>
       </div>
     </div>
