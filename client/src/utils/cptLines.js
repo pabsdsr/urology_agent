@@ -78,7 +78,7 @@ export function formatCptLinesDisplay(linesOrSubmission) {
   const lines = Array.isArray(linesOrSubmission)
     ? normalizeCptLines(linesOrSubmission)
     : cptLinesFromSubmission(linesOrSubmission);
-  return lines.map(formatCptLineDisplay).filter(Boolean).join(" · ");
+  return lines.map(formatCptLineDisplay).filter(Boolean).join(", ");
 }
 
 export function serializeCptLinesForApi(lines) {

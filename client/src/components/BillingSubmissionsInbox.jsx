@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { billingService } from "../services/billingService.js";
 import { useAuth } from "../context/useAuth.js";
@@ -8,7 +8,34 @@ import { formatPacificDateTime } from "../utils/calendarPacific.js";
 import { formatBillingDateUs } from "../utils/billingFormValidation.js";
 import { formatCptLinesDisplay } from "../utils/cptLines.js";
 import { downloadBillingSubmissionsCsv } from "../utils/billingSubmissionsCsv.js";
-import { submitterDisplay } from "../utils/billingSubmissionUtils.js";
+import {
+  compareBillingSubmissions,
+  submitterDisplay,
+} from "../utils/billingSubmissionUtils.js";
+
+const QUEUE_VIEWS = {
+  pending: "pending",
+  processed: "processed",
+};
+
+function SortableHeader({ label, column, sort, onSort }) {
+  const active = sort.column === column;
+  const indicator = active ? (sort.direction === "asc" ? " ↑" : " ↓") : "";
+  return (
+    <th className="px-3 py-2 font-medium">
+      <button
+        type="button"
+        onClick={() => onSort(column)}
+        className="inline-flex items-center hover:text-teal-700"
+      >
+        {label}
+        <span className="text-teal-600" aria-hidden="true">
+          {indicator}
+        </span>
+      </button>
+    </th>
+  );
+}
 
 function BillingSubmissionsInbox() {
   const { user } = useAuth();
@@ -16,6 +43,8 @@ function BillingSubmissionsInbox() {
   const canManage = Boolean(user?.billing_staff);
   const canProcess = Boolean(user?.billing_processor);
   const [submissions, setSubmissions] = useState([]);
+  const [queueView, setQueueView] = useState(QUEUE_VIEWS.pending);
+  const [sort, setSort] = useState({ column: null, direction: "asc" });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [selectedSubmission, setSelectedSubmission] = useState(null);
@@ -23,6 +52,23 @@ function BillingSubmissionsInbox() {
   const [deletingId, setDeletingId] = useState(null);
   const [savingId, setSavingId] = useState(null);
   const [processingId, setProcessingId] = useState(null);
+
+  const pendingSubmissions = useMemo(
+    () => submissions.filter((row) => !row.processed),
+    [submissions]
+  );
+  const processedSubmissions = useMemo(
+    () => submissions.filter((row) => row.processed),
+    [submissions]
+  );
+  const queueSubmissions =
+    queueView === QUEUE_VIEWS.processed ? processedSubmissions : pendingSubmissions;
+  const sortedSubmissions = useMemo(() => {
+    if (!sort.column) return queueSubmissions;
+    return [...queueSubmissions].sort((a, b) =>
+      compareBillingSubmissions(a, b, sort.column, sort.direction)
+    );
+  }, [queueSubmissions, sort]);
 
   const loadSubmissions = async () => {
     setLoading(true);
@@ -44,6 +90,18 @@ function BillingSubmissionsInbox() {
     }
     loadSubmissions();
   }, [canView]);
+
+  const handleSort = (column) => {
+    setSort((prev) => {
+      if (prev.column !== column) {
+        return { column, direction: "asc" };
+      }
+      if (prev.direction === "asc") {
+        return { column, direction: "desc" };
+      }
+      return { column: null, direction: "asc" };
+    });
+  };
 
   const handleDelete = async (row) => {
     const label = row.patient_name || "this submission";
@@ -109,6 +167,11 @@ function BillingSubmissionsInbox() {
     }
   };
 
+  const emptyMessage =
+    queueView === QUEUE_VIEWS.processed
+      ? "No processed submissions yet."
+      : "No billing submissions awaiting processing.";
+
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="bg-white rounded-lg shadow p-6">
@@ -116,15 +179,22 @@ function BillingSubmissionsInbox() {
           <div>
             <h2 className="text-xl font-semibold text-gray-900">Billing Submissions</h2>
             <p className="text-sm text-gray-500 mt-1">
-              Click a row to view the full submission and billing sheet.
+              {queueView === QUEUE_VIEWS.processed
+                ? "Charges that have been marked as processed."
+                : "Work queue for charges awaiting processing. Click a row to view details."}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
             {canView && (
               <button
                 type="button"
-                onClick={() => downloadBillingSubmissionsCsv(submissions)}
-                disabled={loading || submissions.length === 0}
+                onClick={() =>
+                  downloadBillingSubmissionsCsv(
+                    queueSubmissions,
+                    `billing-submissions-${queueView}-${new Date().toISOString().slice(0, 10)}.csv`
+                  )
+                }
+                disabled={loading || queueSubmissions.length === 0}
                 className="text-sm font-medium text-teal-700 hover:text-teal-900 disabled:text-gray-400 disabled:cursor-not-allowed"
               >
                 Download CSV
@@ -138,6 +208,33 @@ function BillingSubmissionsInbox() {
             </Link>
           </div>
         </div>
+
+        {canView && (
+          <div className="mt-4 flex gap-2 border-b border-gray-200">
+            <button
+              type="button"
+              onClick={() => setQueueView(QUEUE_VIEWS.pending)}
+              className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                queueView === QUEUE_VIEWS.pending
+                  ? "border-teal-600 text-teal-700"
+                  : "border-transparent text-gray-600 hover:text-gray-900"
+              }`}
+            >
+              Work queue ({pendingSubmissions.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setQueueView(QUEUE_VIEWS.processed)}
+              className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                queueView === QUEUE_VIEWS.processed
+                  ? "border-teal-600 text-teal-700"
+                  : "border-transparent text-gray-600 hover:text-gray-900"
+              }`}
+            >
+              Processed ({processedSubmissions.length})
+            </button>
+          </div>
+        )}
 
         {!canView && (
           <p className="mt-4 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
@@ -154,28 +251,78 @@ function BillingSubmissionsInbox() {
 
         {canView && loading ? (
           <p className="mt-6 text-sm text-gray-500">Loading submissions...</p>
-        ) : canView && submissions.length === 0 ? (
-          <p className="mt-6 text-sm text-gray-500">No billing submissions yet.</p>
+        ) : canView && sortedSubmissions.length === 0 ? (
+          <p className="mt-6 text-sm text-gray-500">{emptyMessage}</p>
         ) : canView ? (
           <div className="mt-6 overflow-x-auto">
             <table className="min-w-full text-sm border border-gray-200 rounded-lg overflow-hidden">
               <thead className="bg-gray-50 text-left text-gray-700">
                 <tr>
-                  <th className="px-3 py-2 font-medium">Submitted</th>
-                  <th className="px-3 py-2 font-medium">Patient</th>
-                  <th className="px-3 py-2 font-medium">DOB</th>
-                  <th className="px-3 py-2 font-medium">Provider</th>
-                  <th className="px-3 py-2 font-medium">Location</th>
-                  <th className="px-3 py-2 font-medium">DOS</th>
-                  <th className="px-3 py-2 font-medium">CPT</th>
-                  <th className="px-3 py-2 font-medium">ICD-10</th>
-                  <th className="px-3 py-2 font-medium">Processed</th>
-                  <th className="px-3 py-2 font-medium">By</th>
+                  <SortableHeader
+                    label="Submitted"
+                    column="submitted_at"
+                    sort={sort}
+                    onSort={handleSort}
+                  />
+                  <SortableHeader
+                    label="Patient"
+                    column="patient_name"
+                    sort={sort}
+                    onSort={handleSort}
+                  />
+                  <SortableHeader
+                    label="DOB"
+                    column="patient_dob"
+                    sort={sort}
+                    onSort={handleSort}
+                  />
+                  <SortableHeader
+                    label="Provider"
+                    column="provider_name"
+                    sort={sort}
+                    onSort={handleSort}
+                  />
+                  <SortableHeader
+                    label="Location"
+                    column="location"
+                    sort={sort}
+                    onSort={handleSort}
+                  />
+                  <SortableHeader
+                    label="DOS"
+                    column="date_of_service"
+                    sort={sort}
+                    onSort={handleSort}
+                  />
+                  <SortableHeader
+                    label="CPT"
+                    column="cpt_lines"
+                    sort={sort}
+                    onSort={handleSort}
+                  />
+                  <SortableHeader
+                    label="ICD-10"
+                    column="icd10_code"
+                    sort={sort}
+                    onSort={handleSort}
+                  />
+                  <SortableHeader
+                    label="Processed"
+                    column="processed"
+                    sort={sort}
+                    onSort={handleSort}
+                  />
+                  <SortableHeader
+                    label="By"
+                    column="submitted_by"
+                    sort={sort}
+                    onSort={handleSort}
+                  />
                   {canManage && <th className="px-3 py-2 font-medium w-28"> </th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {submissions.map((row) => (
+                {sortedSubmissions.map((row) => (
                   <tr
                     key={row.id}
                     onClick={() => openSubmission(row)}

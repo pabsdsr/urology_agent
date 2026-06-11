@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  compareBillingSubmissions,
   formToSubmissionPayload,
   lastUpdatedAt,
   submissionToEditForm,
@@ -72,5 +73,32 @@ describe("billingSubmissionUtils", () => {
         updated_at: "2026-05-10T15:00:00+00:00",
       })
     ).toBe("2026-05-10T15:00:00+00:00");
+  });
+
+  it("sorts by date of service ascending", () => {
+    const earlier = { date_of_service: "2026-05-01" };
+    const later = { date_of_service: "2026-06-01" };
+    expect(compareBillingSubmissions(earlier, later, "date_of_service", "asc")).toBeLessThan(0);
+    expect(compareBillingSubmissions(later, earlier, "date_of_service", "desc")).toBeLessThan(0);
+  });
+
+  it("sorts by provider name", () => {
+    const a = { provider_name: "Adams" };
+    const b = { provider_name: "Zimmer" };
+    expect(compareBillingSubmissions(a, b, "provider_name", "asc")).toBeLessThan(0);
+  });
+
+  it("sorts by patient name and processed status", () => {
+    expect(
+      compareBillingSubmissions(
+        { patient_name: "Adams" },
+        { patient_name: "Zimmer" },
+        "patient_name",
+        "asc"
+      )
+    ).toBeLessThan(0);
+    expect(
+      compareBillingSubmissions({ processed: false }, { processed: true }, "processed", "asc")
+    ).toBeLessThan(0);
   });
 });

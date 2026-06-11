@@ -30,6 +30,22 @@ describe("buildBillingSubmissionsCsv", () => {
     expect(csv).not.toContain("Submitter Email");
   });
 
+  it("joins multiple CPT lines with commas", () => {
+    const csv = buildBillingSubmissionsCsv([
+      {
+        id: "sub-3",
+        submitted_at: "2026-05-01T10:00:00+00:00",
+        cpt_lines: [
+          { code: "99222", modifiers: ["25"] },
+          { code: "51703", modifiers: [] },
+        ],
+        icd10_code: "N33.9",
+      },
+    ]);
+    expect(csv).toContain("99222-25, 51703");
+    expect(csv).not.toContain("·");
+  });
+
   it("escapes commas and quotes in cell values", () => {
     const csv = buildBillingSubmissionsCsv([
       {

@@ -5,9 +5,61 @@ import {
 } from "./billingFormValidation.js";
 import {
   cptLinesFromSubmission,
+  formatCptLinesDisplay,
   normalizeCptLines,
   serializeCptLinesForApi,
 } from "./cptLines.js";
+
+function parseSortableDate(value) {
+  if (!value) return 0;
+  const parsed = Date.parse(value);
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
+
+function compareText(a, b) {
+  return String(a || "").localeCompare(String(b || ""), undefined, { sensitivity: "base" });
+}
+
+function sortValue(submission, column) {
+  switch (column) {
+    case "submitted_at":
+      return parseSortableDate(submission.submitted_at);
+    case "patient_name":
+      return submission.patient_name;
+    case "patient_dob":
+      return parseSortableDate(submission.patient_dob);
+    case "provider_name":
+      return submission.provider_name;
+    case "location":
+      return submission.location;
+    case "date_of_service":
+      return parseSortableDate(submission.date_of_service);
+    case "cpt_lines":
+      return formatCptLinesDisplay(submission);
+    case "icd10_code":
+      return submission.icd10_code;
+    case "processed":
+      return Boolean(submission.processed);
+    case "submitted_by":
+      return submitterDisplay(submission);
+    default:
+      return "";
+  }
+}
+
+export function compareBillingSubmissions(a, b, column, direction = "asc") {
+  const aVal = sortValue(a, column);
+  const bVal = sortValue(b, column);
+  let cmp = 0;
+  if (column === "processed") {
+    cmp = Number(aVal) - Number(bVal);
+  } else if (typeof aVal === "number" && typeof bVal === "number") {
+    cmp = aVal - bVal;
+  } else {
+    cmp = compareText(aVal, bVal);
+  }
+  return direction === "desc" ? -cmp : cmp;
+}
 
 export function submitterDisplay(submission) {
   return submission?.submitter_email || submission?.submitted_by || "";
