@@ -7,6 +7,8 @@ function buildBillingFormData(payload, { includeSheet = true } = {}) {
   formData.append("location", payload.location);
   formData.append("date_of_service", payload.dateOfService || "");
   formData.append("provider_name", payload.providerName || "");
+  formData.append("incident_to", payload.incidentTo ? "true" : "false");
+  formData.append("attending_name", payload.attendingName || "");
   formData.append("cpt_lines", payload.cptLinesJson || "[]");
   formData.append("icd10_code", payload.icd10Code);
   if (includeSheet && payload.billingSheetFile) {

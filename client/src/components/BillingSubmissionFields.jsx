@@ -42,16 +42,52 @@ export default function BillingSubmissionFields({
           required
         />
       </label>
-      <div className="block">
-        <LocationCombobox
-          storageKey={BILLING_PROVIDERS_STORAGE_KEY}
-          label="Provider Name"
-          placeholder="Select or type a provider"
-          addOptionSuffix="provider"
-          value={form.providerName}
-          onChange={(providerName) => setForm((prev) => ({ ...prev, providerName }))}
-          required
-        />
+      <div
+        className={`grid gap-4 md:col-span-2 ${
+          form.incidentTo ? "grid-cols-1 md:grid-cols-2" : "grid-cols-1"
+        }`}
+      >
+        <div className="block">
+          <LocationCombobox
+            storageKey={BILLING_PROVIDERS_STORAGE_KEY}
+            label="Provider Name"
+            placeholder="Select or type a provider"
+            addOptionSuffix="provider"
+            value={form.providerName}
+            onChange={(providerName) => setForm((prev) => ({ ...prev, providerName }))}
+            required
+          />
+          <label className="mt-3 flex items-center gap-2">
+            <input
+              type="checkbox"
+              name="incidentTo"
+              checked={Boolean(form.incidentTo)}
+              onChange={(event) => {
+                const checked = event.target.checked;
+                setForm((prev) => ({
+                  ...prev,
+                  incidentTo: checked,
+                  attendingName: checked ? prev.attendingName : "",
+                }));
+              }}
+              className="h-4 w-4 rounded border-gray-300 text-teal-600 focus:ring-teal-500"
+            />
+            <span className="text-sm font-medium text-gray-700">Incident To</span>
+          </label>
+        </div>
+        {form.incidentTo ? (
+          <div className="block">
+            <LocationCombobox
+              storageKey={BILLING_PROVIDERS_STORAGE_KEY}
+              label="Attending Name"
+              placeholder="Select or type an attending"
+              addOptionSuffix="provider"
+              value={form.attendingName}
+              onChange={(attendingName) => setForm((prev) => ({ ...prev, attendingName }))}
+              required
+            />
+          </div>
+        ) : null}
       </div>
       <div className="block">
         <LocationCombobox

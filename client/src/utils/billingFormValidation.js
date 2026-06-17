@@ -105,7 +105,7 @@ export function validateBillingSheetFile(file) {
 }
 
 /**
- * @param {{ patientName: string, patientDob: string, providerName: string, location: string, dateOfService: string, cptLines: Array, icd10Codes: string[] }} form
+ * @param {{ patientName: string, patientDob: string, providerName: string, incidentTo?: boolean, attendingName?: string, location: string, dateOfService: string, cptLines: Array, icd10Codes: string[] }} form
  * @param {{ billingSheetFile?: File | null, requireSheet?: boolean }} [options]
  */
 export function validateBillingForm(form, { billingSheetFile = null, requireSheet = false } = {}) {
@@ -115,6 +115,9 @@ export function validateBillingForm(form, { billingSheetFile = null, requireShee
     return `Patient DOB must be a valid date in ${BILLING_DATE_PLACEHOLDER} format.`;
   }
   if (!form.providerName.trim()) return "Provider name is required.";
+  if (form.incidentTo && !form.attendingName?.trim()) {
+    return "Attending Name is required when Incident To is checked.";
+  }
   if (!form.location.trim()) return "Location is required.";
   if (!form.dateOfService?.trim()) return "Date of service is required.";
   if (!isValidBillingDate(form.dateOfService)) {

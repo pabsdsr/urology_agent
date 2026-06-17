@@ -32,10 +32,32 @@ describe('billingService', () => {
     const [url, formData] = postMock.mock.calls[0];
     expect(url).toBe('/billing/submit');
     expect(formData.get('patient_name')).toBe('Jane Doe');
+    expect(formData.get('incident_to')).toBe('false');
+    expect(formData.get('attending_name')).toBe('');
     expect(formData.get('cpt_lines')).toBe('[{"code":"51798","modifiers":["25","57"]}]');
     expect(formData.get('cpt_code')).toBeNull();
     expect(formData.get('cpt_modifiers')).toBeNull();
     expect(formData.get('billing_sheet')).toBe(file);
+  });
+
+  it('submits incident to fields when checked', async () => {
+    postMock.mockResolvedValueOnce({ data: { status: 'submitted', submission_id: 'sub-2' } });
+
+    await billingService.submitBilling({
+      patientName: 'Jane Doe',
+      patientDob: '1990-01-01',
+      location: 'North Pod',
+      dateOfService: '2026-05-20',
+      providerName: 'Dr. NP',
+      incidentTo: true,
+      attendingName: 'Dr. Attending',
+      cptLinesJson: '[{"code":"51798","modifiers":[]}]',
+      icd10Code: 'N40.1',
+    });
+
+    const formData = postMock.mock.calls.at(-1)[1];
+    expect(formData.get('incident_to')).toBe('true');
+    expect(formData.get('attending_name')).toBe('Dr. Attending');
   });
 
   it('updates a submission without billing sheet when none provided', async () => {

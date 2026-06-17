@@ -283,6 +283,12 @@ function BillingSubmissionsInbox() {
                     onSort={handleSort}
                   />
                   <SortableHeader
+                    label="Attending"
+                    column="attending_name"
+                    sort={sort}
+                    onSort={handleSort}
+                  />
+                  <SortableHeader
                     label="Location"
                     column="location"
                     sort={sort}
@@ -336,6 +342,7 @@ function BillingSubmissionsInbox() {
                       {formatBillingDateUs(row.patient_dob) || "—"}
                     </td>
                     <td className="px-3 py-2">{row.provider_name || "—"}</td>
+                    <td className="px-3 py-2">{row.attending_name || "—"}</td>
                     <td className="px-3 py-2">{row.location || "—"}</td>
                     <td className="px-3 py-2 whitespace-nowrap">
                       {formatBillingDateUs(row.date_of_service) || "—"}

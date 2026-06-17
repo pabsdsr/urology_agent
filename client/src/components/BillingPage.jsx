@@ -15,6 +15,8 @@ const EMPTY_FORM = {
   location: "",
   dateOfService: "",
   providerName: "",
+  incidentTo: false,
+  attendingName: "",
   cptLines: [{ ...EMPTY_CPT_LINE }],
   icd10Codes: [],
 };

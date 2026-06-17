@@ -56,6 +56,8 @@ def _normalize_entry(entry: Dict[str, Any]) -> Dict[str, Any]:
     normalized = ensure_entry_cpt_lines(dict(entry))
     normalized["processed"] = bool(entry.get("processed"))
     normalized.setdefault("cpt_modifiers", "")
+    normalized["incident_to"] = bool(entry.get("incident_to"))
+    normalized.setdefault("attending_name", "")
     return normalized
 
 
@@ -168,6 +170,8 @@ def save_submission(
     location: str,
     date_of_service: str,
     provider_name: str,
+    incident_to: bool = False,
+    attending_name: str = "",
     cpt_code: str,
     icd10_code: str,
     cpt_modifiers: str = "",
@@ -197,6 +201,8 @@ def save_submission(
         "location": location,
         "date_of_service": date_of_service,
         "provider_name": provider_name,
+        "incident_to": bool(incident_to),
+        "attending_name": attending_name if incident_to else "",
         "cpt_code": cpt_code,
         "icd10_code": icd10_code,
         "cpt_modifiers": cpt_modifiers,
@@ -334,6 +340,8 @@ def _apply_submission_update(
     location: str,
     date_of_service: str,
     provider_name: str,
+    incident_to: bool = False,
+    attending_name: str = "",
     cpt_code: str,
     icd10_code: str,
     cpt_modifiers: str,
@@ -347,6 +355,8 @@ def _apply_submission_update(
     entry["location"] = location
     entry["date_of_service"] = date_of_service
     entry["provider_name"] = provider_name
+    entry["incident_to"] = bool(incident_to)
+    entry["attending_name"] = attending_name if incident_to else ""
     entry["cpt_code"] = cpt_code
     entry["icd10_code"] = icd10_code
     entry["cpt_modifiers"] = cpt_modifiers
@@ -374,6 +384,8 @@ def update_submission(
     location: str,
     date_of_service: str,
     provider_name: str,
+    incident_to: bool = False,
+    attending_name: str = "",
     cpt_code: str,
     icd10_code: str,
     cpt_modifiers: str = "",
@@ -393,6 +405,8 @@ def update_submission(
             location=location,
             date_of_service=date_of_service,
             provider_name=provider_name,
+            incident_to=incident_to,
+            attending_name=attending_name,
             cpt_code=cpt_code,
             icd10_code=icd10_code,
             cpt_modifiers=cpt_modifiers,

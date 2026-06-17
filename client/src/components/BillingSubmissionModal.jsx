@@ -227,6 +227,10 @@ export default function BillingSubmissionModal({
                 <DetailRow label="Patient name" value={submission.patient_name} />
                 <DetailRow label="Patient DOB" value={formatBillingDateUs(submission.patient_dob)} />
                 <DetailRow label="Provider" value={submission.provider_name} />
+                <DetailRow label="Incident To" value={submission.incident_to ? "Yes" : "No"} />
+                {submission.incident_to ? (
+                  <DetailRow label="Attending Name" value={submission.attending_name} />
+                ) : null}
                 <DetailRow label="Location" value={submission.location} />
                 <DetailRow label="Date of service" value={formatBillingDateUs(submission.date_of_service)} />
                 <DetailRow

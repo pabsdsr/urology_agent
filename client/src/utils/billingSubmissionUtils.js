@@ -30,6 +30,8 @@ function sortValue(submission, column) {
       return parseSortableDate(submission.patient_dob);
     case "provider_name":
       return submission.provider_name;
+    case "attending_name":
+      return submission.attending_name;
     case "location":
       return submission.location;
     case "date_of_service":
@@ -71,10 +73,13 @@ export function lastUpdatedAt(submission) {
 }
 
 export function submissionToEditForm(submission) {
+  const incidentTo = Boolean(submission.incident_to);
   return {
     patientName: submission.patient_name || "",
     patientDob: formatBillingDateUs(submission.patient_dob || ""),
     providerName: submission.provider_name || "",
+    incidentTo,
+    attendingName: incidentTo ? submission.attending_name || "" : "",
     location: submission.location || "",
     dateOfService: formatBillingDateUs(submission.date_of_service || ""),
     cptLines: cptLinesFromSubmission(submission),
@@ -85,12 +90,15 @@ export function submissionToEditForm(submission) {
 /** Map billing form state to the API payload shape. */
 export function formToSubmissionPayload(form, billingSheetFile = null) {
   const cptLines = normalizeCptLines(form.cptLines);
+  const incidentTo = Boolean(form.incidentTo);
   return {
     patientName: form.patientName.trim(),
     patientDob: formatBillingDateUs(form.patientDob),
     location: form.location.trim(),
     dateOfService: formatBillingDateUs(form.dateOfService),
     providerName: form.providerName.trim(),
+    incidentTo,
+    attendingName: incidentTo ? form.attendingName.trim() : "",
     cptLinesJson: serializeCptLinesForApi(cptLines),
     icd10Code: formatBillingCodeList(form.icd10Codes),
     billingSheetFile,
