@@ -9,6 +9,33 @@ import {
   getPacificDateString,
 } from "../utils/calendarPacific.js";
 
+const toggleButtonClass = (active) =>
+  `px-3 py-2 sm:py-1 text-sm rounded border transition-colors ${
+    active
+      ? "bg-teal-600 text-white border-teal-600"
+      : "bg-white text-gray-700 border-gray-300 hover:border-teal-300"
+  }`;
+
+function ScheduleToggleGroup({ label, value, options, onChange }) {
+  return (
+    <div className="flex items-center gap-2 min-w-0">
+      <span className="text-sm text-gray-600 shrink-0 w-10 sm:w-auto">{label}:</span>
+      <div className="flex flex-1 gap-1">
+        {options.map(({ value: optionValue, label: optionLabel }) => (
+          <button
+            key={optionValue}
+            type="button"
+            onClick={() => onChange(optionValue)}
+            className={`${toggleButtonClass(value === optionValue)} flex-1 sm:flex-none`}
+          >
+            {optionLabel}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function PractitionerSchedule() {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -227,95 +254,64 @@ function PractitionerSchedule() {
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <div className="bg-white rounded-lg shadow pt-6 px-6 pb-3">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+      <div className="bg-white rounded-lg shadow pt-5 px-4 pb-3 sm:pt-6 sm:px-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-bold">Schedule</h2>
         </div>
-        <div className="flex flex-wrap items-center gap-4 mb-4">
-        <div className="flex items-center gap-2">
-          <label className="flex items-center gap-1">
-            <span className="text-sm text-gray-600">Date:</span>
-            <input
-              type="date"
-              value={date}
-              onChange={e => {
-                setDate(e.target.value);
-                setViewMode("day");
-              }}
-              className="border px-2 py-1 rounded"
+        <div className="space-y-3 mb-4">
+          <div className="flex items-center gap-2">
+            <label className="flex flex-1 min-w-0 items-center gap-2">
+              <span className="text-sm text-gray-600 shrink-0">Date:</span>
+              <input
+                type="date"
+                value={date}
+                onChange={e => {
+                  setDate(e.target.value);
+                  setViewMode("day");
+                }}
+                className="flex-1 min-w-0 border px-2 py-2 sm:py-1 rounded text-sm"
+              />
+            </label>
+            <button
+              type="button"
+              onClick={goToPrev}
+              className="inline-flex shrink-0 items-center justify-center h-9 w-9 sm:h-7 sm:w-7 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-teal-600 hover:text-white rounded-md border border-gray-300 transition-colors"
+              title={viewMode === "week" ? "Previous week" : "Previous day"}
+            >
+              ←
+            </button>
+            <button
+              type="button"
+              onClick={goToNext}
+              className="inline-flex shrink-0 items-center justify-center h-9 w-9 sm:h-7 sm:w-7 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-teal-600 hover:text-white rounded-md border border-gray-300 transition-colors"
+              title={viewMode === "week" ? "Next week" : "Next day"}
+            >
+              →
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <ScheduleToggleGroup
+              label="View"
+              value={viewMode}
+              onChange={setViewMode}
+              options={[
+                { value: "day", label: "Day" },
+                { value: "week", label: "Week" },
+              ]}
             />
-          </label>
-          <button
-            type="button"
-            onClick={goToPrev}
-            className="inline-flex items-center justify-center h-7 w-7 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-teal-600 hover:text-white rounded-md border border-gray-300 transition-colors"
-            title={viewMode === "week" ? "Previous week" : "Previous day"}
-          >
-            ←
-          </button>
-          <button
-            type="button"
-            onClick={goToNext}
-            className="inline-flex items-center justify-center h-7 w-7 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-teal-600 hover:text-white rounded-md border border-gray-300 transition-colors"
-            title={viewMode === "week" ? "Next week" : "Next day"}
-          >
-            →
-          </button>
-        </div>
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-gray-600">View:</span>
-            <button
-              type="button"
-              onClick={() => setViewMode("day")}
-              className={`px-3 py-1 text-sm rounded border ${
-                viewMode === "day"
-                  ? "bg-teal-600 text-white border-teal-600"
-                  : "bg-white text-gray-700 border-gray-300"
-              }`}
-            >
-              Day
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewMode("week")}
-              className={`px-3 py-1 text-sm rounded border ${
-                viewMode === "week"
-                  ? "bg-teal-600 text-white border-teal-600"
-                  : "bg-white text-gray-700 border-gray-300"
-              }`}
-            >
-              Week
-            </button>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-gray-600">Tab:</span>
-            <button
-              type="button"
-              onClick={() => setActiveTab("schedule")}
-              className={`px-3 py-1 text-sm rounded border ${
-                activeTab === "schedule"
-                  ? "bg-teal-600 text-white border-teal-600"
-                  : "bg-white text-gray-700 border-gray-300"
-              }`}
-            >
-              General
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab("surgeries")}
-              className={`px-3 py-1 text-sm rounded border ${
-                activeTab === "surgeries"
-                  ? "bg-teal-600 text-white border-teal-600"
-                  : "bg-white text-gray-700 border-gray-300"
-              }`}
-            >
-              Surgery
-            </button>
+            <ScheduleToggleGroup
+              label="Tab"
+              value={activeTab}
+              onChange={setActiveTab}
+              options={[
+                { value: "schedule", label: "General" },
+                { value: "surgeries", label: "Surgery" },
+              ]}
+            />
           </div>
         </div>
-      </div>
       {loading ? (
         <div className="flex items-center justify-center py-12 text-gray-500">
           <div className="flex items-center gap-2">

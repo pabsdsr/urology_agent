@@ -4,10 +4,21 @@ import LocationCombobox, {
 } from "./LocationCombobox.jsx";
 import MedicalCodeCombobox from "./MedicalCodeCombobox.jsx";
 import CptLinesEditor from "./CptLinesEditor.jsx";
-import { BILLING_DATE_PLACEHOLDER } from "../utils/billingFormValidation.js";
+import BillingDatePicker from "./BillingDatePicker.jsx";
 
 const inputClassName =
   "mt-1 w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-teal-500 focus:border-teal-500";
+
+const CURRENT_YEAR = new Date().getFullYear();
+
+function FieldLabel({ label, children }) {
+  return (
+    <div className="block">
+      <span className="text-sm font-medium text-gray-700">{label}</span>
+      {children}
+    </div>
+  );
+}
 
 export default function BillingSubmissionFields({
   form,
@@ -29,19 +40,17 @@ export default function BillingSubmissionFields({
           required
         />
       </label>
-      <label className="block">
-        <span className="text-sm font-medium text-gray-700">Patient DOB</span>
-        <input
-          type="text"
+
+      <FieldLabel label="Patient DOB">
+        <BillingDatePicker
           name="patientDob"
           value={form.patientDob}
           onChange={onInputChange}
-          placeholder={BILLING_DATE_PLACEHOLDER}
-          autoComplete="bday"
-          className={inputClassName}
-          required
+          inputClassName={inputClassName}
+          disableFuture
         />
-      </label>
+      </FieldLabel>
+
       <div
         className={`grid gap-4 md:col-span-2 ${
           form.incidentTo ? "grid-cols-1 md:grid-cols-2" : "grid-cols-1"
@@ -89,6 +98,7 @@ export default function BillingSubmissionFields({
           </div>
         ) : null}
       </div>
+
       <div className="block">
         <LocationCombobox
           storageKey={BILLING_LOCATIONS_STORAGE_KEY}
@@ -99,18 +109,18 @@ export default function BillingSubmissionFields({
           required
         />
       </div>
-      <label className="block">
-        <span className="text-sm font-medium text-gray-700">Date Of Service</span>
-        <input
-          type="text"
+
+      <FieldLabel label="Date Of Service">
+        <BillingDatePicker
           name="dateOfService"
           value={form.dateOfService}
           onChange={onInputChange}
-          placeholder={BILLING_DATE_PLACEHOLDER}
-          className={inputClassName}
-          required
+          inputClassName={inputClassName}
+          fromYear={CURRENT_YEAR - 10}
+          disableFuture
         />
-      </label>
+      </FieldLabel>
+
       <CptLinesEditor
         lines={form.cptLines}
         onChange={(cptLines) => setForm((prev) => ({ ...prev, cptLines }))}

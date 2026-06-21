@@ -6,7 +6,7 @@ const US_DATE_REGEX = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/;
 
 export const BILLING_DATE_PLACEHOLDER = "MM/DD/YYYY";
 
-/** Parse MM/DD/YYYY or legacy YYYY-MM-DD into calendar parts. */
+/** Parse MM/DD/YYYY or YYYY-MM-DD into calendar parts. */
 export function parseBillingDateParts(value) {
   const trimmed = String(value || "").trim();
   const usMatch = trimmed.match(US_DATE_REGEX);
@@ -28,6 +28,13 @@ export function parseBillingDateParts(value) {
   return null;
 }
 
+/** Parse a billing date string into a local Date, or null when invalid/empty. */
+export function parseBillingDate(value) {
+  const parts = parseBillingDateParts(value);
+  if (!parts) return null;
+  return new Date(parts.year, parts.month - 1, parts.day);
+}
+
 export function isValidBillingDate(value) {
   const parts = parseBillingDateParts(value);
   if (!parts) return false;
@@ -39,6 +46,21 @@ export function isValidBillingDate(value) {
     date.getMonth() === month - 1 &&
     date.getDate() === day
   );
+}
+
+/** Normalize to YYYY-MM-DD (form value emitted by date pickers). */
+export function formatBillingDateIso(value) {
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) return "";
+    const month = String(value.getMonth() + 1).padStart(2, "0");
+    const day = String(value.getDate()).padStart(2, "0");
+    return `${value.getFullYear()}-${month}-${day}`;
+  }
+  const parts = parseBillingDateParts(value);
+  if (!parts) return "";
+  const month = String(parts.month).padStart(2, "0");
+  const day = String(parts.day).padStart(2, "0");
+  return `${parts.year}-${month}-${day}`;
 }
 
 /** Normalize to MM/DD/YYYY for storage and display. */
@@ -112,7 +134,7 @@ export function validateBillingForm(form, { billingSheetFile = null, requireShee
   if (!form.patientName.trim()) return "Patient name is required.";
   if (!form.patientDob?.trim()) return "Patient DOB is required.";
   if (!isValidBillingDate(form.patientDob)) {
-    return `Patient DOB must be a valid date in ${BILLING_DATE_PLACEHOLDER} format.`;
+    return "Patient DOB must be a valid date.";
   }
   if (!form.providerName.trim()) return "Provider name is required.";
   if (form.incidentTo && !form.attendingName?.trim()) {
@@ -121,7 +143,7 @@ export function validateBillingForm(form, { billingSheetFile = null, requireShee
   if (!form.location.trim()) return "Location is required.";
   if (!form.dateOfService?.trim()) return "Date of service is required.";
   if (!isValidBillingDate(form.dateOfService)) {
-    return `Date of service must be a valid date in ${BILLING_DATE_PLACEHOLDER} format.`;
+    return "Date of service must be a valid date.";
   }
 
   const cptLinesError = validateCptLines(form.cptLines);

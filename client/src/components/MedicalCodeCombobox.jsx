@@ -3,6 +3,10 @@ import { billingCodesService } from "../services/billingCodesService.js";
 import DropdownPortal from "./DropdownPortal.jsx";
 import { readJsonStorage, writeJsonStorage } from "../utils/jsonStorage.js";
 import { parseBillingCodeList, parseBillingModifierList } from "../utils/billingFormValidation.js";
+import {
+  getRecentBillingCodes,
+  recordBillingCodeUsage,
+} from "../utils/billingCodeUsage.js";
 
 const CUSTOM_CODE_STORAGE_KEYS = {
   cpt: "billingCustomCptCodes",
@@ -24,6 +28,12 @@ function formatCodeLabel(codeType, code) {
   return codeType === "modifier" ? `-${code}` : code;
 }
 
+function normalizeQuery(codeType, query) {
+  return codeType === "modifier"
+    ? query.trim().replace(/^-/, "").toUpperCase()
+    : query.trim().toUpperCase();
+}
+
 function loadCustomCodes(storageKey) {
   return readJsonStorage(storageKey)
     .map((c) => String(c).trim())
@@ -34,8 +44,21 @@ function saveCustomCodes(storageKey, codes) {
   writeJsonStorage(storageKey, codes);
 }
 
+function CodeResultButton({ codeType, item, onSelect }) {
+  return (
+    <button
+      type="button"
+      className="block w-full text-left px-3 py-2 hover:bg-gray-100"
+      onClick={() => onSelect(item.code, item.description)}
+    >
+      <span className="font-mono text-gray-900">{formatCodeLabel(codeType, item.code)}</span>
+      {item.description ? <span className="text-gray-600"> — {item.description}</span> : null}
+    </button>
+  );
+}
+
 /**
- * CPT or ICD-10 multi-select with searchable curated codes and saved custom codes.
+ * CPT or ICD-10 multi-select with searchable curated codes, recent usage, and saved custom codes.
  */
 export default function MedicalCodeCombobox({
   codeType,
@@ -59,25 +82,19 @@ export default function MedicalCodeCombobox({
   const rootRef = useRef(null);
   const inputRef = useRef(null);
 
+  const normalizedQuery = normalizeQuery(codeType, query);
+  const selectedSet = useMemo(() => new Set(selectedCodes), [selectedCodes]);
+
   const handleQueryChange = (event) => {
     const next = event.target.value;
     setQuery(next);
-    if (next.trim()) {
-      setOpenPicker({ anchorEl: event.currentTarget });
-    } else {
-      setOpenPicker(null);
-    }
+    setOpenPicker(next.trim() ? { anchorEl: event.currentTarget } : null);
   };
 
   useEffect(() => {
     const handleDocumentClick = (event) => {
       const dropdownRoots = document.querySelectorAll('[data-dropdown-root="true"]');
-      let insideDropdown = false;
-      dropdownRoots.forEach((el) => {
-        if (el.contains(event.target)) {
-          insideDropdown = true;
-        }
-      });
+      const insideDropdown = Array.from(dropdownRoots).some((el) => el.contains(event.target));
       if (!insideDropdown && rootRef.current && !rootRef.current.contains(event.target)) {
         setOpenPicker(null);
       }
@@ -102,18 +119,14 @@ export default function MedicalCodeCombobox({
               ? billingCodesService.searchModifiers
               : billingCodesService.searchCpt;
         const codes = await search(query.trim(), 20);
-        if (!cancelled) {
-          setResults(codes);
-        }
+        if (!cancelled) setResults(codes);
       } catch {
         if (!cancelled) {
           setSearchError("Could not load code suggestions.");
           setResults([]);
         }
       } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
+        if (!cancelled) setLoading(false);
       }
     }, 200);
 
@@ -123,43 +136,51 @@ export default function MedicalCodeCombobox({
     };
   }, [openPicker, query, codeType]);
 
-  const normalizedQuery =
-    codeType === "modifier"
-      ? query.trim().replace(/^-/, "").toUpperCase()
-      : query.trim().toUpperCase();
-  const selectedSet = useMemo(() => new Set(selectedCodes), [selectedCodes]);
+  const recentOptions = useMemo(
+    () =>
+      getRecentBillingCodes(codeType, { query: normalizedQuery }).filter(
+        (item) => !selectedSet.has(item.code.toUpperCase())
+      ),
+    [codeType, normalizedQuery, selectedSet]
+  );
+
+  const recentCodeSet = useMemo(
+    () => new Set(recentOptions.map((item) => item.code.toUpperCase())),
+    [recentOptions]
+  );
 
   const savedCodeOptions = useMemo(() => {
     const unique = [...new Set(customCodes.map((c) => c.toUpperCase()))];
     const filtered = normalizedQuery
       ? unique.filter((code) => code.includes(normalizedQuery))
       : unique;
-    return filtered.filter((code) => !selectedSet.has(code)).sort((a, b) => a.localeCompare(b));
-  }, [customCodes, normalizedQuery, selectedSet]);
+    return filtered
+      .filter((code) => !selectedSet.has(code) && !recentCodeSet.has(code))
+      .sort((a, b) => a.localeCompare(b));
+  }, [customCodes, normalizedQuery, selectedSet, recentCodeSet]);
 
   const apiResults = useMemo(() => {
-    const seen = new Set(savedCodeOptions);
+    const seen = new Set([...savedCodeOptions, ...recentCodeSet]);
     return results.filter((item) => {
       const code = (item.code || "").toUpperCase();
       return code && !selectedSet.has(code) && !seen.has(code);
     });
-  }, [results, savedCodeOptions, selectedSet]);
+  }, [results, savedCodeOptions, recentCodeSet, selectedSet]);
 
-  const addCode = (code) => {
+  const addCode = (code, description = "") => {
     const upper = String(code).trim().toUpperCase();
     if (!upper) return;
-    let next =
-      maxCodes === 1
-        ? [upper]
-        : parseCodeValues(codeType, [...selectedCodes, upper]);
+
+    recordBillingCodeUsage(codeType, upper, description);
+    const next =
+      maxCodes === 1 ? [upper] : parseCodeValues(codeType, [...selectedCodes, upper]);
     onChangeValues(next);
     setQuery("");
     setOpenPicker(null);
   };
 
   const removeCode = (code) => {
-    const upper = code.toUpperCase();
-    onChangeValues(selectedCodes.filter((c) => c !== upper));
+    onChangeValues(selectedCodes.filter((c) => c !== code.toUpperCase()));
   };
 
   const removeCustomCode = (code) => {
@@ -182,7 +203,11 @@ export default function MedicalCodeCombobox({
   };
 
   const showEmptyHint =
-    !loading && !searchError && savedCodeOptions.length === 0 && apiResults.length === 0;
+    !loading &&
+    !searchError &&
+    recentOptions.length === 0 &&
+    savedCodeOptions.length === 0 &&
+    apiResults.length === 0;
 
   return (
     <div ref={rootRef} className="block">
@@ -237,7 +262,23 @@ export default function MedicalCodeCombobox({
       </div>
 
       <DropdownPortal open={!!openPicker} anchorEl={openPicker?.anchorEl}>
-        <div className="rounded-md border border-gray-200 bg-white shadow-lg text-sm">
+        <div className="rounded-md border border-gray-200 bg-white shadow-lg text-sm max-h-72 overflow-y-auto">
+          {recentOptions.length > 0 && (
+            <div>
+              <p className="px-3 py-1.5 text-xs font-medium uppercase tracking-wide text-gray-500 bg-gray-50 border-b border-gray-100">
+                Frequently used
+              </p>
+              {recentOptions.map((item) => (
+                <CodeResultButton
+                  key={`recent-${item.code}`}
+                  codeType={codeType}
+                  item={item}
+                  onSelect={addCode}
+                />
+              ))}
+            </div>
+          )}
+
           {savedCodeOptions.map((code) => (
             <div key={`saved-${code}`} className="flex items-center hover:bg-gray-100">
               <button
@@ -259,33 +300,24 @@ export default function MedicalCodeCombobox({
           ))}
 
           {loading && <p className="px-3 py-2 text-gray-500">Searching...</p>}
-          {!loading && searchError && (
-            <p className="px-3 py-2 text-red-600">{searchError}</p>
-          )}
+          {!loading && searchError && <p className="px-3 py-2 text-red-600">{searchError}</p>}
           {!loading &&
             apiResults.map((item) => (
-              <button
+              <CodeResultButton
                 key={item.code}
-                type="button"
-                className="block w-full text-left px-3 py-2 hover:bg-gray-100"
-                onClick={() => addCode(item.code)}
-              >
-                <span className="font-mono text-gray-900">
-                  {formatCodeLabel(codeType, item.code)}
-                </span>
-                <span className="text-gray-600"> — {item.description}</span>
-              </button>
+                codeType={codeType}
+                item={item}
+                onSelect={addCode}
+              />
             ))}
 
           {showEmptyHint && (
-            <p className="px-3 py-2 text-gray-500">
-              No matches. Type a code and add it below.
-            </p>
+            <p className="px-3 py-2 text-gray-500">No matches. Type a code and add it below.</p>
           )}
 
           <button
             type="button"
-            className="block w-full text-left px-3 py-2 border-t border-gray-200 text-teal-700 hover:bg-gray-50 font-mono"
+            className="sticky bottom-0 block w-full text-left px-3 py-2 border-t border-gray-200 bg-white text-teal-700 hover:bg-gray-50 font-mono"
             onClick={addCurrentAsCustomCode}
             disabled={!normalizedQuery || selectedSet.has(normalizedQuery)}
           >
