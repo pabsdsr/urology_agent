@@ -84,6 +84,7 @@ def _parse_billing_form_fields(
     date_of_service: str,
     provider_name: str,
     icd10_code: str,
+    date_of_service_end: str = "",
     incident_to: str = "false",
     attending_name: str = "",
     cpt_lines: str = "",
@@ -94,6 +95,7 @@ def _parse_billing_form_fields(
     patient_dob = patient_dob.strip()
     location = location.strip()
     date_of_service = date_of_service.strip()
+    date_of_service_end = date_of_service_end.strip()
     provider_name = provider_name.strip()
     attending_name = attending_name.strip()
     incident_to_flag = _parse_incident_to(incident_to)
@@ -134,6 +136,7 @@ def _parse_billing_form_fields(
         "patient_dob": patient_dob,
         "location": location,
         "date_of_service": date_of_service,
+        "date_of_service_end": date_of_service_end,
         "provider_name": provider_name,
         "incident_to": incident_to_flag,
         "attending_name": attending_name,
@@ -160,6 +163,7 @@ async def submit_billing(
     patient_dob: str = Form(...),
     location: str = Form(...),
     date_of_service: str = Form(""),
+    date_of_service_end: str = Form(""),
     provider_name: str = Form(""),
     incident_to: str = Form("false"),
     attending_name: str = Form(""),
@@ -175,6 +179,7 @@ async def submit_billing(
         patient_dob=patient_dob,
         location=location,
         date_of_service=date_of_service,
+        date_of_service_end=date_of_service_end,
         provider_name=provider_name,
         incident_to=incident_to,
         attending_name=attending_name,
@@ -293,6 +298,7 @@ async def update_billing_submission(
     patient_dob: str = Form(...),
     location: str = Form(...),
     date_of_service: str = Form(""),
+    date_of_service_end: str = Form(""),
     provider_name: str = Form(""),
     incident_to: str = Form("false"),
     attending_name: str = Form(""),
@@ -308,6 +314,7 @@ async def update_billing_submission(
         patient_dob=patient_dob,
         location=location,
         date_of_service=date_of_service,
+        date_of_service_end=date_of_service_end,
         provider_name=provider_name,
         incident_to=incident_to,
         attending_name=attending_name,

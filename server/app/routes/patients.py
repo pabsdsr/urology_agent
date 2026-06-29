@@ -45,14 +45,14 @@ async def search_patients(
                 resource = patient.get("resource", {})
                 if not resource:
                     continue
-                id = resource.get("id")
+                patient_id = resource.get("id")
                 name_obj = resource.get("name", [{}])[0]
                 family_name = name_obj.get("family", "")
                 given_names = name_obj.get("given", [""])
                 given_name = given_names[0] if given_names else ""
                 dob = resource.get("birthDate", "")
                 patients.append({
-                    "id": id,
+                    "id": patient_id,
                     "familyName": family_name,
                     "givenName": given_name,
                     "dob": dob

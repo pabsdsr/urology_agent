@@ -1,13 +1,14 @@
-import { validateCptLines } from "./cptLines.js";
+import { parseDelimitedList, validateCptLines } from "./cptLines.js";
 
 const ICD10_REGEX = /^[A-TV-Z][0-9][0-9AB]\.?[0-9A-TV-Z]{0,4}$/i;
 const ISO_DATE_REGEX = /^(\d{4})-(\d{2})-(\d{2})$/;
 const US_DATE_REGEX = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/;
 
-export const BILLING_DATE_PLACEHOLDER = "MM/DD/YYYY";
+// Billing dates use local calendar parts (not UTC); schedule dates use the
+// UTC Y-M-D helpers in calendarPacific.js. Keep the two date models separate.
 
 /** Parse MM/DD/YYYY or YYYY-MM-DD into calendar parts. */
-export function parseBillingDateParts(value) {
+function parseBillingDateParts(value) {
   const trimmed = String(value || "").trim();
   const usMatch = trimmed.match(US_DATE_REGEX);
   if (usMatch) {
@@ -72,8 +73,8 @@ export function formatBillingDateUs(value) {
   return `${month}/${day}/${parts.year}`;
 }
 
-export const MAX_BILLING_IMAGE_BYTES = 10 * 1024 * 1024;
-export const ALLOWED_BILLING_IMAGE_TYPES = [
+const MAX_BILLING_IMAGE_BYTES = 10 * 1024 * 1024;
+const ALLOWED_BILLING_IMAGE_TYPES = [
   "image/jpeg",
   "image/png",
   "image/webp",
@@ -82,17 +83,7 @@ export const ALLOWED_BILLING_IMAGE_TYPES = [
 export const BILLING_IMAGE_ACCEPT = ALLOWED_BILLING_IMAGE_TYPES.join(",");
 
 export function parseBillingCodeList(value) {
-  if (Array.isArray(value)) {
-    return [...new Set(value.map((c) => String(c).trim().toUpperCase()).filter(Boolean))];
-  }
-  return [
-    ...new Set(
-      String(value || "")
-        .split(/[,;]+/)
-        .map((c) => c.trim().toUpperCase())
-        .filter(Boolean)
-    ),
-  ];
+  return parseDelimitedList(value);
 }
 
 export function formatBillingCodeList(codes) {
@@ -100,18 +91,7 @@ export function formatBillingCodeList(codes) {
 }
 
 export function parseBillingModifierList(value) {
-  const normalize = (code) => String(code).trim().replace(/^-/, "").toUpperCase();
-  if (Array.isArray(value)) {
-    return [...new Set(value.map(normalize).filter(Boolean))];
-  }
-  return [
-    ...new Set(
-      String(value || "")
-        .split(/[,;]+/)
-        .map(normalize)
-        .filter(Boolean)
-    ),
-  ];
+  return parseDelimitedList(value, { stripDash: true });
 }
 
 /** @returns {string} Empty string when valid, otherwise an error message. */
@@ -144,6 +124,16 @@ export function validateBillingForm(form, { billingSheetFile = null, requireShee
   if (!form.dateOfService?.trim()) return "Date of service is required.";
   if (!isValidBillingDate(form.dateOfService)) {
     return "Date of service must be a valid date.";
+  }
+  if (form.dateOfServiceEnd?.trim()) {
+    if (!isValidBillingDate(form.dateOfServiceEnd)) {
+      return "Date of service end must be a valid date.";
+    }
+    const start = parseBillingDate(form.dateOfService);
+    const end = parseBillingDate(form.dateOfServiceEnd);
+    if (start && end && end < start) {
+      return "Date of service end must be on or after the start date.";
+    }
   }
 
   const cptLinesError = validateCptLines(form.cptLines);

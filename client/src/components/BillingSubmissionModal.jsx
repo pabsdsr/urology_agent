@@ -6,6 +6,7 @@ import { validateBillingForm, validateBillingSheetFile, BILLING_IMAGE_ACCEPT, fo
 import { formatCptLinesDisplay } from "../utils/cptLines.js";
 import { formatPacificDateTime } from "../utils/calendarPacific.js";
 import {
+  formatDateOfService,
   formToSubmissionPayload,
   lastUpdatedAt,
   submissionToEditForm,
@@ -232,7 +233,7 @@ export default function BillingSubmissionModal({
                   <DetailRow label="Attending Name" value={submission.attending_name} />
                 ) : null}
                 <DetailRow label="Location" value={submission.location} />
-                <DetailRow label="Date of service" value={formatBillingDateUs(submission.date_of_service)} />
+                <DetailRow label="Date of service" value={formatDateOfService(submission)} />
                 <DetailRow
                   label="CPT codes"
                   value={formatCptLinesDisplay(submission)}

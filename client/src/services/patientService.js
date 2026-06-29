@@ -16,13 +16,13 @@ export const patientService = {
     if (!input || input.trim() === "") return [];
     const parts = input.trim().split(/\s+/);
     if (parts.length === 1) {
-      // Try as given and as family, merge results client-side
+      // A single token could be a first or last name, so query both and
+      // de-duplicate the combined results by patient id.
       const [single] = parts;
       const [givenRes, familyRes] = await Promise.all([
         apiClient.get(`/patients?given=${encodeURIComponent(single)}`),
         apiClient.get(`/patients?family=${encodeURIComponent(single)}`),
       ]);
-      // Merge by id
       const seen = new Set();
       const merged = [...givenRes.data, ...familyRes.data].filter((p) => {
         if (seen.has(p.id)) return false;

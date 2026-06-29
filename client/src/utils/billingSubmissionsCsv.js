@@ -1,5 +1,9 @@
 import { formatPacificDateTime } from "./calendarPacific.js";
-import { lastUpdatedAt, submitterDisplay } from "./billingSubmissionUtils.js";
+import {
+  formatDateOfService,
+  lastUpdatedAt,
+  submitterDisplay,
+} from "./billingSubmissionUtils.js";
 import { formatBillingDateUs } from "./billingFormValidation.js";
 import { formatCptLinesDisplay } from "./cptLines.js";
 
@@ -39,7 +43,7 @@ function submissionToCsvRow(submission) {
     attending_name: submission.attending_name ?? "",
     incident_to: submission.incident_to ? "Yes" : "No",
     location: submission.location ?? "",
-    date_of_service: formatBillingDateUs(submission.date_of_service ?? ""),
+    date_of_service: formatDateOfService(submission),
     cpt_lines: formatCptLinesDisplay(submission),
     icd10_code: submission.icd10_code ?? "",
     processed: submission.processed ? "Yes" : "No",

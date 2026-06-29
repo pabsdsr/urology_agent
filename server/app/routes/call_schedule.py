@@ -85,7 +85,7 @@ async def get_call_schedule(
 async def list_call_schedule_changelog(
     limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
-    admin: SessionUser = Depends(require_admin),
+    current_user: SessionUser = Depends(require_admin),
 ):
     """
     Newest-first change log of call schedule edits (who changed what and when).

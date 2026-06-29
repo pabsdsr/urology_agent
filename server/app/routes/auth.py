@@ -3,7 +3,6 @@ from typing import Optional
 
 from app.models import SessionUser
 from app.services.auth_service import auth_service
-from app.services.billing_access import billing_flags_from_roles
 
 router = APIRouter(
     prefix="/auth",
@@ -11,17 +10,18 @@ router = APIRouter(
 )
 
 
+def _extract_bearer_token(authorization: Optional[str]) -> Optional[str]:
+    """Return the bearer token from an Authorization header, or None if absent/empty."""
+    if not authorization or not authorization.startswith("Bearer "):
+        return None
+    return authorization[7:].strip() or None
+
+
 async def get_current_user(
     authorization: Optional[str] = Header(None),
 ) -> SessionUser:
     """Resolve authenticated user from Bearer access token."""
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(
-            status_code=401,
-            detail="No access token provided",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    access_token = authorization[7:].strip()
+    access_token = _extract_bearer_token(authorization)
     if not access_token:
         raise HTTPException(
             status_code=401,
@@ -50,6 +50,7 @@ async def require_admin(
 async def require_billing_staff(
     current_user: SessionUser = Depends(get_current_user),
 ) -> SessionUser:
+    """Require permission to submit billing entries."""
     if not current_user.billing_staff:
         raise HTTPException(status_code=403, detail="Billing submission access required")
     return current_user
@@ -58,6 +59,7 @@ async def require_billing_staff(
 async def require_billing_processor(
     current_user: SessionUser = Depends(get_current_user),
 ) -> SessionUser:
+    """Require permission to process/manage billing entries."""
     if not current_user.billing_processor:
         raise HTTPException(status_code=403, detail="Billing processing access required")
     return current_user
@@ -66,6 +68,7 @@ async def require_billing_processor(
 async def require_billing_viewer(
     current_user: SessionUser = Depends(get_current_user),
 ) -> SessionUser:
+    """Require permission to view billing (submitter or processor)."""
     if not (current_user.billing_staff or current_user.billing_processor):
         raise HTTPException(status_code=403, detail="Billing access required")
     return current_user
@@ -94,10 +97,9 @@ async def logout(authorization: Optional[str] = Header(None)):
     Clears server-side ModMed/Qdrant cache for this Entra user.
     The client should also sign out with MSAL.
     """
-    if authorization and authorization.startswith("Bearer "):
-        token = authorization[7:].strip()
-        if token:
-            auth_service.try_clear_cache_for_access_token(token)
+    token = _extract_bearer_token(authorization)
+    if token:
+        auth_service.try_clear_cache_for_access_token(token)
     return {"message": "Logged out successfully"}
 
 

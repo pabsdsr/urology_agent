@@ -14,6 +14,7 @@ const EMPTY_FORM = {
   patientDob: "",
   location: "",
   dateOfService: "",
+  dateOfServiceEnd: "",
   providerName: "",
   incidentTo: false,
   attendingName: "",

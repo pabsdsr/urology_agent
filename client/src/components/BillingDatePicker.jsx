@@ -5,6 +5,7 @@ import {
   endOfWeek,
   format,
   isAfter,
+  isBefore,
   isSameDay,
   isSameMonth,
   startOfDay,
@@ -38,9 +39,10 @@ function calendarDays(viewDate) {
   });
 }
 
-function dayButtonClass({ inMonth, isSelected, isDisabled, isToday }) {
-  if (isSelected) return "bg-teal-600 text-white font-medium";
+function dayButtonClass({ inMonth, isEndpoint, inRange, isDisabled }) {
+  if (isEndpoint) return "bg-teal-600 text-white font-medium";
   if (isDisabled) return "text-gray-300 opacity-40 cursor-not-allowed hover:bg-transparent";
+  if (inRange) return "bg-teal-50 text-teal-900 hover:bg-teal-100";
   if (inMonth) return "text-gray-900 hover:bg-teal-50";
   return "text-gray-300 hover:bg-gray-50";
 }
@@ -54,16 +56,23 @@ export default function BillingDatePicker({
   toYear = new Date().getFullYear(),
   disableFuture = false,
   placeholder = "Select date",
+  range = false,
+  endValue = "",
+  onRangeChange,
 }) {
   const id = useId();
   const rootRef = useRef(null);
   const [open, setOpen] = useState(false);
-  const selectedDate = parseBillingDate(value);
+  const [draftStart, setDraftStart] = useState(null);
+  const [hoverDate, setHoverDate] = useState(null);
+
+  const selectedStart = parseBillingDate(value);
+  const selectedEnd = parseBillingDate(endValue);
   const maxDate = disableFuture ? startOfDay(new Date()) : null;
-  const [viewDate, setViewDate] = useState(() => selectedDate || new Date());
+  const [viewDate, setViewDate] = useState(() => selectedStart || new Date());
 
   useEffect(() => {
-    if (selectedDate) setViewDate(selectedDate);
+    if (selectedStart) setViewDate(selectedStart);
   }, [value]);
 
   useEffect(() => {
@@ -85,14 +94,47 @@ export default function BillingDatePicker({
     };
   }, [open]);
 
+  // Reset the in-progress range selection whenever the popover opens/closes.
+  useEffect(() => {
+    setDraftStart(null);
+    setHoverDate(null);
+  }, [open]);
+
   const yearOptions = useMemo(() => buildYearOptions(fromYear, toYear), [fromYear, toYear]);
   const days = useMemo(() => calendarDays(viewDate), [viewDate]);
-  const displayValue = selectedDate ? formatBillingDateUs(value) : "";
 
-  const selectDate = (date) => {
-    onChange({ target: { name, value: formatBillingDateIso(date) } });
+  // Highlighted endpoints. While picking a range, the pending start wins and the
+  // end follows the hovered day; otherwise the committed start/end are shown.
+  // In single mode there is no end, so the same logic drives both modes.
+  const previewEnd = draftStart && hoverDate && isAfter(hoverDate, draftStart) ? hoverDate : null;
+  const rangeStart = draftStart || selectedStart;
+  const rangeEnd = !range ? null : draftStart ? previewEnd : selectedEnd;
+
+  const startText = selectedStart ? formatBillingDateUs(value) : "";
+  const endText = range && selectedEnd ? formatBillingDateUs(endValue) : "";
+  const displayValue =
+    endText && endText !== startText ? `${startText} – ${endText}` : startText;
+
+  const selectSingle = (day) => {
+    onChange({ target: { name, value: formatBillingDateIso(day) } });
     setOpen(false);
   };
+
+  const selectRange = (day) => {
+    // No pending start yet, or the click lands before it: (re)start the selection.
+    if (!draftStart || isBefore(day, draftStart)) {
+      setDraftStart(day);
+      onRangeChange(formatBillingDateIso(day), "");
+      return;
+    }
+    // Second click on or after the start commits the range (same day = single date).
+    const endIso = isSameDay(day, draftStart) ? "" : formatBillingDateIso(day);
+    onRangeChange(formatBillingDateIso(draftStart), endIso);
+    setDraftStart(null);
+    setOpen(false);
+  };
+
+  const handleDayClick = (day) => (range ? selectRange(day) : selectSingle(day));
 
   const setViewPart = (part, nextValue) => {
     setViewDate((current) =>
@@ -151,6 +193,14 @@ export default function BillingDatePicker({
             </select>
           </div>
 
+          {range && (
+            <p className="mb-2 text-xs text-gray-500">
+              {draftStart
+                ? "Select the end date (or the same day for a single date)."
+                : "Select a start date, then an end date for a range."}
+            </p>
+          )}
+
           <div className="grid grid-cols-7 gap-1 mb-1">
             {WEEKDAY_LABELS.map((label) => (
               <div key={label} className="text-center text-xs font-medium text-gray-500 py-1">
@@ -162,22 +212,31 @@ export default function BillingDatePicker({
           <div className="grid grid-cols-7 gap-1">
             {days.map((day) => {
               const inMonth = isSameMonth(day, viewDate);
-              const isSelected = selectedDate && isSameDay(day, selectedDate);
               const isDisabled = maxDate && isAfter(startOfDay(day), maxDate);
               const isToday = isSameDay(day, new Date());
+
+              const isEndpoint =
+                (rangeStart && isSameDay(day, rangeStart)) ||
+                (rangeEnd && isSameDay(day, rangeEnd));
+              const inRange =
+                rangeStart &&
+                rangeEnd &&
+                isAfter(day, rangeStart) &&
+                isBefore(day, rangeEnd);
 
               return (
                 <button
                   key={day.toISOString()}
                   type="button"
                   disabled={isDisabled}
-                  onClick={() => selectDate(day)}
+                  onClick={() => handleDayClick(day)}
+                  onMouseEnter={() => range && draftStart && setHoverDate(day)}
                   className={`h-9 w-full rounded-md text-sm transition-colors ${dayButtonClass({
                     inMonth,
-                    isSelected,
+                    isEndpoint,
+                    inRange,
                     isDisabled,
-                    isToday,
-                  })} ${isToday && !isSelected ? "ring-1 ring-teal-300" : ""}`}
+                  })} ${isToday && !isEndpoint ? "ring-1 ring-teal-300" : ""}`}
                 >
                   {format(day, "d")}
                 </button>

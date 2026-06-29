@@ -2,33 +2,18 @@ const CPT_MODIFIER_REGEX = /^[A-Z0-9]{2}$/;
 
 export const EMPTY_CPT_LINE = { code: "", modifiers: [] };
 
-function parseCodeList(value) {
-  if (Array.isArray(value)) {
-    return [...new Set(value.map((c) => String(c).trim().toUpperCase()).filter(Boolean))];
-  }
-  return [
-    ...new Set(
-      String(value || "")
-        .split(/[,;]+/)
-        .map((c) => c.trim().toUpperCase())
-        .filter(Boolean)
-    ),
-  ];
-}
-
-function parseModifierList(value) {
-  const normalize = (code) => String(code).trim().replace(/^-/, "").toUpperCase();
-  if (Array.isArray(value)) {
-    return [...new Set(value.map(normalize).filter(Boolean))];
-  }
-  return [
-    ...new Set(
-      String(value || "")
-        .split(/[,;]+/)
-        .map(normalize)
-        .filter(Boolean)
-    ),
-  ];
+/**
+ * Split a comma/semicolon-delimited string (or array) into a list of unique,
+ * upper-cased codes. Pass `stripDash` to drop a single leading dash, which is
+ * used when normalizing CPT modifiers (e.g. "-59" -> "59").
+ */
+export function parseDelimitedList(value, { stripDash = false } = {}) {
+  const normalize = (code) => {
+    const trimmed = String(code).trim();
+    return (stripDash ? trimmed.replace(/^-/, "") : trimmed).toUpperCase();
+  };
+  const items = Array.isArray(value) ? value : String(value || "").split(/[,;]+/);
+  return [...new Set(items.map(normalize).filter(Boolean))];
 }
 
 function isValidCptCode(code) {
@@ -37,12 +22,12 @@ function isValidCptCode(code) {
   return [...normalized.slice(0, -1)].every((ch) => ch >= "0" && ch <= "9");
 }
 
-export function normalizeCptLine(line) {
+function normalizeCptLine(line) {
   return {
     code: String(line?.code || "")
       .trim()
       .toUpperCase(),
-    modifiers: parseModifierList(line?.modifiers || []),
+    modifiers: parseDelimitedList(line?.modifiers || [], { stripDash: true }),
   };
 }
 
@@ -56,8 +41,8 @@ export function cptLinesFromSubmission(submission) {
   if (Array.isArray(submission?.cpt_lines) && submission.cpt_lines.length > 0) {
     return normalizeCptLines(submission.cpt_lines);
   }
-  const codes = parseCodeList(submission?.cpt_code);
-  const modifiers = parseModifierList(submission?.cpt_modifiers);
+  const codes = parseDelimitedList(submission?.cpt_code);
+  const modifiers = parseDelimitedList(submission?.cpt_modifiers, { stripDash: true });
   if (codes.length === 0) {
     return [{ ...EMPTY_CPT_LINE }];
   }

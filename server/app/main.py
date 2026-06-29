@@ -42,17 +42,12 @@ def create_app():
     allowed_origins = []
 
     if os.getenv('ENVIRONMENT') == 'production':
-        # Production domains - using actual deployed domains
         allowed_origins = [
-            # Frontend and backend domains
             "https://www.uroassist.net",
             "https://uroassist.net",
             "https://api.uroassist.net",
-            # Allow localhost for testing during deployment
-            # "http://localhost:5173",
         ]
     else:
-        # Allow HTTP for local development
         allowed_origins = [
             "http://localhost:5173",
         ]
@@ -83,20 +78,17 @@ def create_app():
 
     return app
 
-def run(query: str, patient_id: str, practice_url: str = None, user_qdrant_tool = None):
+def run(query: str, patient_id: str, practice_url: str | None = None, user_qdrant_tool=None):
     """
     Execute the CrewAI clinical assistant synchronously (call via asyncio.to_thread from routes).
     """
     inputs = {"query": query, "id": patient_id, "practice_url": practice_url}
 
     try:
-        # Create clinical assistant crew instance
         crew_instance = ClinicalAssistantCrew()
-        
-        # Set user's qdrant tool if provided
         if user_qdrant_tool:
             crew_instance.user_qdrant_tool = user_qdrant_tool
-        
+
         crew = crew_instance.crew()
         result = crew.kickoff(inputs=inputs)
     except Exception as e:

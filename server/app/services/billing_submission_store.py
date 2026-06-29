@@ -58,6 +58,7 @@ def _normalize_entry(entry: Dict[str, Any]) -> Dict[str, Any]:
     normalized.setdefault("cpt_modifiers", "")
     normalized["incident_to"] = bool(entry.get("incident_to"))
     normalized.setdefault("attending_name", "")
+    normalized.setdefault("date_of_service_end", "")
     return normalized
 
 
@@ -169,6 +170,7 @@ def save_submission(
     patient_dob: str,
     location: str,
     date_of_service: str,
+    date_of_service_end: str = "",
     provider_name: str,
     incident_to: bool = False,
     attending_name: str = "",
@@ -200,6 +202,7 @@ def save_submission(
         "patient_dob": patient_dob,
         "location": location,
         "date_of_service": date_of_service,
+        "date_of_service_end": date_of_service_end,
         "provider_name": provider_name,
         "incident_to": bool(incident_to),
         "attending_name": attending_name if incident_to else "",
@@ -340,6 +343,7 @@ def _apply_submission_update(
     location: str,
     date_of_service: str,
     provider_name: str,
+    date_of_service_end: str = "",
     incident_to: bool = False,
     attending_name: str = "",
     cpt_code: str,
@@ -354,6 +358,7 @@ def _apply_submission_update(
     entry["patient_dob"] = patient_dob
     entry["location"] = location
     entry["date_of_service"] = date_of_service
+    entry["date_of_service_end"] = date_of_service_end
     entry["provider_name"] = provider_name
     entry["incident_to"] = bool(incident_to)
     entry["attending_name"] = attending_name if incident_to else ""
@@ -383,6 +388,7 @@ def update_submission(
     patient_dob: str,
     location: str,
     date_of_service: str,
+    date_of_service_end: str = "",
     provider_name: str,
     incident_to: bool = False,
     attending_name: str = "",
@@ -404,6 +410,7 @@ def update_submission(
             patient_dob=patient_dob,
             location=location,
             date_of_service=date_of_service,
+            date_of_service_end=date_of_service_end,
             provider_name=provider_name,
             incident_to=incident_to,
             attending_name=attending_name,

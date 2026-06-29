@@ -6,6 +6,7 @@ function buildBillingFormData(payload, { includeSheet = true } = {}) {
   formData.append("patient_dob", payload.patientDob);
   formData.append("location", payload.location);
   formData.append("date_of_service", payload.dateOfService || "");
+  formData.append("date_of_service_end", payload.dateOfServiceEnd || "");
   formData.append("provider_name", payload.providerName || "");
   formData.append("incident_to", payload.incidentTo ? "true" : "false");
   formData.append("attending_name", payload.attendingName || "");

@@ -11,8 +11,8 @@ logger = logging.getLogger(__name__)
 
 
 router = APIRouter(
-    prefix = "/run_crew",
-    tags = ["run_crew"]
+    prefix="/run_crew",
+    tags=["run_crew"],
 )
 
 class CrewInput(BaseModel):
@@ -23,7 +23,7 @@ class CrewInput(BaseModel):
 @router.post("")
 async def run_crew(req: CrewInput, current_user: SessionUser = Depends(require_modmed_session)):
 
-    # Always ensure patient data is embedded before running crew
+    # Prefetch and embed the patient's chart into Qdrant so the crew can query it.
     await get_patient_info(
         req.id, 
         modmed_token=current_user.modmed_access_token,
@@ -52,7 +52,7 @@ async def run_crew(req: CrewInput, current_user: SessionUser = Depends(require_m
                    extra={"patient_id": req.id, "username": current_user.username})
         
         return {"result": result}
-    except Exception as e:
+    except Exception:
         logger.exception("Crew execution failed", 
                         extra={"patient_id": req.id, "query": req.query[:50], 
                               "username": current_user.username, "practice_url": current_user.practice_url})

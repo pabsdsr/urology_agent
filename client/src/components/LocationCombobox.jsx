@@ -1,19 +1,13 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import DropdownPortal from "./DropdownPortal.jsx";
 import { readJsonStorage, writeJsonStorage } from "../utils/jsonStorage.js";
+import { useDropdownDismiss } from "../hooks/useDropdownDismiss.js";
+import { BILLING_INPUT_CLASS } from "../utils/billingUi.js";
 
 export const CALL_SCHEDULE_LOCATIONS_STORAGE_KEY = "callScheduleCustomLocations";
 export const CALL_SCHEDULE_PRACTITIONERS_STORAGE_KEY = "callScheduleCustomPractitioners";
 export const BILLING_LOCATIONS_STORAGE_KEY = "billingCustomLocations";
 export const BILLING_PROVIDERS_STORAGE_KEY = "billingCustomProviders";
-
-function loadCustomLocations(storageKey) {
-  return readJsonStorage(storageKey);
-}
-
-function saveCustomLocations(storageKey, locations) {
-  writeJsonStorage(storageKey, locations);
-}
 
 /**
  * Location text field with dropdown of saved custom locations.
@@ -26,30 +20,14 @@ export default function LocationCombobox({
   placeholder = "Location",
   addOptionSuffix = "location",
   required = false,
-  inputClassName = "w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-teal-500 focus:border-teal-500",
+  inputClassName = BILLING_INPUT_CLASS,
 }) {
   const [customLocations, setCustomLocations] = useState(() =>
-    loadCustomLocations(storageKey)
+    readJsonStorage(storageKey)
   );
   const [openPicker, setOpenPicker] = useState(null);
 
-  useEffect(() => {
-    const handleDocumentClick = (event) => {
-      const dropdownRoots = document.querySelectorAll('[data-dropdown-root="true"]');
-      let insideDropdown = false;
-      dropdownRoots.forEach((el) => {
-        if (el.contains(event.target)) {
-          insideDropdown = true;
-        }
-      });
-      if (!insideDropdown) {
-        setOpenPicker(null);
-      }
-    };
-
-    document.addEventListener("click", handleDocumentClick);
-    return () => document.removeEventListener("click", handleDocumentClick);
-  }, []);
+  useDropdownDismiss(() => setOpenPicker(null));
 
   const allLocationOptions = useMemo(() => {
     const unique = [...new Set(customLocations)];
@@ -61,7 +39,7 @@ export default function LocationCombobox({
   const removeLocation = (opt) => {
     setCustomLocations((prev) => {
       const next = prev.filter((x) => x !== opt);
-      saveCustomLocations(storageKey, next);
+      writeJsonStorage(storageKey, next);
       return next;
     });
   };
@@ -70,7 +48,7 @@ export default function LocationCombobox({
     if (!trimmedValue) return;
     setCustomLocations((prev) => {
       const next = Array.from(new Set([...prev, trimmedValue]));
-      saveCustomLocations(storageKey, next);
+      writeJsonStorage(storageKey, next);
       return next;
     });
     setOpenPicker(null);

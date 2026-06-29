@@ -12,6 +12,7 @@ import {
   CALL_SCHEDULE_PRACTITIONERS_STORAGE_KEY,
 } from "./LocationCombobox.jsx";
 import { readJsonStorage, writeJsonStorage } from "../utils/jsonStorage.js";
+import { useDropdownDismiss } from "../hooks/useDropdownDismiss.js";
 import {
   formatYMD,
   addDays,
@@ -60,33 +61,10 @@ export default function CallScheduleAdmin() {
   const [uploadStatusError, setUploadStatusError] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
 
-  useEffect(() => {
-    const handleDocumentClick = (event) => {
-      if (!containerRef.current) {
-        setOpenLocationPicker(null);
-        setOpenPractitionerPicker(null);
-        return;
-      }
-      const dropdownRoots = document.querySelectorAll(
-        '[data-dropdown-root="true"]'
-      );
-      let insideDropdown = false;
-      dropdownRoots.forEach((el) => {
-        if (el.contains(event.target)) {
-          insideDropdown = true;
-        }
-      });
-      if (!insideDropdown) {
-        setOpenLocationPicker(null);
-        setOpenPractitionerPicker(null);
-      }
-    };
-
-    document.addEventListener("click", handleDocumentClick);
-    return () => {
-      document.removeEventListener("click", handleDocumentClick);
-    };
-  }, []);
+  useDropdownDismiss(() => {
+    setOpenLocationPicker(null);
+    setOpenPractitionerPicker(null);
+  });
 
   const handleWeekStartChange = (val) => {
     if (!val) return;

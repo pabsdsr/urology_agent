@@ -5,9 +5,9 @@ import LocationCombobox, {
 import MedicalCodeCombobox from "./MedicalCodeCombobox.jsx";
 import CptLinesEditor from "./CptLinesEditor.jsx";
 import BillingDatePicker from "./BillingDatePicker.jsx";
+import { BILLING_INPUT_CLASS } from "../utils/billingUi.js";
 
-const inputClassName =
-  "mt-1 w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-teal-500 focus:border-teal-500";
+const inputClassName = `mt-1 ${BILLING_INPUT_CLASS}`;
 
 const CURRENT_YEAR = new Date().getFullYear();
 
@@ -28,6 +28,10 @@ export default function BillingSubmissionFields({
   cptLinesResetKey,
   children,
 }) {
+  const handleServiceRangeChange = (startIso, endIso) => {
+    setForm((prev) => ({ ...prev, dateOfService: startIso, dateOfServiceEnd: endIso }));
+  };
+
   return (
     <div className={className}>
       <label className="block">
@@ -112,12 +116,15 @@ export default function BillingSubmissionFields({
 
       <FieldLabel label="Date Of Service">
         <BillingDatePicker
+          range
           name="dateOfService"
           value={form.dateOfService}
-          onChange={onInputChange}
+          endValue={form.dateOfServiceEnd}
+          onRangeChange={handleServiceRangeChange}
           inputClassName={inputClassName}
           fromYear={CURRENT_YEAR - 10}
           disableFuture
+          placeholder="Select date or range"
         />
       </FieldLabel>
 

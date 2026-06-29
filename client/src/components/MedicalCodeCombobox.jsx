@@ -3,6 +3,8 @@ import { billingCodesService } from "../services/billingCodesService.js";
 import DropdownPortal from "./DropdownPortal.jsx";
 import { readJsonStorage, writeJsonStorage } from "../utils/jsonStorage.js";
 import { parseBillingCodeList, parseBillingModifierList } from "../utils/billingFormValidation.js";
+import { useDropdownDismiss } from "../hooks/useDropdownDismiss.js";
+import { BILLING_INPUT_CLASS } from "../utils/billingUi.js";
 import {
   getRecentBillingCodes,
   recordBillingCodeUsage,
@@ -67,7 +69,7 @@ export default function MedicalCodeCombobox({
   label,
   placeholder,
   maxCodes,
-  inputClassName = "w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-teal-500 focus:border-teal-500",
+  inputClassName = BILLING_INPUT_CLASS,
 }) {
   const storageKey = CUSTOM_CODE_STORAGE_KEYS[codeType];
   const codeTypeLabel = CODE_TYPE_LABELS[codeType] || "code";
@@ -91,18 +93,7 @@ export default function MedicalCodeCombobox({
     setOpenPicker(next.trim() ? { anchorEl: event.currentTarget } : null);
   };
 
-  useEffect(() => {
-    const handleDocumentClick = (event) => {
-      const dropdownRoots = document.querySelectorAll('[data-dropdown-root="true"]');
-      const insideDropdown = Array.from(dropdownRoots).some((el) => el.contains(event.target));
-      if (!insideDropdown && rootRef.current && !rootRef.current.contains(event.target)) {
-        setOpenPicker(null);
-      }
-    };
-
-    document.addEventListener("click", handleDocumentClick);
-    return () => document.removeEventListener("click", handleDocumentClick);
-  }, []);
+  useDropdownDismiss(() => setOpenPicker(null), { extraRefs: [rootRef] });
 
   useEffect(() => {
     if (!openPicker) return undefined;

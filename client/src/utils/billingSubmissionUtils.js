@@ -67,6 +67,16 @@ export function submitterDisplay(submission) {
   return submission?.submitter_email || submission?.submitted_by || "";
 }
 
+/** Display the date of service as a single date or "start – end" range. */
+export function formatDateOfService(submission) {
+  const start = formatBillingDateUs(submission?.date_of_service || "");
+  const end = formatBillingDateUs(submission?.date_of_service_end || "");
+  if (end && end !== start) {
+    return `${start} – ${end}`;
+  }
+  return start;
+}
+
 /** Last edit time, or submitted time if the record was never edited. */
 export function lastUpdatedAt(submission) {
   return submission?.updated_at || submission?.submitted_at || "";
@@ -82,6 +92,7 @@ export function submissionToEditForm(submission) {
     attendingName: incidentTo ? submission.attending_name || "" : "",
     location: submission.location || "",
     dateOfService: formatBillingDateUs(submission.date_of_service || ""),
+    dateOfServiceEnd: formatBillingDateUs(submission.date_of_service_end || ""),
     cptLines: cptLinesFromSubmission(submission),
     icd10Codes: parseBillingCodeList(submission.icd10_code),
   };
@@ -96,6 +107,7 @@ export function formToSubmissionPayload(form, billingSheetFile = null) {
     patientDob: formatBillingDateUs(form.patientDob),
     location: form.location.trim(),
     dateOfService: formatBillingDateUs(form.dateOfService),
+    dateOfServiceEnd: form.dateOfServiceEnd ? formatBillingDateUs(form.dateOfServiceEnd) : "",
     providerName: form.providerName.trim(),
     incidentTo,
     attendingName: incidentTo ? form.attendingName.trim() : "",

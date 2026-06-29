@@ -10,6 +10,7 @@ import { formatCptLinesDisplay } from "../utils/cptLines.js";
 import { downloadBillingSubmissionsCsv } from "../utils/billingSubmissionsCsv.js";
 import {
   compareBillingSubmissions,
+  formatDateOfService,
   submitterDisplay,
 } from "../utils/billingSubmissionUtils.js";
 
@@ -345,7 +346,7 @@ function BillingSubmissionsInbox() {
                     <td className="px-3 py-2">{row.attending_name || "—"}</td>
                     <td className="px-3 py-2">{row.location || "—"}</td>
                     <td className="px-3 py-2 whitespace-nowrap">
-                      {formatBillingDateUs(row.date_of_service) || "—"}
+                      {formatDateOfService(row) || "—"}
                     </td>
                     <td className="px-3 py-2 font-mono">
                       {formatCptLinesDisplay(row) || "—"}
