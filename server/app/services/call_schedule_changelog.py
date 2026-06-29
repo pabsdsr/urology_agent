@@ -5,12 +5,17 @@ Env:
   CALL_SCHEDULE_S3_BUCKET — if set, store log in S3
   CALL_SCHEDULE_CHANGELOG_S3_KEY — object key (default ``call_schedule_changelog.json``)
 """
-import json
 import logging
 import os
 from typing import Any, Dict, List
 
-from app.services.local_file_lock import local_file_lock
+from app.services.s3_json_store import (
+    init_s3_client,
+    json_write_lock,
+    local_read_json,
+    s3_get_json,
+    update_json_document,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -24,102 +29,69 @@ CALL_SCHEDULE_CHANGELOG_S3_KEY = (
 
 MAX_CHANGELOG_ENTRIES = 5000
 
-_s3_client = None
-if CALL_SCHEDULE_S3_BUCKET:
-    try:
-        import boto3  # type: ignore
-
-        _s3_client = boto3.client("s3")
-    except Exception:
-        _s3_client = None
+_s3_client = init_s3_client(CALL_SCHEDULE_S3_BUCKET or "", label="changelog")
 
 
-def _load_changelog_from_s3() -> List[Dict[str, Any]]:
-    if not (_s3_client and CALL_SCHEDULE_S3_BUCKET):
-        return []
-    try:
-        resp = _s3_client.get_object(
-            Bucket=CALL_SCHEDULE_S3_BUCKET, Key=CALL_SCHEDULE_CHANGELOG_S3_KEY
-        )
-        body = resp["Body"].read().decode("utf-8")
-        data = json.loads(body)
-        if isinstance(data, list):
-            return [x for x in data if isinstance(x, dict)]
-        return []
-    except _s3_client.exceptions.NoSuchKey:  # type: ignore[attr-defined]
-        return []
-    except Exception as e:
-        logger.warning(
-            "S3 get changelog failed key=%s: %s", CALL_SCHEDULE_CHANGELOG_S3_KEY, e
-        )
-        return []
-
-
-def _save_changelog_to_s3(entries: List[Dict[str, Any]]) -> None:
-    if not (_s3_client and CALL_SCHEDULE_S3_BUCKET):
-        return
-    try:
-        body = json.dumps(entries, indent=2).encode("utf-8")
-        _s3_client.put_object(
-            Bucket=CALL_SCHEDULE_S3_BUCKET,
-            Key=CALL_SCHEDULE_CHANGELOG_S3_KEY,
-            Body=body,
-            ContentType="application/json",
-        )
-    except Exception as e:
-        logger.error(
-            "S3 put changelog failed key=%s: %s", CALL_SCHEDULE_CHANGELOG_S3_KEY, e
-        )
+def _uses_s3() -> bool:
+    return bool(_s3_client and CALL_SCHEDULE_S3_BUCKET)
 
 
 def load_changelog() -> List[Dict[str, Any]]:
-    if _s3_client and CALL_SCHEDULE_S3_BUCKET:
-        s3_data = _load_changelog_from_s3()
-        if s3_data:
-            return s3_data
-    if not os.path.exists(CALL_SCHEDULE_CHANGELOG_PATH):
-        return []
-    try:
-        with open(CALL_SCHEDULE_CHANGELOG_PATH, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        if isinstance(data, list):
-            return [x for x in data if isinstance(x, dict)]
-        return []
-    except Exception as e:
-        logger.warning(
-            "Read changelog failed path=%s: %s", CALL_SCHEDULE_CHANGELOG_PATH, e
+    """Read the full change log.
+
+    When S3 is configured it is the sole source of truth (a missing/empty object
+    means "no history yet"); we never fall back to local disk.
+    """
+    if _uses_s3():
+        raw = s3_get_json(
+            _s3_client,
+            CALL_SCHEDULE_S3_BUCKET,
+            CALL_SCHEDULE_CHANGELOG_S3_KEY,
+            default_factory=list,
+            label="changelog",
         )
-        return []
+    else:
+        raw = local_read_json(
+            CALL_SCHEDULE_CHANGELOG_PATH, default_factory=list, label="changelog"
+        )
+    return _normalize_changelog(raw)
+
+
+def _normalize_changelog(raw: Any) -> List[Dict[str, Any]]:
+    """Coerce stored changelog data into a clean list of record dicts."""
+    return [x for x in raw if isinstance(x, dict)] if isinstance(raw, list) else []
 
 
 def append_changelog_entry(entry: Dict[str, Any]) -> None:
-    """Append one change-log record; never raises (fail-soft)."""
+    """Append one change-log record; never raises (fail-soft).
+
+    The write is atomic: the local path holds a file lock, and the S3 path uses a
+    conditional (ETag) write with retries, so concurrent appends can't clobber
+    one another.
+    """
+
+    def _append(entries: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        entries.append(entry)
+        return entries[-MAX_CHANGELOG_ENTRIES:] if len(entries) > MAX_CHANGELOG_ENTRIES else entries
+
     try:
-        if _s3_client and CALL_SCHEDULE_S3_BUCKET:
-            entries = list(load_changelog())
-            entries.append(entry)
-            if len(entries) > MAX_CHANGELOG_ENTRIES:
-                entries = entries[-MAX_CHANGELOG_ENTRIES:]
-            _save_changelog_to_s3(entries)
-        else:
-            with local_file_lock(CALL_SCHEDULE_CHANGELOG_PATH):
-                entries = list(load_changelog())
-                entries.append(entry)
-                if len(entries) > MAX_CHANGELOG_ENTRIES:
-                    entries = entries[-MAX_CHANGELOG_ENTRIES:]
-                os.makedirs(os.path.dirname(CALL_SCHEDULE_CHANGELOG_PATH), exist_ok=True)
-                with open(CALL_SCHEDULE_CHANGELOG_PATH, "w", encoding="utf-8") as f:
-                    json.dump(entries, f, indent=2)
+        update_json_document(
+            use_s3=_uses_s3(),
+            client=_s3_client,
+            bucket=CALL_SCHEDULE_S3_BUCKET,
+            key=CALL_SCHEDULE_CHANGELOG_S3_KEY,
+            local_path=CALL_SCHEDULE_CHANGELOG_PATH,
+            default_factory=list,
+            label="changelog",
+            mutate=lambda raw: _append(_normalize_changelog(raw)),
+        )
     except Exception as e:
         logger.warning("Failed to append call schedule changelog: %s", e)
 
 
 def get_changelog_entries(limit: int = 100, offset: int = 0) -> List[Dict[str, Any]]:
     """Newest-first slice for API consumers."""
-    if _s3_client and CALL_SCHEDULE_S3_BUCKET:
-        entries = load_changelog()
-    else:
-        with local_file_lock(CALL_SCHEDULE_CHANGELOG_PATH):
-            entries = list(load_changelog())
+    with json_write_lock(use_s3=_uses_s3(), local_path=CALL_SCHEDULE_CHANGELOG_PATH):
+        entries = list(load_changelog())
     rev = list(reversed(entries))
     return rev[offset : offset + limit]

@@ -259,9 +259,9 @@ function PractitionerSchedule() {
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-bold">Schedule</h2>
         </div>
-        <div className="space-y-3 mb-4">
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-6 sm:gap-y-3">
           <div className="flex items-center gap-2">
-            <label className="flex flex-1 min-w-0 items-center gap-2">
+            <label className="flex items-center gap-2">
               <span className="text-sm text-gray-600 shrink-0">Date:</span>
               <input
                 type="date"
@@ -270,7 +270,7 @@ function PractitionerSchedule() {
                   setDate(e.target.value);
                   setViewMode("day");
                 }}
-                className="flex-1 min-w-0 border px-2 py-2 sm:py-1 rounded text-sm"
+                className="w-40 border px-2 py-2 sm:py-1 rounded text-sm"
               />
             </label>
             <button
@@ -291,26 +291,24 @@ function PractitionerSchedule() {
             </button>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <ScheduleToggleGroup
-              label="View"
-              value={viewMode}
-              onChange={setViewMode}
-              options={[
-                { value: "day", label: "Day" },
-                { value: "week", label: "Week" },
-              ]}
-            />
-            <ScheduleToggleGroup
-              label="Tab"
-              value={activeTab}
-              onChange={setActiveTab}
-              options={[
-                { value: "schedule", label: "General" },
-                { value: "surgeries", label: "Surgery" },
-              ]}
-            />
-          </div>
+          <ScheduleToggleGroup
+            label="View"
+            value={viewMode}
+            onChange={setViewMode}
+            options={[
+              { value: "day", label: "Day" },
+              { value: "week", label: "Week" },
+            ]}
+          />
+          <ScheduleToggleGroup
+            label="Tab"
+            value={activeTab}
+            onChange={setActiveTab}
+            options={[
+              { value: "schedule", label: "General" },
+              { value: "surgeries", label: "Surgery" },
+            ]}
+          />
         </div>
       {loading ? (
         <div className="flex items-center justify-center py-12 text-gray-500">

@@ -4,6 +4,7 @@ import os
 import boto3
 import json
 import logging
+import traceback
 from typing import Any, Callable, Optional, Type, List
 
 logger = logging.getLogger(__name__)
@@ -170,57 +171,43 @@ class QdrantVectorSearchTool(BaseTool):
             
         except Exception as e:
             logger.error(f"Error in _run method: {e}")
-            import traceback
             logger.debug(f"Traceback: {traceback.format_exc()}")
             return json.dumps([])
     
-    def delete_points_by_patient_hash(self, patient_hash : str):
-        hash_filter = "patient_hash"
-        delete_filter = Filter(
+    def _patient_section_filter(self, patient_id: str, section_name: str) -> Filter:
+        """Match every point belonging to one patient's section within the collection."""
+        return Filter(
             must=[
-                FieldCondition(key=hash_filter, match=MatchValue(value=patient_hash))
-                ]
-        )
-
-        delete_selector = FilterSelector(filter=delete_filter)
-
-        self.client.delete(
-            collection_name=self.collection_name,
-            points_selector=delete_selector,
-        )
-
-    
-    def delete_all_points(self):
-        delete_selector = FilterSelector(
-            filter=Filter(must=[])
-        )
-
-        self.client.delete(
-            collection_name=self.collection_name,
-            points_selector=delete_selector,
-        )
-
-    
-    def find_hash_embedding(self, patient_hash: str):
-        """
-        Find the hash embedding in Qdrant using patient_id and patient_hash.
-        """
-        search_filter = Filter(
-            must=[
-                FieldCondition(key="patient_hash", match=MatchValue(value=patient_hash))
+                FieldCondition(key="patient_id", match=MatchValue(value=patient_id)),
+                FieldCondition(key="section_name", match=MatchValue(value=section_name)),
             ]
         )
 
+    def find_section_hash(self, patient_id: str, section_name: str):
+        """
+        Return the content hash currently stored for a patient's section, or None
+        if the section has not been embedded yet. Used to detect whether the
+        section's data changed since the last ingest.
+        """
         search_result = self.client.scroll(
             collection_name=self.collection_name,
-            scroll_filter=search_filter,
-            limit=1
+            scroll_filter=self._patient_section_filter(patient_id, section_name),
+            limit=1,
         )
 
         if search_result and search_result[0]:
             return search_result[0][0].payload.get("patient_hash")
 
         return None
+
+    def delete_points_by_section(self, patient_id: str, section_name: str):
+        """Remove all stored points for a patient's section before re-embedding it."""
+        self.client.delete(
+            collection_name=self.collection_name,
+            points_selector=FilterSelector(
+                filter=self._patient_section_filter(patient_id, section_name)
+            ),
+        )
 
     def _vectorize_query(self, query: str, embedding_model: str) -> list[float]:
         """Default vectorization function with Amazon Titan.
@@ -259,7 +246,6 @@ class QdrantVectorSearchTool(BaseTool):
             
         except Exception as e:
             logger.error(f"Error creating embedding: {e}")
-            import traceback
             logger.debug(f"Traceback: {traceback.format_exc()}")
             return []
 

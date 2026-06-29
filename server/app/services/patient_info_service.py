@@ -276,6 +276,19 @@ async def get_patient_info(id: str, modmed_token: str = None, practice_url: str 
         
         all_sections_to_embed = []
 
+        # Re-embed a section only when its content changed since the last ingest.
+        # Dedup is keyed on (patient_id, section_name): compare the hash stored on
+        # the existing vectors to the freshly computed one. If they match, skip; if
+        # they differ, delete the stale vectors before re-embedding so changed
+        # sections don't accumulate orphaned duplicates. The hash is computed over
+        # the exact structure that gets embedded so the two stay consistent.
+        def queue_section_if_changed(section_list, section_name, current_hash):
+            previous_hash = user_qdrant_tool.find_section_hash(id, section_name)
+            if previous_hash == current_hash:
+                return
+            if previous_hash:
+                user_qdrant_tool.delete_points_by_section(id, section_name)
+            all_sections_to_embed.append((section_list, section_name, current_hash))
 
         for section_name, section_data in results.items():
             if not section_data:
@@ -285,22 +298,10 @@ async def get_patient_info(id: str, modmed_token: str = None, practice_url: str 
                 for doc in section_data:
                     doc_title = doc.get("title") or "document"
                     section_list = [{doc_title: doc}]
-                    current_hash = hash_patient_data(section_list)
-                    previous_hash = user_qdrant_tool.find_hash_embedding(current_hash)
-
-                    if not previous_hash or previous_hash != current_hash:
-                        if previous_hash:
-                            user_qdrant_tool.delete_points_by_patient_hash(previous_hash)
-                        all_sections_to_embed.append((section_list, doc["title"], current_hash))
+                    queue_section_if_changed(section_list, doc_title, hash_patient_data(section_list))
             else:
                 section_list = [{section_name: section_data}]
-                current_hash = hash_patient_data([results[section_name]])
-                previous_hash = user_qdrant_tool.find_hash_embedding(current_hash)
-
-                if not previous_hash or previous_hash != current_hash:
-                    if previous_hash:
-                        user_qdrant_tool.delete_points_by_patient_hash(previous_hash)
-                    all_sections_to_embed.append((section_list, section_name, current_hash))
+                queue_section_if_changed(section_list, section_name, hash_patient_data(section_list))
 
         # Now embed everything in parallel using practice-specific collection
         await asyncio.gather(*[

@@ -141,7 +141,7 @@ async def upload_call_schedule(
             "practice_url": current_user.practice_url,
             "is_admin": current_user.is_admin,
         }
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         result = await asyncio.wait_for(
             loop.run_in_executor(
                 None,

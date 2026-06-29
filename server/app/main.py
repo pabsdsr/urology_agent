@@ -9,7 +9,6 @@ import warnings
 import logging
 import os
 from app.services.client_service import client
-from app.crew.crew import ClinicalAssistantCrew
 from app.routes import auth, run_crew, patients, appointments, call_schedule, billing
 
 warnings.filterwarnings("ignore", category=SyntaxWarning, module="pysbd")
@@ -78,38 +77,11 @@ def create_app():
 
     return app
 
-def run(query: str, patient_id: str, practice_url: str | None = None, user_qdrant_tool=None):
-    """
-    Execute the CrewAI clinical assistant synchronously (call via asyncio.to_thread from routes).
-    """
-    inputs = {"query": query, "id": patient_id, "practice_url": practice_url}
 
-    try:
-        crew_instance = ClinicalAssistantCrew()
-        if user_qdrant_tool:
-            crew_instance.user_qdrant_tool = user_qdrant_tool
-
-        crew = crew_instance.crew()
-        result = crew.kickoff(inputs=inputs)
-    except Exception as e:
-        raise Exception(f"An error occurred while running the crew: {e}")
-
-    result_dict = result.model_dump()
-
-    tasks_output = result_dict.get("tasks_output", [])
-    for task in tasks_output:
-        if task.get("agent", "").strip() == "Clinical Assistant Specialist":
-            final_answer = task.get("raw", "No final answer found.")
-            return final_answer
-
-
-    return "No relevant output found from Clinical Assistant Specialist."
-
-    
 def main():
     app = create_app()
     uvicorn.run(app, host="0.0.0.0", port=8080)
 
+
 if __name__ == "__main__":
     main()
-    

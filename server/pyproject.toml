@@ -26,6 +26,7 @@ package = true
 
 [dependency-groups]
 dev = [
+    "moto[s3]>=5.2.2",
     "pytest>=8.4.0",
     "pytest-asyncio>=1.0.0",
 ]

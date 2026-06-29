@@ -1,7 +1,7 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import logging
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from app.services.appointment_service import (
     get_appointments_by_date,
     get_practitioner_schedule_by_date,
@@ -29,6 +29,14 @@ def _schedule_params(current_user: SessionUser):
     )
 
 
+def _parse_query_date(value: str, field: str):
+    """Parse a YYYY-MM-DD query param, raising 400 (not 500) on bad input."""
+    try:
+        return datetime.strptime(value, "%Y-%m-%d").date()
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=400, detail=f"'{field}' must be a valid YYYY-MM-DD date.")
+
+
 @router.get("")
 async def practitioner_schedule_by_date(
     start: str,
@@ -50,20 +58,14 @@ async def practitioner_schedule_by_date(
 
 @router.get("/appointment_types")
 async def list_appointment_types(
-    start: str = None,
-    end: str = None,
+    start: str | None = None,
+    end: str | None = None,
     current_user: SessionUser = Depends(require_modmed_session)
 ):
     """Return appointment type and surgery location mappings for a date range."""
-    today = datetime.utcnow().date()
-    if end is None:
-        end_dt = today
-    else:
-        end_dt = datetime.strptime(end, "%Y-%m-%d").date()
-    if start is None:
-        start_dt = end_dt - timedelta(days=7)
-    else:
-        start_dt = datetime.strptime(start, "%Y-%m-%d").date()
+    today = datetime.now(timezone.utc).date()
+    end_dt = today if end is None else _parse_query_date(end, "end")
+    start_dt = (end_dt - timedelta(days=7)) if start is None else _parse_query_date(start, "start")
 
     modmed_token, base_url, practice_api_key = _schedule_params(current_user)
 

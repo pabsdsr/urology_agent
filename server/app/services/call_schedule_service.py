@@ -1,12 +1,17 @@
 """Single-tenant on-call schedule: one JSON file locally and/or one S3 object."""
 import copy
-import json
 import logging
 import os
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 
-from app.services.local_file_lock import local_file_lock
+from app.services.s3_json_store import (
+    init_s3_client,
+    json_write_lock,
+    local_read_json,
+    s3_get_json,
+    update_json_document,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -20,74 +25,38 @@ CALL_SCHEDULE_PATH = os.path.join(
 CALL_SCHEDULE_S3_BUCKET = os.getenv("CALL_SCHEDULE_S3_BUCKET")
 CALL_SCHEDULE_S3_KEY = os.getenv("CALL_SCHEDULE_S3_KEY", "call_schedule.json")
 
-_s3_client = None
-if CALL_SCHEDULE_S3_BUCKET:
-    try:
-        import boto3  # type: ignore
-
-        _s3_client = boto3.client("s3")
-    except Exception:
-        _s3_client = None
+_s3_client = init_s3_client(CALL_SCHEDULE_S3_BUCKET or "", label="call schedule")
 
 
-def _load_call_schedule_from_s3() -> Dict[str, Dict[str, str]]:
-    if not (_s3_client and CALL_SCHEDULE_S3_BUCKET):
+def _uses_s3() -> bool:
+    return bool(_s3_client and CALL_SCHEDULE_S3_BUCKET)
+
+
+def _normalize_schedule(raw: Any) -> Dict[str, Dict[str, str]]:
+    """Coerce stored schedule data into a clean {date: {pod: ...}} mapping."""
+    if not isinstance(raw, dict):
         return {}
-    try:
-        resp = _s3_client.get_object(Bucket=CALL_SCHEDULE_S3_BUCKET, Key=CALL_SCHEDULE_S3_KEY)
-        body = resp["Body"].read().decode("utf-8")
-        data = json.loads(body)
-        return {str(k): dict(v) for k, v in data.items()}
-    except _s3_client.exceptions.NoSuchKey:  # type: ignore[attr-defined]
-        return {}
-    except Exception as e:
-        logger.warning("S3 get call schedule failed key=%s: %s", CALL_SCHEDULE_S3_KEY, e)
-        return {}
-
-
-def _save_call_schedule_to_s3(data: Dict[str, Dict[str, str]]) -> None:
-    if not (_s3_client and CALL_SCHEDULE_S3_BUCKET):
-        return
-    try:
-        body = json.dumps(data, indent=2, sort_keys=True).encode("utf-8")
-        _s3_client.put_object(
-            Bucket=CALL_SCHEDULE_S3_BUCKET,
-            Key=CALL_SCHEDULE_S3_KEY,
-            Body=body,
-            ContentType="application/json",
-        )
-    except Exception as e:
-        logger.error("S3 put call schedule failed key=%s: %s", CALL_SCHEDULE_S3_KEY, e)
-
-
-def _load_call_schedule_disk() -> Dict[str, Dict[str, str]]:
-    if not os.path.exists(CALL_SCHEDULE_PATH):
-        return {}
-    try:
-        with open(CALL_SCHEDULE_PATH, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        return {str(k): dict(v) for k, v in data.items()}
-    except Exception as e:
-        logger.warning("Read call schedule failed path=%s: %s", CALL_SCHEDULE_PATH, e)
-        return {}
+    return {str(k): dict(v) for k, v in raw.items() if isinstance(v, dict)}
 
 
 def _load_call_schedule() -> Dict[str, Dict[str, str]]:
-    if _s3_client and CALL_SCHEDULE_S3_BUCKET:
-        s3_data = _load_call_schedule_from_s3()
-        if s3_data:
-            return s3_data
-    return _load_call_schedule_disk()
+    """Read the canonical schedule.
 
-
-def _write_call_schedule_disk(data: Dict[str, Dict[str, str]]) -> None:
-    directory = os.path.dirname(CALL_SCHEDULE_PATH)
-    os.makedirs(directory, exist_ok=True)
-    try:
-        with open(CALL_SCHEDULE_PATH, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2, sort_keys=True)
-    except Exception as e:
-        logger.error("Write call schedule failed path=%s: %s", CALL_SCHEDULE_PATH, e)
+    When S3 is configured it is the sole source of truth: a missing or empty
+    object means "no schedule yet", and we never fall back to local disk (doing
+    so would let stale local state shadow/merge into S3 across instances).
+    """
+    if _uses_s3():
+        raw = s3_get_json(
+            _s3_client,
+            CALL_SCHEDULE_S3_BUCKET,
+            CALL_SCHEDULE_S3_KEY,
+            default_factory=dict,
+            label="call schedule",
+        )
+    else:
+        raw = local_read_json(CALL_SCHEDULE_PATH, default_factory=dict, label="call schedule")
+    return _normalize_schedule(raw)
 
 
 def update_week(
@@ -110,30 +79,33 @@ def update_week(
             continue
         norm_days[norm_key] = pods
 
-    def apply_merge(schedule: Dict[str, Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
-        for norm_key, pods in norm_days.items():
-            schedule[norm_key] = pods
-        return schedule
+    # The read-modify-write is atomic: the local path holds a file lock, and the
+    # S3 path uses a conditional (ETag) write with retries, so concurrent week
+    # edits can't silently clobber one another. `mutate` may re-run on an S3
+    # retry, so it only recomputes in-memory state (no irreversible side effects).
+    previous_by_date: Dict[str, Any] = {}
 
-    if _s3_client and CALL_SCHEDULE_S3_BUCKET:
-        schedule = dict(_load_call_schedule())
-        previous_by_date: Dict[str, Any] = {}
+    def _merge_week(schedule: Dict[str, Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
+        previous_by_date.clear()
         if changelog_meta and norm_days:
             for k in norm_days:
                 prev = schedule.get(k)
                 previous_by_date[k] = copy.deepcopy(prev) if prev is not None else None
-        schedule = apply_merge(schedule)
-        _save_call_schedule_to_s3(schedule)
-    else:
-        with local_file_lock(CALL_SCHEDULE_PATH):
-            schedule = dict(_load_call_schedule_disk())
-            previous_by_date = {}
-            if changelog_meta and norm_days:
-                for k in norm_days:
-                    prev = schedule.get(k)
-                    previous_by_date[k] = copy.deepcopy(prev) if prev is not None else None
-            schedule = apply_merge(schedule)
-            _write_call_schedule_disk(schedule)
+        for norm_key, pods in norm_days.items():
+            schedule[norm_key] = pods
+        return schedule
+
+    schedule = update_json_document(
+        use_s3=_uses_s3(),
+        client=_s3_client,
+        bucket=CALL_SCHEDULE_S3_BUCKET,
+        key=CALL_SCHEDULE_S3_KEY,
+        local_path=CALL_SCHEDULE_PATH,
+        default_factory=dict,
+        label="call schedule",
+        mutate=lambda raw: _merge_week(_normalize_schedule(raw)),
+        sort_keys=True,
+    )
 
     if changelog_meta and norm_days:
         from app.services.call_schedule_changelog import append_changelog_entry
@@ -169,11 +141,8 @@ def get_call_schedule_range(
     except ValueError:
         return {}
 
-    if _s3_client and CALL_SCHEDULE_S3_BUCKET:
+    with json_write_lock(use_s3=_uses_s3(), local_path=CALL_SCHEDULE_PATH):
         raw = _load_call_schedule()
-    else:
-        with local_file_lock(CALL_SCHEDULE_PATH):
-            raw = _load_call_schedule_disk()
 
     result: Dict[str, Dict[str, Any]] = {}
     cur = start_dt

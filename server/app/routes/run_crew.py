@@ -1,9 +1,11 @@
 import asyncio
+import logging
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
-import logging
+
 from app.services.patient_info_service import get_patient_info
+from app.services.crew_runner import run
 from app.routes.auth import require_modmed_session
 from app.models import SessionUser
 
@@ -25,14 +27,12 @@ async def run_crew(req: CrewInput, current_user: SessionUser = Depends(require_m
 
     # Prefetch and embed the patient's chart into Qdrant so the crew can query it.
     await get_patient_info(
-        req.id, 
+        req.id,
         modmed_token=current_user.modmed_access_token,
         practice_url=current_user.practice_url,
         practice_api_key=current_user.practice_api_key,
-        user_qdrant_tool=current_user.qdrant_tool
+        user_qdrant_tool=current_user.qdrant_tool,
     )
-
-    from app.main import run
 
     try:
         logger.info("Starting crew execution", 

@@ -4,7 +4,6 @@ Persist billing submissions (metadata index + sheet images).
 Local dev (no ``BILLING_S3_BUCKET``): ``app/data/billing_submissions.json`` and ``app/data/billing_sheets/``.
 Production: dedicated S3 bucket via ``BILLING_S3_BUCKET`` only (not the call-schedule bucket).
 """
-import json
 import logging
 import mimetypes
 import os
@@ -12,8 +11,14 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from app.services.local_file_lock import local_file_lock
 from app.services.billing_cpt_lines import ensure_entry_cpt_lines
+from app.services.s3_json_store import (
+    init_s3_client,
+    json_write_lock,
+    local_read_json,
+    s3_get_json,
+    update_json_document,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -33,14 +38,7 @@ _billing_s3_region = (os.getenv("BILLING_S3_REGION") or "us-west-2").strip()
 
 MAX_SUBMISSIONS = 5000
 
-_s3_client = None
-if BILLING_S3_BUCKET:
-    try:
-        import boto3  # type: ignore
-
-        _s3_client = boto3.client("s3", region_name=_billing_s3_region)
-    except Exception as e:
-        logger.error("Billing S3 client init failed bucket=%s: %s", BILLING_S3_BUCKET, e)
+_s3_client = init_s3_client(BILLING_S3_BUCKET, region=_billing_s3_region, label="billing")
 
 
 def billing_uses_s3() -> bool:
@@ -54,9 +52,9 @@ def _utc_now_iso() -> str:
 def _normalize_entry(entry: Dict[str, Any]) -> Dict[str, Any]:
     """Ensure expected fields exist for API responses (older index rows may omit them)."""
     normalized = ensure_entry_cpt_lines(dict(entry))
-    normalized["processed"] = bool(entry.get("processed"))
+    normalized["processed"] = bool(normalized.get("processed"))
     normalized.setdefault("cpt_modifiers", "")
-    normalized["incident_to"] = bool(entry.get("incident_to"))
+    normalized["incident_to"] = bool(normalized.get("incident_to"))
     normalized.setdefault("attending_name", "")
     normalized.setdefault("date_of_service_end", "")
     return normalized
@@ -83,51 +81,41 @@ def _s3_sheet_key(submission_id: str, ext: str) -> str:
     return f"{BILLING_SHEETS_S3_PREFIX}{submission_id}{ext}"
 
 
+def _normalize_index(raw: Any) -> List[Dict[str, Any]]:
+    """Coerce stored index data into a clean list of entry dicts."""
+    return [x for x in raw if isinstance(x, dict)] if isinstance(raw, list) else []
+
+
 def _load_index_unlocked() -> List[Dict[str, Any]]:
     if billing_uses_s3():
-        try:
-            resp = _s3_client.get_object(
-                Bucket=BILLING_S3_BUCKET, Key=BILLING_SUBMISSIONS_INDEX_KEY
-            )
-            body = resp["Body"].read().decode("utf-8")
-            data = json.loads(body)
-            if isinstance(data, list):
-                return [x for x in data if isinstance(x, dict)]
-        except _s3_client.exceptions.NoSuchKey:  # type: ignore[attr-defined]
-            return []
-        except Exception as e:
-            logger.warning("S3 get billing index failed: %s", e)
-            return []
-
-    if not os.path.exists(LOCAL_INDEX_PATH):
-        return []
-    try:
-        with open(LOCAL_INDEX_PATH, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        if isinstance(data, list):
-            return [x for x in data if isinstance(x, dict)]
-    except Exception as e:
-        logger.warning("Read billing index failed: %s", e)
-    return []
-
-
-def _save_index_unlocked(entries: List[Dict[str, Any]]) -> None:
-    if len(entries) > MAX_SUBMISSIONS:
-        entries = entries[-MAX_SUBMISSIONS:]
-
-    if billing_uses_s3():
-        body = json.dumps(entries, indent=2).encode("utf-8")
-        _s3_client.put_object(
-            Bucket=BILLING_S3_BUCKET,
-            Key=BILLING_SUBMISSIONS_INDEX_KEY,
-            Body=body,
-            ContentType="application/json",
+        raw = s3_get_json(
+            _s3_client,
+            BILLING_S3_BUCKET,
+            BILLING_SUBMISSIONS_INDEX_KEY,
+            default_factory=list,
+            label="billing index",
         )
-        return
+    else:
+        raw = local_read_json(LOCAL_INDEX_PATH, default_factory=list, label="billing index")
+    return _normalize_index(raw)
 
-    os.makedirs(os.path.dirname(LOCAL_INDEX_PATH), exist_ok=True)
-    with open(LOCAL_INDEX_PATH, "w", encoding="utf-8") as f:
-        json.dump(entries, f, indent=2)
+
+def _update_index(mutate: Callable[[List[Dict[str, Any]]], Optional[List[Dict[str, Any]]]]):
+    """Run an atomic read-modify-write over the submissions index.
+
+    ``mutate`` receives the normalized entry list and returns the new list to
+    persist, or ``None`` to skip writing (e.g. nothing matched).
+    """
+    return update_json_document(
+        use_s3=billing_uses_s3(),
+        client=_s3_client,
+        bucket=BILLING_S3_BUCKET,
+        key=BILLING_SUBMISSIONS_INDEX_KEY,
+        local_path=LOCAL_INDEX_PATH,
+        default_factory=list,
+        label="billing index",
+        mutate=lambda raw: mutate(_normalize_index(raw)),
+    )
 
 
 def _ensure_billing_s3_ready() -> None:
@@ -219,26 +207,19 @@ def save_submission(
         "processed": False,
     }
 
-    if billing_uses_s3():
-        entries = _load_index_unlocked()
+    def _append(entries: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         entries.append(entry)
-        _save_index_unlocked(entries)
-    else:
-        with local_file_lock(LOCAL_INDEX_PATH):
-            entries = _load_index_unlocked()
-            entries.append(entry)
-            _save_index_unlocked(entries)
+        return entries[-MAX_SUBMISSIONS:] if len(entries) > MAX_SUBMISSIONS else entries
+
+    _update_index(_append)
 
     logger.info("billing_submission_saved submission_id=%s", submission_id)
     return _normalize_entry(entry)
 
 
 def list_submissions(limit: int = 100, offset: int = 0) -> List[Dict[str, Any]]:
-    if billing_uses_s3():
-        entries = _load_index_unlocked()
-    else:
-        with local_file_lock(LOCAL_INDEX_PATH):
-            entries = list(_load_index_unlocked())
+    with json_write_lock(use_s3=billing_uses_s3(), local_path=LOCAL_INDEX_PATH):
+        entries = list(_load_index_unlocked())
     rev = list(reversed(entries))
     return [_normalize_entry(e) for e in rev[offset : offset + limit]]
 
@@ -253,11 +234,8 @@ def _find_submission_in_index(
 
 
 def get_submission(submission_id: str) -> Optional[Dict[str, Any]]:
-    if billing_uses_s3():
+    with json_write_lock(use_s3=billing_uses_s3(), local_path=LOCAL_INDEX_PATH):
         entries = _load_index_unlocked()
-    else:
-        with local_file_lock(LOCAL_INDEX_PATH):
-            entries = _load_index_unlocked()
     idx = _find_submission_in_index(entries, submission_id)
     if idx is None:
         return None
@@ -269,23 +247,18 @@ def _update_index_entry(
     updater: Callable[[Dict[str, Any]], None],
 ) -> Optional[Dict[str, Any]]:
     """Load index, mutate one entry in place, save, and return the normalized entry."""
-    if billing_uses_s3():
-        entries = _load_index_unlocked()
-        idx = _find_submission_in_index(entries, submission_id)
-        if idx is None:
-            return None
-        updater(entries[idx])
-        _save_index_unlocked(entries)
-        return _normalize_entry(entries[idx])
+    result: Dict[str, Optional[Dict[str, Any]]] = {"entry": None}
 
-    with local_file_lock(LOCAL_INDEX_PATH):
-        entries = _load_index_unlocked()
+    def _mutate(entries: List[Dict[str, Any]]) -> Optional[List[Dict[str, Any]]]:
         idx = _find_submission_in_index(entries, submission_id)
         if idx is None:
-            return None
+            return None  # nothing to update -> skip the write
         updater(entries[idx])
-        _save_index_unlocked(entries)
-        return _normalize_entry(entries[idx])
+        result["entry"] = _normalize_entry(entries[idx])
+        return entries
+
+    _update_index(_mutate)
+    return result["entry"]
 
 
 def set_submission_processed(submission_id: str, *, processed: bool) -> Optional[Dict[str, Any]]:
@@ -431,24 +404,22 @@ def update_submission(
 
 def delete_submission(submission_id: str) -> bool:
     """Remove submission from index and delete stored billing sheet. Returns False if not found."""
-    if billing_uses_s3():
-        entries = _load_index_unlocked()
+    removed: Dict[str, Optional[Dict[str, Any]]] = {"entry": None}
+
+    def _mutate(entries: List[Dict[str, Any]]) -> Optional[List[Dict[str, Any]]]:
         idx = _find_submission_in_index(entries, submission_id)
         if idx is None:
-            return False
-        entry = entries.pop(idx)
-        _delete_sheet_file(entry, submission_id)
-        _save_index_unlocked(entries)
-    else:
-        with local_file_lock(LOCAL_INDEX_PATH):
-            entries = _load_index_unlocked()
-            idx = _find_submission_in_index(entries, submission_id)
-            if idx is None:
-                return False
-            entry = entries.pop(idx)
-            _delete_sheet_file(entry, submission_id)
-            _save_index_unlocked(entries)
+            return None  # not found -> skip the write
+        removed["entry"] = entries.pop(idx)
+        return entries
 
+    _update_index(_mutate)
+
+    if removed["entry"] is None:
+        return False
+    # Delete the sheet only after the index write commits, so a lost concurrency
+    # race (retry) can't orphan a still-referenced image.
+    _delete_sheet_file(removed["entry"], submission_id)
     logger.info("billing_submission_deleted submission_id=%s", submission_id)
     return True
 
