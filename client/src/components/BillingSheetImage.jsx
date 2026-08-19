@@ -1,18 +1,27 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import apiClient from "../services/apiClient.js";
 import { billingService } from "../services/billingService.js";
 
 function BillingSheetImage({ submissionId, reloadKey = 0 }) {
   const [src, setSrc] = useState(null);
   const [error, setError] = useState("");
+  const blobUrlRef = useRef(null);
 
   useEffect(() => {
-    let objectUrl = null;
     let cancelled = false;
 
+    const revokeBlobUrl = () => {
+      if (blobUrlRef.current) {
+        URL.revokeObjectURL(blobUrlRef.current);
+        blobUrlRef.current = null;
+      }
+    };
+
+    revokeBlobUrl();
+    setError("");
+    setSrc(null);
+
     (async () => {
-      setError("");
-      setSrc(null);
       try {
         const response = await apiClient.get(billingService.billingSheetUrl(submissionId), {
           responseType: "blob",
@@ -20,10 +29,13 @@ function BillingSheetImage({ submissionId, reloadKey = 0 }) {
         if (!response.data || response.data.size === 0) {
           throw new Error("Billing sheet image is empty.");
         }
-        objectUrl = URL.createObjectURL(response.data);
-        if (!cancelled) {
-          setSrc(objectUrl);
+        const objectUrl = URL.createObjectURL(response.data);
+        if (cancelled) {
+          URL.revokeObjectURL(objectUrl);
+          return;
         }
+        blobUrlRef.current = objectUrl;
+        setSrc(objectUrl);
       } catch (err) {
         if (!cancelled) {
           if (err.response?.status === 404) {
@@ -50,9 +62,7 @@ function BillingSheetImage({ submissionId, reloadKey = 0 }) {
 
     return () => {
       cancelled = true;
-      if (objectUrl) {
-        URL.revokeObjectURL(objectUrl);
-      }
+      revokeBlobUrl();
     };
   }, [submissionId, reloadKey]);
 

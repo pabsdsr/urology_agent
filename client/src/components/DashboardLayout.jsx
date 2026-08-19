@@ -3,6 +3,7 @@ import { useNavigate, useLocation, Outlet } from "react-router-dom";
 import { useMsal } from '@azure/msal-react';
 import { logoutSession } from '../services/authService.js';
 import { msalConfig } from '../authConfig.js';
+import { CHAT_ENABLED, DEFAULT_AUTHENTICATED_ROUTE } from '../config/features.js';
 
 const navButtonClass = (active) =>
   `px-4 py-2 text-sm font-medium rounded-md transition-colors ${
@@ -22,7 +23,9 @@ function DashboardLayout() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const navLinks = [
-    { label: "Chat", path: "/", active: location.pathname === "/" },
+    ...(CHAT_ENABLED
+      ? [{ label: "Chat", path: "/", active: location.pathname === "/" || location.pathname === "/chat" }]
+      : []),
     { label: "Schedule", path: "/schedule", active: location.pathname === "/schedule" },
     {
       label: "Billing",

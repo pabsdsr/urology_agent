@@ -86,6 +86,18 @@ def _normalize_index(raw: Any) -> List[Dict[str, Any]]:
     return [x for x in raw if isinstance(x, dict)] if isinstance(raw, list) else []
 
 
+def _practice_matches(entry: Dict[str, Any], practice_url: Optional[str]) -> bool:
+    """Tenant guard: entries are only visible to their own practice.
+
+    ``practice_url=None`` (internal/store-level callers) and legacy entries
+    without a stored practice are treated as unscoped for backward compat.
+    """
+    if not practice_url:
+        return True
+    entry_practice = (entry.get("practice_url") or "").strip()
+    return not entry_practice or entry_practice == practice_url
+
+
 def _load_index_unlocked() -> List[Dict[str, Any]]:
     if billing_uses_s3():
         raw = s3_get_json(
@@ -207,20 +219,39 @@ def save_submission(
         "processed": False,
     }
 
+    # Reset on every mutate run (S3 retries re-run it) so we only delete sheets
+    # for entries actually trimmed by the write that committed.
+    trimmed: List[Dict[str, Any]] = []
+
     def _append(entries: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         entries.append(entry)
+        trimmed[:] = entries[:-MAX_SUBMISSIONS] if len(entries) > MAX_SUBMISSIONS else []
         return entries[-MAX_SUBMISSIONS:] if len(entries) > MAX_SUBMISSIONS else entries
 
-    _update_index(_append)
+    try:
+        _update_index(_append)
+    except Exception:
+        if storage_key:
+            _delete_sheet_file({"billing_sheet_storage_key": storage_key}, submission_id)
+        raise
+
+    # Entries dropped by the MAX_SUBMISSIONS cap would otherwise orphan their
+    # sheet images in S3/local storage.
+    for old_entry in trimmed:
+        old_id = old_entry.get("id") or ""
+        if old_id:
+            _delete_sheet_file(old_entry, old_id)
 
     logger.info("billing_submission_saved submission_id=%s", submission_id)
     return _normalize_entry(entry)
 
 
-def list_submissions(limit: int = 100, offset: int = 0) -> List[Dict[str, Any]]:
+def list_submissions(
+    limit: int = 100, offset: int = 0, practice_url: Optional[str] = None
+) -> List[Dict[str, Any]]:
     with json_write_lock(use_s3=billing_uses_s3(), local_path=LOCAL_INDEX_PATH):
         entries = list(_load_index_unlocked())
-    rev = list(reversed(entries))
+    rev = [e for e in reversed(entries) if _practice_matches(e, practice_url)]
     return [_normalize_entry(e) for e in rev[offset : offset + limit]]
 
 
@@ -233,11 +264,13 @@ def _find_submission_in_index(
     return None
 
 
-def get_submission(submission_id: str) -> Optional[Dict[str, Any]]:
+def get_submission(
+    submission_id: str, practice_url: Optional[str] = None
+) -> Optional[Dict[str, Any]]:
     with json_write_lock(use_s3=billing_uses_s3(), local_path=LOCAL_INDEX_PATH):
         entries = _load_index_unlocked()
     idx = _find_submission_in_index(entries, submission_id)
-    if idx is None:
+    if idx is None or not _practice_matches(entries[idx], practice_url):
         return None
     return _normalize_entry(entries[idx])
 
@@ -245,14 +278,15 @@ def get_submission(submission_id: str) -> Optional[Dict[str, Any]]:
 def _update_index_entry(
     submission_id: str,
     updater: Callable[[Dict[str, Any]], None],
+    practice_url: Optional[str] = None,
 ) -> Optional[Dict[str, Any]]:
     """Load index, mutate one entry in place, save, and return the normalized entry."""
     result: Dict[str, Optional[Dict[str, Any]]] = {"entry": None}
 
     def _mutate(entries: List[Dict[str, Any]]) -> Optional[List[Dict[str, Any]]]:
         idx = _find_submission_in_index(entries, submission_id)
-        if idx is None:
-            return None  # nothing to update -> skip the write
+        if idx is None or not _practice_matches(entries[idx], practice_url):
+            return None  # missing or other practice -> skip the write
         updater(entries[idx])
         result["entry"] = _normalize_entry(entries[idx])
         return entries
@@ -261,13 +295,15 @@ def _update_index_entry(
     return result["entry"]
 
 
-def set_submission_processed(submission_id: str, *, processed: bool) -> Optional[Dict[str, Any]]:
+def set_submission_processed(
+    submission_id: str, *, processed: bool, practice_url: Optional[str] = None
+) -> Optional[Dict[str, Any]]:
     """Mark whether a billing submission has been processed by the billing team."""
 
     def _mark_processed(entry: Dict[str, Any]) -> None:
         entry["processed"] = processed
 
-    entry = _update_index_entry(submission_id, _mark_processed)
+    entry = _update_index_entry(submission_id, _mark_processed, practice_url=practice_url)
     if entry:
         logger.info(
             "billing_submission_processed submission_id=%s processed=%s",
@@ -323,9 +359,9 @@ def _apply_submission_update(
     icd10_code: str,
     cpt_modifiers: str,
     cpt_lines: Optional[List[Dict[str, Any]]] = None,
-    billing_sheet_filename: Optional[str],
-    billing_sheet_content_type: Optional[str],
-    billing_sheet_bytes: Optional[bytes],
+    billing_sheet_filename: Optional[str] = None,
+    billing_sheet_content_type: Optional[str] = None,
+    billing_sheet_storage_key: Optional[str] = None,
 ) -> None:
     entry["patient_name"] = patient_name
     entry["patient_dob"] = patient_dob
@@ -341,17 +377,10 @@ def _apply_submission_update(
     entry["cpt_lines"] = cpt_lines or []
     entry["updated_at"] = _utc_now_iso()
 
-    if billing_sheet_bytes:
-        _delete_sheet_file(entry, submission_id)
-        storage_key = _save_sheet_bytes(
-            submission_id,
-            billing_sheet_bytes,
-            billing_sheet_content_type or "application/octet-stream",
-            billing_sheet_filename or "billing-sheet.png",
-        )
+    if billing_sheet_storage_key is not None:
         entry["billing_sheet_filename"] = billing_sheet_filename or "billing-sheet.png"
         entry["billing_sheet_content_type"] = billing_sheet_content_type or "application/octet-stream"
-        entry["billing_sheet_storage_key"] = storage_key
+        entry["billing_sheet_storage_key"] = billing_sheet_storage_key
 
 
 def update_submission(
@@ -372,8 +401,22 @@ def update_submission(
     billing_sheet_filename: Optional[str] = None,
     billing_sheet_content_type: Optional[str] = None,
     billing_sheet_bytes: Optional[bytes] = None,
+    practice_url: Optional[str] = None,
 ) -> Optional[Dict[str, Any]]:
     """Update submission metadata and optionally replace the billing sheet image."""
+    existing = get_submission(submission_id, practice_url=practice_url)
+    if existing is None:
+        return None
+    old_storage_key = existing.get("billing_sheet_storage_key") or ""
+
+    new_storage_key: Optional[str] = None
+    if billing_sheet_bytes:
+        new_storage_key = _save_sheet_bytes(
+            submission_id,
+            billing_sheet_bytes,
+            billing_sheet_content_type or "application/octet-stream",
+            billing_sheet_filename or "billing-sheet.png",
+        )
 
     def _apply(entry: Dict[str, Any]) -> None:
         _apply_submission_update(
@@ -393,23 +436,29 @@ def update_submission(
             cpt_lines=cpt_lines,
             billing_sheet_filename=billing_sheet_filename,
             billing_sheet_content_type=billing_sheet_content_type,
-            billing_sheet_bytes=billing_sheet_bytes,
+            billing_sheet_storage_key=new_storage_key if billing_sheet_bytes else None,
         )
 
-    entry = _update_index_entry(submission_id, _apply)
+    entry = _update_index_entry(submission_id, _apply, practice_url=practice_url)
     if entry:
+        if billing_sheet_bytes and old_storage_key and old_storage_key != new_storage_key:
+            _delete_sheet_file({"billing_sheet_storage_key": old_storage_key}, submission_id)
         logger.info("billing_submission_updated submission_id=%s", submission_id)
-    return entry
+        return entry
+
+    if new_storage_key:
+        _delete_sheet_file({"billing_sheet_storage_key": new_storage_key}, submission_id)
+    return None
 
 
-def delete_submission(submission_id: str) -> bool:
+def delete_submission(submission_id: str, practice_url: Optional[str] = None) -> bool:
     """Remove submission from index and delete stored billing sheet. Returns False if not found."""
     removed: Dict[str, Optional[Dict[str, Any]]] = {"entry": None}
 
     def _mutate(entries: List[Dict[str, Any]]) -> Optional[List[Dict[str, Any]]]:
         idx = _find_submission_in_index(entries, submission_id)
-        if idx is None:
-            return None  # not found -> skip the write
+        if idx is None or not _practice_matches(entries[idx], practice_url):
+            return None  # missing or other practice -> skip the write
         removed["entry"] = entries.pop(idx)
         return entries
 
@@ -465,8 +514,9 @@ def _try_load_sheet_from_s3(storage_key: str, submission_id: str) -> Optional[by
 
 def load_billing_sheet(
     submission_id: str,
+    practice_url: Optional[str] = None,
 ) -> Optional[Tuple[bytes, str, str]]:
-    entry = get_submission(submission_id)
+    entry = get_submission(submission_id, practice_url=practice_url)
     if not entry:
         return None
 

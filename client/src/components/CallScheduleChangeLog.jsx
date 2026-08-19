@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../context/useAuth.js";
 import { callScheduleService } from "../services/callScheduleService";
+import { formatPacificDateTime } from "../utils/calendarPacific.js";
 
 const POD_ORDER = ["North Pod", "Central Pod", "South Pod"];
 const POD_LABEL = {
@@ -92,12 +93,8 @@ function summarizeScheduleChanges(entry) {
 
 function formatWhen(iso) {
   if (!iso || typeof iso !== "string") return "—";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleString(undefined, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  });
+  // Practice operates on Pacific time; render consistently regardless of viewer TZ.
+  return formatPacificDateTime(iso) || "—";
 }
 
 function formatSource(entry) {

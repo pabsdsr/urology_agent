@@ -51,6 +51,28 @@ def test_search_patients_maps_entries(monkeypatch, authenticated_client):
     ]
 
 
+def test_search_patients_url_encodes_query(monkeypatch, authenticated_client):
+    captured = {}
+
+    class _CapturingClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        async def get(self, url, **kwargs):
+            captured["url"] = url
+            return _response(200, {"entry": []})
+
+    monkeypatch.setattr(routes.patients.httpx, "AsyncClient", lambda **kwargs: _CapturingClient())
+
+    response = authenticated_client.get("/patients?given=John%20Doe&family=O%27Brien")
+    assert response.status_code == 200
+    assert "given=John+Doe" in captured["url"] or "given=John%20Doe" in captured["url"]
+    assert "family=O%27Brien" in captured["url"]
+
+
 def test_search_patients_handles_upstream_failure(monkeypatch, authenticated_client):
     monkeypatch.setattr(
         routes.patients.httpx,

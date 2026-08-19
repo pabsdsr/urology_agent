@@ -6,6 +6,7 @@ import hashlib
 import xmltodict
 import copy
 from io import BytesIO
+from urllib.parse import urlparse
 
 import pdfplumber
 
@@ -103,8 +104,9 @@ def hash_patient_data(patient_data):
     return hashlib.sha256(patient_text.encode("utf-8")).hexdigest()
 
 
-# Rate limiter (max concurrent requests)
-MAX_CONCURRENT_REQUESTS = 300
+# Rate limiter (max concurrent ModMed requests). Kept modest so a single
+# document-heavy patient ingest can't flood the upstream API with 429s.
+MAX_CONCURRENT_REQUESTS = int(os.getenv("PATIENT_INFO_MAX_CONCURRENT_REQUESTS", "20"))
 semaphore = asyncio.Semaphore(MAX_CONCURRENT_REQUESTS)
 
 async def limited_get(client: httpx.AsyncClient, url: str, headers: dict = None):
@@ -162,10 +164,17 @@ async def get_patient_info(id: str, modmed_token: str = None, practice_url: str 
         results = {}
         doc_entries = []
 
+        failed_sections = []
         for name, resp in zip(tasks.keys(), responses):
             if isinstance(resp, Exception) or resp.status_code != 200:
-                if name == "document_references":
-                    logger.error(f"DocumentReference API Error: {resp.status_code if hasattr(resp, 'status_code') else 'Exception'} - {resp.text[:200] if hasattr(resp, 'text') else str(resp)[:200]}")
+                failed_sections.append(name)
+                detail = (
+                    f"HTTP {resp.status_code}" if hasattr(resp, "status_code") else repr(resp)[:200]
+                )
+                logger.warning(
+                    "Patient section fetch failed section=%s patient_id=%s: %s",
+                    name, id, detail,
+                )
                 continue
 
             if name == "document_references":
@@ -193,11 +202,17 @@ async def get_patient_info(id: str, modmed_token: str = None, practice_url: str 
                     if file_url:
                         all_file_info.append((file_url, attachment, doc_json))
 
+            files = []
             if all_file_info:
-                all_file_tasks = [limited_get(client, url) for url, _, _ in all_file_info]
+                # Send ModMed credentials only to same-host attachment URLs;
+                # presigned/external URLs must not receive our auth headers.
+                api_host = urlparse(base_url).netloc
+                all_file_tasks = [
+                    limited_get(client, url, headers if urlparse(url).netloc == api_host else None)
+                    for url, _, _ in all_file_info
+                ]
                 all_file_responses = await asyncio.gather(*all_file_tasks, return_exceptions=True)
 
-                files = []
                 for (url, attachment, doc_json), file_resp in zip(all_file_info, all_file_responses):
                     if not isinstance(file_resp, httpx.Response) or file_resp.status_code != 200:
                         # Use robust title fallback
@@ -309,8 +324,17 @@ async def get_patient_info(id: str, modmed_token: str = None, practice_url: str 
             for section_list, name, h in all_sections_to_embed
         ])
 
-        logger.info("Patient information processed successfully", 
-                   extra={"patient_id": id, "practice_url": practice_url, "sections_embedded": len(all_sections_to_embed)})
+        if failed_sections:
+            logger.warning(
+                "Patient information processed with missing sections",
+                extra={"patient_id": id, "practice_url": practice_url,
+                       "failed_sections": failed_sections,
+                       "sections_embedded": len(all_sections_to_embed)},
+            )
+        else:
+            logger.info("Patient information processed successfully",
+                        extra={"patient_id": id, "practice_url": practice_url,
+                               "sections_embedded": len(all_sections_to_embed)})
         return True
 
     except HTTPException:

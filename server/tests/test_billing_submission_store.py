@@ -61,6 +61,53 @@ def test_billing_submission_store_roundtrip(tmp_path, monkeypatch):
     assert billing_submission_store.load_billing_sheet(entry["id"]) is None
 
 
+def test_practice_scoping_hides_other_practices(tmp_path, monkeypatch):
+    data_dir = tmp_path / "data"
+    monkeypatch.setattr(billing_submission_store, "_DATA_DIR", str(data_dir))
+    monkeypatch.setattr(
+        billing_submission_store,
+        "LOCAL_INDEX_PATH",
+        str(data_dir / "billing_submissions.json"),
+    )
+    monkeypatch.setattr(billing_submission_store, "LOCAL_SHEETS_DIR", str(data_dir / "sheets"))
+    monkeypatch.setattr(billing_submission_store, "_s3_client", None)
+    monkeypatch.setattr(billing_submission_store, "BILLING_S3_BUCKET", "")
+
+    common = dict(
+        patient_dob="1990-01-01",
+        location="Central Pod",
+        date_of_service="2026-05-01",
+        provider_name="Dr. Smith",
+        cpt_code="51798",
+        icd10_code="N40.1",
+        submitted_by="user@test.com",
+        submitter_email="user@test.com",
+    )
+    entry_a = billing_submission_store.save_submission(
+        patient_name="Practice A Patient", practice_url="practice-a", **common
+    )
+    billing_submission_store.save_submission(
+        patient_name="Practice B Patient", practice_url="practice-b", **common
+    )
+
+    a_list = billing_submission_store.list_submissions(limit=10, practice_url="practice-a")
+    assert [e["patient_name"] for e in a_list] == ["Practice A Patient"]
+
+    # Cross-practice access behaves as "not found" for reads and mutations.
+    assert billing_submission_store.get_submission(entry_a["id"], practice_url="practice-b") is None
+    assert (
+        billing_submission_store.set_submission_processed(
+            entry_a["id"], processed=True, practice_url="practice-b"
+        )
+        is None
+    )
+    assert billing_submission_store.delete_submission(entry_a["id"], practice_url="practice-b") is False
+
+    # Same practice retains full access.
+    assert billing_submission_store.get_submission(entry_a["id"], practice_url="practice-a")
+    assert billing_submission_store.delete_submission(entry_a["id"], practice_url="practice-a") is True
+
+
 def test_load_billing_sheet_tries_s3_key_fallbacks(monkeypatch):
     class _FakeS3:
         class exceptions:
@@ -80,7 +127,7 @@ def test_load_billing_sheet_tries_s3_key_fallbacks(monkeypatch):
     monkeypatch.setattr(
         billing_submission_store,
         "get_submission",
-        lambda _id: {
+        lambda _id, practice_url=None: {
             "id": "sub-99",
             "billing_sheet_storage_key": "billing_sheets/sub-99.png",
             "billing_sheet_content_type": "image/png",

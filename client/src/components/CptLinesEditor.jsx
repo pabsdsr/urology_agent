@@ -61,7 +61,7 @@ export default function CptLinesEditor({ lines, onChange, resetKey }) {
           const isExpanded = expandedIndex === index;
           return (
             <button
-              key={`cpt-chip-${index}`}
+              key={`${line.code}-${index}`}
               type="button"
               onClick={() => setExpandedIndex(index)}
               aria-expanded={isExpanded}

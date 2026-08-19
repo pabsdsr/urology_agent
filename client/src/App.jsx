@@ -9,6 +9,7 @@ import CallScheduleAdmin from "./components/CallScheduleAdmin";
 import CallScheduleChangeLog from "./components/CallScheduleChangeLog";
 import BillingPage from "./components/BillingPage";
 import BillingSubmissionsInbox from "./components/BillingSubmissionsInbox";
+import { CHAT_ENABLED, DEFAULT_AUTHENTICATED_ROUTE } from "./config/features.js";
 
 function App() {
   return (
@@ -23,7 +24,17 @@ function App() {
             </ProtectedRoute>
           }
         >
-          <Route index element={<MainApp />} />
+          <Route
+            index
+            element={
+              CHAT_ENABLED ? (
+                <MainApp />
+              ) : (
+                <Navigate to={DEFAULT_AUTHENTICATED_ROUTE} replace />
+              )
+            }
+          />
+          {CHAT_ENABLED && <Route path="chat" element={<MainApp />} />}
           <Route path="schedule" element={<PractitionerSchedule />} />
           <Route path="billing" element={<BillingPage />} />
           <Route path="billing/submissions" element={<BillingSubmissionsInbox />} />

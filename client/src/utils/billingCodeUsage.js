@@ -14,9 +14,27 @@ function readUsage(key) {
   }
 }
 
+// Cap tracked codes so localStorage doesn't grow without bound; keep the most
+// frequently (then most recently) used entries.
+const MAX_TRACKED_CODES = 200;
+
+function pruneUsage(usage) {
+  const entries = Object.entries(usage);
+  if (entries.length <= MAX_TRACKED_CODES) return usage;
+  return Object.fromEntries(
+    entries
+      .sort(([, a], [, b]) => b.count - a.count || b.lastUsed - a.lastUsed)
+      .slice(0, MAX_TRACKED_CODES)
+  );
+}
+
 function writeUsage(key, usage) {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(key, JSON.stringify(usage));
+  try {
+    window.localStorage.setItem(key, JSON.stringify(pruneUsage(usage)));
+  } catch {
+    // Quota exceeded or storage disabled — usage ranking is best-effort.
+  }
 }
 
 function normalizeCode(codeType, code) {

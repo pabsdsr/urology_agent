@@ -40,6 +40,21 @@ def get_surgery_location_ids(appointments: list) -> list:
     return sorted(ids)
 
 
+def _participant_ref(participant: dict, marker: str) -> str | None:
+    """Return the trailing id from a FHIR participant reference, or None if missing/irrelevant."""
+    ref = (participant.get("actor") or {}).get("reference") or ""
+    if marker not in ref:
+        return None
+    return ref.split("/")[-1]
+
+
+def _patient_ref(participant: dict) -> str | None:
+    ref = (participant.get("actor") or {}).get("reference") or ""
+    if "Patient/" not in ref:
+        return None
+    return ref.split("Patient/")[-1].split("/")[-1]
+
+
 def aggregate_practitioner_schedule(appointments: list) -> dict:
     """
     Aggregate appointments into a schedule by location, AM/PM, and practitioner.
@@ -341,11 +356,7 @@ async def fetch_appointments_for_range(start_dt: datetime, end_dt: datetime, mod
                     continue
                 start = resource.get("start")
                 patient_ref = next(
-                    (
-                        p["actor"]["reference"].split("Patient/")[-1].split("/")[-1]
-                        for p in resource.get("participant", [])
-                        if "Patient/" in (p.get("actor", {}).get("reference") or "")
-                    ),
+                    (_patient_ref(p) for p in resource.get("participant", []) if _patient_ref(p)),
                     None,
                 )
                 if start and patient_ref:
@@ -391,19 +402,20 @@ async def fetch_appointments_for_range(start_dt: datetime, end_dt: datetime, mod
                 if not start_in_range(start):
                     continue
                 # Match full URLs for Practitioner, Location, Patient. Normalize practitioner id so it matches keys from Practitioner list/by-id.
-                _raw_refs = [p["actor"]["reference"].split("/")[-1] for p in resource.get("participant", []) if "/Practitioner/" in p["actor"]["reference"]]
+                participants = resource.get("participant", [])
+                _raw_refs = [
+                    ref
+                    for p in participants
+                    if (ref := _participant_ref(p, "/Practitioner/"))
+                ]
                 practitioner_refs = [_canonical_practitioner_id(rid) for rid in _raw_refs]
                 location_refs = [
-                    p["actor"]["reference"].split("/")[-1]
-                    for p in resource.get("participant", [])
-                    if "/Location/" in p["actor"]["reference"]
+                    ref
+                    for p in participants
+                    if (ref := _participant_ref(p, "/Location/"))
                 ]
                 patient_ref = next(
-                    (
-                        p["actor"]["reference"].split("Patient/")[-1].split("/")[-1]
-                        for p in resource.get("participant", [])
-                        if "Patient/" in (p.get("actor", {}).get("reference") or "")
-                    ),
+                    (_patient_ref(p) for p in resource.get("participant", []) if _patient_ref(p)),
                     None,
                 )
                 # Free-text description for the appointment (often used for surgery case description)

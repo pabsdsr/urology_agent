@@ -73,7 +73,8 @@ export default function MedicalCodeCombobox({
 }) {
   const storageKey = CUSTOM_CODE_STORAGE_KEYS[codeType];
   const codeTypeLabel = CODE_TYPE_LABELS[codeType] || "code";
-  const selectedCodes = parseCodeValues(codeType, values);
+  // Memoized so the selectedSet -> recentOptions -> apiResults memo chain stays stable.
+  const selectedCodes = useMemo(() => parseCodeValues(codeType, values), [codeType, values]);
 
   const [customCodes, setCustomCodes] = useState(() => loadCustomCodes(storageKey));
   const [query, setQuery] = useState("");

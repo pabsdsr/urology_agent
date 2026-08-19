@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import mimetypes
 import re
@@ -196,7 +197,9 @@ async def submit_billing(
         sheet_bytes, sheet_content_type, sheet_filename = await _read_billing_sheet(billing_sheet)
 
     try:
-        entry = save_submission(
+        # Store I/O is synchronous (S3/file locks); keep it off the event loop.
+        entry = await asyncio.to_thread(
+            save_submission,
             **fields,
             submitted_by=current_user.username,
             submitter_email=current_user.email,
@@ -250,8 +253,10 @@ async def get_billing_submissions(
     offset: int = Query(0, ge=0),
     current_user: SessionUser = Depends(require_billing_viewer),
 ):
-    """Newest-first list of billing submissions for review."""
-    entries = list_submissions(limit=limit, offset=offset)
+    """Newest-first list of billing submissions for review (scoped to the caller's practice)."""
+    entries = await asyncio.to_thread(
+        list_submissions, limit=limit, offset=offset, practice_url=current_user.practice_url
+    )
     return {"submissions": entries, "limit": limit, "offset": offset}
 
 
@@ -262,7 +267,12 @@ async def set_billing_submission_processed(
     current_user: SessionUser = Depends(require_billing_processor),
 ):
     """Mark a submission as processed (or unmark) for billing department tracking."""
-    entry = set_submission_processed(submission_id, processed=body.processed)
+    entry = await asyncio.to_thread(
+        set_submission_processed,
+        submission_id,
+        processed=body.processed,
+        practice_url=current_user.practice_url,
+    )
     if not entry:
         raise HTTPException(status_code=404, detail="Billing submission not found.")
     logger.info(
@@ -279,7 +289,9 @@ async def get_billing_submission_sheet(
     submission_id: str,
     current_user: SessionUser = Depends(require_billing_viewer),
 ):
-    loaded = load_billing_sheet(submission_id)
+    loaded = await asyncio.to_thread(
+        load_billing_sheet, submission_id, practice_url=current_user.practice_url
+    )
     if not loaded:
         raise HTTPException(status_code=404, detail="Billing sheet not found.")
     image_bytes, content_type, filename = loaded
@@ -332,12 +344,14 @@ async def update_billing_submission(
         sheet_bytes, sheet_content_type, sheet_filename = await _read_billing_sheet(billing_sheet)
 
     try:
-        entry = update_submission(
+        entry = await asyncio.to_thread(
+            update_submission,
             submission_id,
             **fields,
             billing_sheet_filename=sheet_filename,
             billing_sheet_content_type=sheet_content_type,
             billing_sheet_bytes=sheet_bytes,
+            practice_url=current_user.practice_url,
         )
     except Exception as exc:
         logger.exception("billing_submission_update_failed submission_id=%s", submission_id)
@@ -355,7 +369,10 @@ async def delete_billing_submission(
     submission_id: str,
     current_user: SessionUser = Depends(require_billing_staff),
 ):
-    if not delete_submission(submission_id):
+    deleted = await asyncio.to_thread(
+        delete_submission, submission_id, practice_url=current_user.practice_url
+    )
+    if not deleted:
         raise HTTPException(status_code=404, detail="Billing submission not found.")
     logger.info("billing_submission_deleted submission_id=%s by=%s", submission_id, current_user.username)
     return {"status": "deleted", "submission_id": submission_id}

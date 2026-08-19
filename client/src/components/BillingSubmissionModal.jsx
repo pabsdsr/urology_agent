@@ -136,12 +136,14 @@ export default function BillingSubmissionModal({
       aria-modal="true"
       aria-labelledby="billing-submission-modal-title"
     >
+      {/* While editing, backdrop clicks must not silently discard unsaved changes
+          (matches the Escape-key guard above). */}
       <button
         type="button"
         className="absolute inset-0 bg-black/50"
         onClick={onClose}
         aria-label="Close"
-        disabled={isEditing && saving}
+        disabled={isEditing || saving}
       />
       <div className="relative z-10 w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-lg bg-white shadow-xl">
         <div className="sticky top-0 flex items-start justify-between gap-3 border-b border-gray-200 bg-white px-6 py-4">

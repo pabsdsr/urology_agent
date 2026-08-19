@@ -11,15 +11,21 @@ function MainApp() {
     results: filteredPatients,
     showResults,
     setShowResults,
+    loading: searchLoading,
     searchRef,
   } = usePatientSearch();
 
   const messagesEndRef = useRef(null);
+  const selectedIdRef = useRef(selectedId);
   const [messages, setMessages] = useState([]);
   const [inputMessage, setInputMessage] = useState("");
   const [loading, setLoading] = useState(false);
 
   // Auto-scroll to bottom when new messages are added
+  useEffect(() => {
+    selectedIdRef.current = selectedId;
+  }, [selectedId]);
+
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
@@ -42,8 +48,9 @@ function MainApp() {
   const sendMessage = async () => {
     if (!inputMessage.trim() || !selectedId) return;
 
+    const patientId = selectedId;
     const userMessage = {
-      id: Date.now(),
+      id: crypto.randomUUID(),
       text: inputMessage,
       sender: "user",
       timestamp: new Date().toLocaleTimeString(),
@@ -55,11 +62,13 @@ function MainApp() {
     try {
       const data = await patientService.runCrew({
         query: inputMessage,
-        id: selectedId,
+        id: patientId,
       });
 
+      if (patientId !== selectedIdRef.current) return;
+
       const botMessage = {
-        id: Date.now() + 1,
+        id: crypto.randomUUID(),
         text: data.result,
         sender: "bot",
         timestamp: new Date().toLocaleTimeString(),
@@ -68,9 +77,11 @@ function MainApp() {
       setMessages((prev) => [...prev, botMessage]);
     } catch (error) {
       console.error("Error sending message:", error);
+
+      if (patientId !== selectedIdRef.current) return;
       
       const errorMessage = {
-        id: Date.now() + 1,
+        id: crypto.randomUUID(),
         text: error.message || "Sorry, I encountered an error processing your request.",
         sender: "bot",
         timestamp: new Date().toLocaleTimeString(),
@@ -137,7 +148,7 @@ function MainApp() {
                       ))
                     ) : (
                       <div className="px-4 py-2 text-gray-500">
-                        No patients found
+                        {searchLoading ? "Searching..." : "No patients found"}
                       </div>
                     )}
                   </div>

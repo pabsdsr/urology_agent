@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
 from pydantic import BaseModel, Field
 import asyncio
+import logging
 from typing import Any, Dict, Optional
 
 from app.models import SessionUser
@@ -9,6 +10,8 @@ from app.services.call_schedule_service import update_week, get_call_schedule_ra
 from app.services.call_schedule_import import parse_call_schedule_upload
 from app.services.call_schedule_changelog import get_changelog_entries
 
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/call-schedule",
@@ -24,7 +27,7 @@ class CallScheduleWeekRequest(BaseModel):
 @router.post("/week")
 async def save_call_schedule_week(
     payload: CallScheduleWeekRequest,
-    current_user: SessionUser = Depends(require_modmed_session),
+    current_user: SessionUser = Depends(require_admin),
 ):
     """
     Save or update the on-call schedule for a single week.
@@ -64,7 +67,13 @@ async def save_call_schedule_week(
         "source": "week_save",
         "upload_filename": None,
     }
-    update_week(payload.week_start, day_mapping, changelog_meta=changelog_meta)
+    try:
+        # Store I/O is synchronous (S3/file locks); keep it off the event loop.
+        await asyncio.to_thread(
+            update_week, payload.week_start, day_mapping, changelog_meta=changelog_meta
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
     return {"success": True, "updated_keys": list(day_mapping.keys())}
 
 
@@ -77,7 +86,7 @@ async def get_call_schedule(
     """
     Get call schedule entries for an inclusive date range.
     """
-    data = get_call_schedule_range(start, end)
+    data = await asyncio.to_thread(get_call_schedule_range, start, end)
     return {"call_schedule": data}
 
 
@@ -90,7 +99,7 @@ async def list_call_schedule_changelog(
     """
     Newest-first change log of call schedule edits (who changed what and when).
     """
-    entries = get_changelog_entries(limit=limit, offset=offset)
+    entries = await asyncio.to_thread(get_changelog_entries, limit=limit, offset=offset)
     return {"changelog": entries, "limit": limit, "offset": offset}
 
 
@@ -123,7 +132,7 @@ def _parse_and_save_upload(
 @router.post("/upload")
 async def upload_call_schedule(
     file: UploadFile = File(...),
-    current_user: SessionUser = Depends(require_modmed_session),
+    current_user: SessionUser = Depends(require_admin),
 ):
     """
     Upload a call schedule spreadsheet (CSV or XLSX).
@@ -158,5 +167,6 @@ async def upload_call_schedule(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception:
+        logger.exception("call_schedule_upload_failed filename=%s", filename)
         raise HTTPException(status_code=500, detail="Failed to parse uploaded call schedule")
 

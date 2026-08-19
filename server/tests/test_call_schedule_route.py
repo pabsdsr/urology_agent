@@ -41,3 +41,30 @@ def test_save_call_schedule_normalizes_entries(monkeypatch, authenticated_client
 def test_changelog_forbidden_for_non_admin(non_admin_client):
     response = non_admin_client.get("/call-schedule/changelog")
     assert response.status_code == 403
+
+
+def test_save_week_forbidden_for_non_admin(non_admin_client):
+    response = non_admin_client.post(
+        "/call-schedule/week",
+        json={"week_start": "2026-05-24", "days": {"2026-05-24": {"north": []}}},
+    )
+    assert response.status_code == 403
+
+
+def test_upload_forbidden_for_non_admin(non_admin_client):
+    response = non_admin_client.post(
+        "/call-schedule/upload",
+        files={"file": ("schedule.csv", b"a,b,c", "text/csv")},
+    )
+    assert response.status_code == 403
+
+
+def test_save_week_rejects_all_invalid_dates(authenticated_client):
+    response = authenticated_client.post(
+        "/call-schedule/week",
+        json={
+            "week_start": "2026-05-24",
+            "days": {"not-a-date": {"north": [{"location": "A", "practitioner": "Dr. X"}]}},
+        },
+    )
+    assert response.status_code == 400

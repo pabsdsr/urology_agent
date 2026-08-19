@@ -9,6 +9,20 @@ from typing import Any, Callable, Optional, Type, List
 
 logger = logging.getLogger(__name__)
 
+# Bedrock clients are thread-safe; reuse one per process instead of paying
+# client construction + connection setup on every vector search.
+_bedrock_client = None
+
+
+def _get_bedrock_client():
+    global _bedrock_client
+    if _bedrock_client is None:
+        _bedrock_client = boto3.client(
+            service_name='bedrock-runtime',
+            region_name=os.getenv('AWS_REGION', 'us-west-2'),
+        )
+    return _bedrock_client
+
 
 try:
     from qdrant_client import QdrantClient
@@ -220,12 +234,8 @@ class QdrantVectorSearchTool(BaseTool):
             list[float]: The vectorized query
         """
         try:
-            
-            bedrock_client = boto3.client(
-                service_name='bedrock-runtime',
-                region_name=os.getenv('AWS_REGION', 'us-west-2')
-            )
-            
+            bedrock_client = _get_bedrock_client()
+
             request_body = {
                 "inputText": query,
                 "dimensions": 1024,

@@ -10,5 +10,9 @@ export function readJsonStorage(key, fallback = []) {
 
 export function writeJsonStorage(key, value) {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(key, JSON.stringify(value));
+  try {
+    window.localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // Quota exceeded or storage disabled (private browsing) — persistence is best-effort.
+  }
 }

@@ -79,6 +79,10 @@ def update_week(
             continue
         norm_days[norm_key] = pods
 
+    # Don't silently save nothing when every provided date key was malformed.
+    if days and not norm_days:
+        raise ValueError("No valid dates provided (expected YYYY-MM-DD keys)")
+
     # The read-modify-write is atomic: the local path holds a file lock, and the
     # S3 path uses a conditional (ETag) write with retries, so concurrent week
     # edits can't silently clobber one another. `mutate` may re-run on an S3

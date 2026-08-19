@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
+from urllib.parse import urlencode
 import httpx
 from app.routes.auth import require_modmed_session
 from app.models import SessionUser
@@ -24,14 +25,10 @@ async def search_patients(
     prefix = current_user.practice_url
 
     base_url = f"https://mmapi.ema-api.com/ema-prod/firm/{prefix}/ema/fhir/v2/Patient"
-    params = []
-    if given:
-        params.append(f"given={given}")
-    if family:
-        params.append(f"family={family}")
-    if not params:
+    query_params = {k: v for k, v in (("given", given), ("family", family)) if v}
+    if not query_params:
         raise HTTPException(status_code=400, detail="At least one of 'given' or 'family' must be provided.")
-    url = base_url + "?" + "&".join(params)
+    url = f"{base_url}?{urlencode(query_params)}"
 
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:

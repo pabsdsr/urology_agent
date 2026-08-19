@@ -69,18 +69,15 @@ async def list_appointment_types(
 
     modmed_token, base_url, practice_api_key = _schedule_params(current_user)
 
-    all_appointments = []
-    seen = set()
-    d = start_dt
-    while d <= end_dt:
-        day_str = d.strftime("%Y-%m-%d")
-        appts = await get_appointments_by_date(day_str, day_str, modmed_token, base_url, practice_api_key)
-        for a in appts:
-            key = (a.get("start"), a.get("end"), a.get("patient_id"))
-            if key not in seen:
-                seen.add(key)
-                all_appointments.append(a)
-        d += timedelta(days=1)
+    # One ranged call: the service already fans out per-day fetches
+    # concurrently and deduplicates by (start, end, patient_id).
+    all_appointments = await get_appointments_by_date(
+        start_dt.strftime("%Y-%m-%d"),
+        end_dt.strftime("%Y-%m-%d"),
+        modmed_token,
+        base_url,
+        practice_api_key,
+    )
 
     id_to_name = get_appointment_type_id_to_name(all_appointments)
     surgery_loc_ids = get_surgery_location_ids(all_appointments)

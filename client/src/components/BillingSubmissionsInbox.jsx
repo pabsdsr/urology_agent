@@ -22,8 +22,9 @@ const QUEUE_VIEWS = {
 function SortableHeader({ label, column, sort, onSort }) {
   const active = sort.column === column;
   const indicator = active ? (sort.direction === "asc" ? " ↑" : " ↓") : "";
+  const ariaSort = active ? (sort.direction === "asc" ? "ascending" : "descending") : "none";
   return (
-    <th className="px-3 py-2 font-medium">
+    <th className="px-3 py-2 font-medium" aria-sort={ariaSort}>
       <button
         type="button"
         onClick={() => onSort(column)}
@@ -71,25 +72,29 @@ function BillingSubmissionsInbox() {
     );
   }, [queueSubmissions, sort]);
 
-  const loadSubmissions = async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const data = await billingService.listSubmissions(200, 0);
-      setSubmissions(data.submissions || []);
-    } catch (err) {
-      setError(err.message || "Failed to load billing submissions.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
     if (!canView) {
       setLoading(false);
-      return;
+      return undefined;
     }
-    loadSubmissions();
+
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      setError("");
+      try {
+        const data = await billingService.listSubmissions(200, 0);
+        if (!cancelled) setSubmissions(data.submissions || []);
+      } catch (err) {
+        if (!cancelled) setError(err.message || "Failed to load billing submissions.");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [canView]);
 
   const handleSort = (column) => {

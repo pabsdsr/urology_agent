@@ -13,13 +13,17 @@ from app.routes import auth, run_crew, patients, appointments, call_schedule, bi
 
 warnings.filterwarnings("ignore", category=SyntaxWarning, module="pysbd")
 
+_log_handlers: list[logging.Handler] = [logging.StreamHandler()]
+try:
+    _log_handlers.append(logging.FileHandler('app.log'))
+except OSError:
+    # Read-only filesystem (containers/serverless): stream logging only.
+    pass
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(),
-        logging.FileHandler('app.log')
-    ]
+    handlers=_log_handlers,
 )
 logging.getLogger("httpx").setLevel(logging.WARNING)
 

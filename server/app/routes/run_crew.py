@@ -35,8 +35,9 @@ async def run_crew(req: CrewInput, current_user: SessionUser = Depends(require_m
     )
 
     try:
+        # NOTE: do not log the query text itself; it can contain PHI.
         logger.info("Starting crew execution", 
-                   extra={"patient_id": req.id, "query": req.query[:50], 
+                   extra={"patient_id": req.id,
                          "username": current_user.username, "practice_url": current_user.practice_url})
         
         # CrewAI is synchronous; run off the event loop so other requests can progress.
@@ -54,6 +55,6 @@ async def run_crew(req: CrewInput, current_user: SessionUser = Depends(require_m
         return {"result": result}
     except Exception:
         logger.exception("Crew execution failed", 
-                        extra={"patient_id": req.id, "query": req.query[:50], 
+                        extra={"patient_id": req.id,
                               "username": current_user.username, "practice_url": current_user.practice_url})
         raise HTTPException(status_code=500, detail="Failed to process query")

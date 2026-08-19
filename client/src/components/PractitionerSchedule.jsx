@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/useAuth.js";
 import { scheduleService } from "../services/scheduleService";
@@ -8,6 +8,87 @@ import {
   getDatesInRange,
   getPacificDateString,
 } from "../utils/calendarPacific.js";
+
+// Surgery column key from backend (same as server SURGERY_COLUMN_KEY)
+const SURGERY_COLUMN_KEY = "Surgery";
+
+// Practitioner pods and desired display order within each pod.
+const PODS = [
+  {
+    name: "North Pod",
+    callKey: "North Pod",
+    practitioners: [
+      "Don Bui",
+      "Leah Nakamura",
+      "Paul Oh",
+      "Tammy Ho",
+      "Ashley Swanson",
+      "Michael Bui",
+    ],
+  },
+  {
+    name: "Central Pod",
+    callKey: "Central Pod",
+    practitioners: [
+      "Moses Kim",
+      "Daniel Su",
+      "Aaron Spitz",
+      "Neyssan Tebyani",
+      "Daniel Cabanero",
+      "Taralyn Johnson",
+    ],
+  },
+  {
+    name: "South Pod",
+    callKey: "South Pod",
+    practitioners: [
+      "Josh Randall",
+      "Poone Shoureshi",
+      "Karan Singh",
+      "James Meaglia",
+      "Olivia Carr",
+      "Jennifer Kim",
+    ],
+  },
+];
+
+const NON_SURGERY_PRACTITIONERS = [
+  "Olivia Carr",
+  "Daniel Cabanero",
+  "Taralyn Johnson",
+  "Jennifer Kim",
+  "Michael Bui",
+  "Ashley Swanson",
+];
+
+const CREDENTIAL_TOKENS = new Set(["md", "m.d.", "pa", "p.a.", "np", "n.p."]);
+
+const tokenizeName = (name) => {
+  if (!name) return [];
+  return name
+    .toLowerCase()
+    .replace(/[,]/g, " ")
+    .split(/\s+/)
+    .filter(Boolean)
+    .filter((t) => !CREDENTIAL_TOKENS.has(t));
+};
+
+const formatLocationLabel = (label) => {
+  if (!label) return "";
+  const lower = label.toLowerCase();
+  if (lower === "telehealth") return "TH";
+  if (lower === "surgery") return "SX";
+  if (lower === "irvine") return "IRV";
+  return label;
+};
+
+const formatColumnDateLabel = (dayStr) => {
+  if (!dayStr) return "";
+  const parts = dayStr.split("-");
+  if (parts.length !== 3) return dayStr;
+  const [, month, day] = parts;
+  return `${month}/${day}`;
+};
 
 const toggleButtonClass = (active) =>
   `px-3 py-2 sm:py-1 text-sm rounded border transition-colors ${
@@ -54,6 +135,16 @@ function PractitionerSchedule() {
   const [selectedSurgery, setSelectedSurgery] = useState(null);
   const [date, setDate] = useState(getPacificDateString());
 
+  // Close the surgery details modal on Escape.
+  useEffect(() => {
+    if (!selectedSurgery) return undefined;
+    const onKeyDown = (e) => {
+      if (e.key === "Escape") setSelectedSurgery(null);
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [selectedSurgery]);
+
   const goToPrev = () => {
     const step = viewMode === "week" ? 7 : 1;
     setDate((prev) => addDays(prev, -step));
@@ -69,15 +160,9 @@ function PractitionerSchedule() {
     ? getDatesInRange(weekRange.start, weekRange.end)
     : [date];
 
-  const formatColumnDateLabel = (dayStr) => {
-    if (!dayStr) return "";
-    const parts = dayStr.split("-");
-    if (parts.length !== 3) return dayStr;
-    const [, month, day] = parts;
-    return `${month}/${day}`;
-  };
-
   useEffect(() => {
+    let cancelled = false;
+
     async function fetchSchedule() {
       setLoading(true);
       setError(null);
@@ -90,6 +175,7 @@ function PractitionerSchedule() {
           end = range.end;
         }
         const res = await scheduleService.getPractitionerSchedule(start, end);
+        if (cancelled) return;
         setData({
           schedule: res.schedule || {},
           practitioner_names: res.practitioner_names || {},
@@ -99,104 +185,43 @@ function PractitionerSchedule() {
           surgery_appointments: res.surgery_appointments || {},
         });
       } catch {
-        setError("Failed to load schedule");
+        if (!cancelled) setError("Failed to load schedule");
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     }
     fetchSchedule();
+    return () => {
+      cancelled = true;
+    };
   }, [date, viewMode]);
 
   const { schedule, practitioner_names, practitioner_roles, location_names, call_schedule, surgery_appointments } = data;
-  // Surgery column key from backend (same as server SURGERY_COLUMN_KEY)
-  const SURGERY_COLUMN_KEY = "Surgery";
-  // Practitioner pods and desired display order within each pod.
-  const PODS = [
-    {
-      name: "North Pod",
-      callKey: "North Pod",
-      practitioners: [
-        "Don Bui",
-        "Leah Nakamura",
-        "Paul Oh",
-        "Tammy Ho",
-        "Ashley Swanson",
-        "Michael Bui",
-      ],
-    },
-    {
-      name: "Central Pod",
-      callKey: "Central Pod",
-      practitioners: [
-        "Moses Kim",
-        "Daniel Su",
-        "Aaron Spitz",
-        "Neyssan Tebyani",
-        "Daniel Cabanero",
-        "Taralyn Johnson",
-      ],
-    },
-    {
-      name: "South Pod",
-      callKey: "South Pod",
-      practitioners: [
-        "Josh Randall",
-        "Poone Shoureshi",
-        "Karan Singh",
-        "James Meaglia",
-        "Olivia Carr",
-        "Jennifer Kim",
-      ],
-    },
-  ];
 
-  const NON_SURGERY_PRACTITIONERS = [
-    "Olivia Carr",
-    "Daniel Cabanero",
-    "Taralyn Johnson",
-    "Jennifer Kim",
-    "Michael Bui",
-    "Ashley Swanson",
-  ];
-  const tokenizeName = (name) => {
-    if (!name) return [];
-    const credentialTokens = new Set(["md", "m.d.", "pa", "p.a.", "np", "n.p."]);
-    return name
-      .toLowerCase()
-      .replace(/[,]/g, " ")
-      .split(/\s+/)
-      .filter(Boolean)
-      .filter((t) => !credentialTokens.has(t));
-  };
-  const allPractitionerIdsRaw = Object.keys(practitioner_names || {});
-  const findPractitionerIdForName = (targetName) => {
-    const targetTokens = new Set(tokenizeName(targetName));
-    return allPractitionerIdsRaw.find((id) => {
-      const name = practitioner_names[id] || id;
-      const nameTokens = new Set(tokenizeName(name));
-      for (const t of targetTokens) {
-        if (!nameTokens.has(t)) return false;
-      }
-      return true;
-    });
-  };
+  // Resolve practitioner IDs per pod (fuzzy name-token matching), preserving
+  // the specified order. Memoized: this is O(pods × names) and only changes
+  // when a new schedule payload arrives.
+  const podsWithIds = useMemo(() => {
+    const allIds = Object.keys(practitioner_names || {});
+    const findPractitionerIdForName = (targetName) => {
+      const targetTokens = new Set(tokenizeName(targetName));
+      return allIds.find((id) => {
+        const nameTokens = new Set(tokenizeName(practitioner_names[id] || id));
+        for (const t of targetTokens) {
+          if (!nameTokens.has(t)) return false;
+        }
+        return true;
+      });
+    };
+    return PODS.map((pod) => ({
+      name: pod.name,
+      callKey: pod.callKey || pod.name,
+      practitionerIds: pod.practitioners
+        .map((displayName) => findPractitionerIdForName(displayName))
+        .filter(Boolean),
+    }));
+  }, [practitioner_names]);
 
-  // Resolve practitioner IDs per pod, preserving the specified order.
-  const podsWithIds = PODS.map((pod) => ({
-    name: pod.name,
-    callKey: pod.callKey || pod.name,
-    practitionerIds: pod.practitioners
-      .map((displayName) => findPractitionerIdForName(displayName))
-      .filter(Boolean),
-  }));
-  const formatLocationLabel = (label) => {
-    if (!label) return "";
-    const lower = label.toLowerCase();
-    if (lower === "telehealth") return "TH";
-    if (lower === "surgery") return "SX";
-    if (lower === "irvine") return "IRV";
-    return label;
-  };
   const isTelehealthLocation = (locId) => {
     const raw =
       locId === SURGERY_COLUMN_KEY
@@ -496,7 +521,15 @@ function PractitionerSchedule() {
       )}
       </div>
       {selectedSurgery && (
-        <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/30">
+        <div
+          className="fixed inset-0 z-30 flex items-center justify-center bg-black/30"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Surgery details"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setSelectedSurgery(null);
+          }}
+        >
           <div className="bg-white rounded-lg shadow-lg max-w-md w-full mx-4 p-4">
             <div className="flex justify-between items-center mb-2">
               <h3 className="text-sm font-semibold text-gray-900">Surgery details</h3>
@@ -504,6 +537,7 @@ function PractitionerSchedule() {
                 type="button"
                 onClick={() => setSelectedSurgery(null)}
                 className="text-gray-400 hover:text-gray-600 text-sm"
+                aria-label="Close surgery details"
               >
                 ×
               </button>

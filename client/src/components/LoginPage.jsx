@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useMsal } from '@azure/msal-react';
 import { loginRequest } from '../authConfig';
+import { CHAT_ENABLED, DEFAULT_AUTHENTICATED_ROUTE } from '../config/features.js';
 
 const LoginPage = () => {
   const { instance } = useMsal();
@@ -9,7 +10,7 @@ const LoginPage = () => {
   const [error, setError] = useState('');
 
   if (activeAccount) {
-    return <Navigate to="/" replace />;
+    return <Navigate to={CHAT_ENABLED ? "/" : DEFAULT_AUTHENTICATED_ROUTE} replace />;
   }
 
   const handleLoginRedirect = () => {

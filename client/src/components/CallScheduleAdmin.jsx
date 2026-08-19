@@ -14,7 +14,6 @@ import {
 import { readJsonStorage, writeJsonStorage } from "../utils/jsonStorage.js";
 import { useDropdownDismiss } from "../hooks/useDropdownDismiss.js";
 import {
-  formatYMD,
   addDays,
   startOfWeekSundayUTC,
   getPacificDateString,
@@ -77,20 +76,14 @@ export default function CallScheduleAdmin() {
 
     const weekEnd = addDays(weekStart, 6);
 
-    const buildEmptyRows = () => {
-      const base = new Date(`${weekStart}T00:00:00`);
-      return Array.from({ length: 7 }, (_, idx) => {
-        const day = new Date(base);
-        day.setDate(base.getDate() + idx);
-        const dateStr = formatYMD(day);
-        return {
-          date: dateStr,
-          north: [{ location: "", practitioner: "" }],
-          central: [{ location: "", practitioner: "" }],
-          south: [{ location: "", practitioner: "" }],
-        };
-      });
-    };
+    // Pure string date math (UTC) — avoids local-timezone off-by-one shifts.
+    const buildEmptyRows = () =>
+      Array.from({ length: 7 }, (_, idx) => ({
+        date: addDays(weekStart, idx),
+        north: [{ location: "", practitioner: "" }],
+        central: [{ location: "", practitioner: "" }],
+        south: [{ location: "", practitioner: "" }],
+      }));
 
     let isCancelled = false;
 
@@ -126,9 +119,9 @@ export default function CallScheduleAdmin() {
 
         setRows(nextRows);
       } catch {
-        // On error, just show empty week
         if (!isCancelled) {
           setRows(buildEmptyRows());
+          setMessage("Failed to load the call schedule for this week. Showing an empty grid.");
         }
       }
     })();
@@ -363,6 +356,13 @@ export default function CallScheduleAdmin() {
 
   const handleClearWeek = async () => {
     if (!weekStart || rows.length === 0) return;
+    if (
+      !window.confirm(
+        "Clear all call schedule entries for this week? This will save immediately and cannot be undone."
+      )
+    ) {
+      return;
+    }
     setSaving(true);
     setMessage("");
     try {
@@ -384,6 +384,13 @@ export default function CallScheduleAdmin() {
 
   const handleCopyFromPreviousWeek = async () => {
     if (!weekStart) return;
+    if (
+      !window.confirm(
+        "Copy the previous week's call schedule into this week? Current entries will be replaced and saved immediately."
+      )
+    ) {
+      return;
+    }
     setSaving(true);
     setMessage("");
     try {
@@ -392,9 +399,6 @@ export default function CallScheduleAdmin() {
       const prevData =
         (await callScheduleService.getCallSchedule(prevWeekStart, prevWeekEnd)) ||
         {};
-
-      const baseCurrent = new Date(`${weekStart}T00:00:00`);
-      const basePrev = new Date(`${prevWeekStart}T00:00:00`);
 
       const normalize = (entries) => {
         if (!Array.isArray(entries) || entries.length === 0) {
@@ -412,15 +416,10 @@ export default function CallScheduleAdmin() {
         data[label.replace(" Pod", " pod")] ||
         [];
 
+      // Pure string date math (UTC) — avoids local-timezone off-by-one shifts.
       const nextRows = Array.from({ length: 7 }, (_, idx) => {
-        const curDay = new Date(baseCurrent);
-        curDay.setDate(baseCurrent.getDate() + idx);
-        const curDateStr = formatYMD(curDay);
-
-        const prevDay = new Date(basePrev);
-        prevDay.setDate(basePrev.getDate() + idx);
-        const prevDateStr = formatYMD(prevDay);
-
+        const curDateStr = addDays(weekStart, idx);
+        const prevDateStr = addDays(prevWeekStart, idx);
         const dayData = prevData[prevDateStr] || {};
 
         return {

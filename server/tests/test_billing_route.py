@@ -285,7 +285,7 @@ def test_submit_billing_rejects_large_image(monkeypatch, authenticated_client):
 def test_list_billing_submissions(monkeypatch, authenticated_client):
     monkeypatch.setattr(
         "app.routes.billing.list_submissions",
-        lambda limit, offset: [{"id": "sub-1", "patient_name": "Jane Doe"}],
+        lambda limit, offset, practice_url=None: [{"id": "sub-1", "patient_name": "Jane Doe"}],
     )
     response = authenticated_client.get("/billing/submissions?limit=10&offset=0")
     assert response.status_code == 200
@@ -293,7 +293,7 @@ def test_list_billing_submissions(monkeypatch, authenticated_client):
 
 
 def test_get_billing_sheet_not_found(monkeypatch, authenticated_client):
-    monkeypatch.setattr("app.routes.billing.load_billing_sheet", lambda _id: None)
+    monkeypatch.setattr("app.routes.billing.load_billing_sheet", lambda _id, practice_url=None: None)
     response = authenticated_client.get("/billing/submissions/missing/sheet")
     assert response.status_code == 404
 
@@ -301,7 +301,7 @@ def test_get_billing_sheet_not_found(monkeypatch, authenticated_client):
 def test_get_billing_sheet_success(monkeypatch, authenticated_client):
     monkeypatch.setattr(
         "app.routes.billing.load_billing_sheet",
-        lambda _id: (b"img", "image/png", "sheet.png"),
+        lambda _id, practice_url=None: (b"img", "image/png", "sheet.png"),
     )
     response = authenticated_client.get("/billing/submissions/sub-1/sheet")
     assert response.status_code == 200
