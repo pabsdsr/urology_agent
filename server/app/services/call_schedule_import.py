@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from io import BytesIO, StringIO
 import csv
+import re
 from typing import Any, Dict, Iterable, List, Tuple
 
 
@@ -25,6 +26,28 @@ def _normalize_pod(pod_raw: Any) -> str | None:
     return None
 
 
+def _normalize_date_header_text(value: str) -> str:
+    """Normalize common spreadsheet month abbreviations before strptime."""
+    # Excel CSV exports often use "Sept" while Python expects "Sep" for %b.
+    return re.sub(r"\bSept\b", "Sep", value, flags=re.IGNORECASE)
+
+
+def _try_parse_us_slash_date(value: str) -> str | None:
+    """Parse US numeric dates: mm/dd/yyyy or mm/dd/yy."""
+    match = re.match(r"^(\d{1,2})/(\d{1,2})/(\d{2,4})$", value)
+    if not match:
+        return None
+    month = int(match.group(1))
+    day = int(match.group(2))
+    year = int(match.group(3))
+    if year < 100:
+        year += 2000 if year < 70 else 1900
+    try:
+        return date(year, month, day).isoformat()
+    except ValueError:
+        return None
+
+
 def _parse_header_date(value: Any) -> str:
     """
     Parse a header cell into ISO date string (YYYY-MM-DD).
@@ -40,9 +63,13 @@ def _parse_header_date(value: Any) -> str:
     if isinstance(value, date):
         return value.isoformat()
 
-    s = str(value).strip()
+    s = _normalize_date_header_text(str(value).strip())
     if not s:
         raise ValueError("Empty date header")
+
+    us_slash = _try_parse_us_slash_date(s)
+    if us_slash is not None:
+        return us_slash
 
     # Try a range of common string formats and normalize to ISO.
     candidates = [
@@ -57,8 +84,10 @@ def _parse_header_date(value: Any) -> str:
         "%d-%m-%Y",   # 05-04-2026
         "%d-%m-%y",   # 05-04-26
         "%b %d %Y",   # Apr 05 2026
+        "%b %d, %Y",  # Apr 05, 2026
         "%d %b %Y",   # 05 Apr 2026
         "%B %d %Y",   # April 05 2026
+        "%B %d, %Y",  # April 05, 2026
         "%d %B %Y",   # 05 April 2026
     ]
     for fmt in candidates:
@@ -68,7 +97,8 @@ def _parse_header_date(value: Any) -> str:
             continue
 
     raise ValueError(
-        f"Invalid date header '{s}'. Please use a standard date format (e.g. 2026-04-05, 4/5/2026, or Apr 5 2026)"
+        f"Invalid date header '{s}'. Please use a standard date format "
+        f"(e.g. 2026-04-05, 4/5/2026, 09/01/2026, or Apr 5 2026)"
     )
 
 
@@ -267,4 +297,3 @@ def _parse_xlsx(file_bytes: bytes) -> Dict[str, Dict[str, List[Dict[str, str]]]]
                 )
 
     return day_mapping
-
