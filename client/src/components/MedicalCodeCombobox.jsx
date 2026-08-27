@@ -173,6 +173,22 @@ export default function MedicalCodeCombobox({
     });
   }, [results, savedCodeOptions, recentCodeSet, selectedSet]);
 
+  // First option in the dropdown, matching the rendered order
+  // (Frequently used -> saved -> API results). Selected when Enter is pressed.
+  const topOption = useMemo(() => {
+    if (recentOptions.length > 0) {
+      return { code: recentOptions[0].code, description: recentOptions[0].description };
+    }
+    if (savedCodeOptions.length > 0) {
+      const code = savedCodeOptions[0];
+      return { code, description: descriptionByCode.get(code.toUpperCase()) || "" };
+    }
+    if (apiResults.length > 0) {
+      return { code: apiResults[0].code, description: apiResults[0].description };
+    }
+    return null;
+  }, [recentOptions, savedCodeOptions, apiResults, descriptionByCode]);
+
   const addCode = (code, description = "") => {
     const upper = String(code).trim().toUpperCase();
     if (!upper) return;
@@ -206,6 +222,26 @@ export default function MedicalCodeCombobox({
       return next;
     });
     addCode(normalizedQuery);
+  };
+
+  const handleInputKeyDown = (event) => {
+    if (event.key !== "Enter") return;
+    // Nothing typed and no menu open: let the keypress behave normally.
+    if (!openPicker && !normalizedQuery) return;
+    if (topOption) {
+      event.preventDefault();
+      addCode(topOption.code, topOption.description);
+      return;
+    }
+    // Results may still be loading; hold off on submitting the form.
+    if (loading) {
+      event.preventDefault();
+      return;
+    }
+    if (normalizedQuery && !selectedSet.has(normalizedQuery)) {
+      event.preventDefault();
+      addCurrentAsCustomCode();
+    }
   };
 
   const showEmptyHint =
@@ -246,6 +282,7 @@ export default function MedicalCodeCombobox({
           type="text"
           value={query}
           onChange={handleQueryChange}
+          onKeyDown={handleInputKeyDown}
           placeholder={placeholder}
           className={`${inputClassName} pr-8`}
           autoComplete="off"

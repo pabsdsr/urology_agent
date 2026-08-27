@@ -15,6 +15,7 @@ import {
 import {
   formatBillingDateIso,
   formatBillingDateUs,
+  isValidBillingDate,
   parseBillingDate,
 } from "../utils/billingFormValidation.js";
 
@@ -47,6 +48,35 @@ function dayButtonClass({ inMonth, isEndpoint, inRange, isDisabled }) {
   return "text-gray-300 hover:bg-gray-50";
 }
 
+// Progressively insert slashes as the user types digits (MM/DD/YYYY). Keeping
+// input numeric lets mobile keyboards show the number pad instead of the full
+// keyboard, and the mask supplies the "/" separators automatically.
+function maskUsDate(raw) {
+  const digits = String(raw || "").replace(/\D/g, "").slice(0, 8);
+  if (digits.length > 4) return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
+  if (digits.length > 2) return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+  return digits;
+}
+
+// Mask an optional start–end range. The first 8 digits form the start date; a
+// 9th digit begins the end date and auto-inserts the separator, so a mobile
+// number pad (no "/" or "–" keys) can still enter a full range.
+function maskUsDateRange(raw) {
+  const digits = String(raw || "").replace(/\D/g, "").slice(0, 16);
+  const start = maskUsDate(digits.slice(0, 8));
+  if (digits.length <= 8) return start;
+  return `${start} – ${maskUsDate(digits.slice(8))}`;
+}
+
+// Split a typed range into its date parts. Dates use "/", so a hyphen, en dash,
+// or the word "to" is unambiguously the range separator.
+function splitTypedRange(text) {
+  return String(text || "")
+    .split(/\s*(?:–|-|to)\s*/i)
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
 export default function BillingDatePicker({
   name,
   value,
@@ -62,9 +92,11 @@ export default function BillingDatePicker({
 }) {
   const id = useId();
   const rootRef = useRef(null);
+  const inputRef = useRef(null);
   const [open, setOpen] = useState(false);
   const [draftStart, setDraftStart] = useState(null);
   const [hoverDate, setHoverDate] = useState(null);
+  const [typedText, setTypedText] = useState("");
 
   const selectedStart = parseBillingDate(value);
   const selectedEnd = parseBillingDate(endValue);
@@ -115,6 +147,83 @@ export default function BillingDatePicker({
   const displayValue =
     endText && endText !== startText ? `${startText} – ${endText}` : startText;
 
+  // Keep the typable input in sync with the committed value (external changes,
+  // calendar selections, resets) without clobbering what the user is typing.
+  useEffect(() => {
+    setTypedText(range ? displayValue : startText);
+  }, [range, displayValue, startText]);
+
+  const handleTypedChange = (event) => {
+    const masked = maskUsDate(event.target.value);
+    setTypedText(masked);
+    // Commit as soon as a complete, valid date is typed so downstream form
+    // state and the calendar view update live.
+    if (masked.length === 10 && isValidBillingDate(masked)) {
+      onChange({ target: { name, value: formatBillingDateIso(masked) } });
+    } else if (masked === "") {
+      onChange({ target: { name, value: "" } });
+    }
+  };
+
+  const commitTypedText = () => {
+    const trimmed = typedText.trim();
+    if (!trimmed) {
+      onChange({ target: { name, value: "" } });
+      return;
+    }
+    if (isValidBillingDate(trimmed)) {
+      const iso = formatBillingDateIso(trimmed);
+      onChange({ target: { name, value: iso } });
+      setTypedText(formatBillingDateUs(iso));
+    } else {
+      // Invalid entry: revert to the last committed value.
+      setTypedText(startText);
+    }
+  };
+
+  const handleTypedRangeChange = (event) => {
+    const masked = maskUsDateRange(event.target.value);
+    setTypedText(masked);
+    if (masked === "") {
+      onRangeChange("", "");
+      return;
+    }
+    const [startPart, endPart] = splitTypedRange(masked);
+    const startValid = startPart && startPart.length === 10 && isValidBillingDate(startPart);
+    if (!startValid) return;
+    const startIso = formatBillingDateIso(startPart);
+    // Only attach an end once it's a complete, valid date on/after the start.
+    if (endPart && endPart.length === 10 && isValidBillingDate(endPart)) {
+      const endIso = formatBillingDateIso(endPart);
+      onRangeChange(startIso, isBefore(parseBillingDate(endPart), parseBillingDate(startPart)) ? "" : endIso);
+    } else {
+      onRangeChange(startIso, "");
+    }
+  };
+
+  const commitTypedRange = () => {
+    const trimmed = typedText.trim();
+    if (!trimmed) {
+      onRangeChange("", "");
+      return;
+    }
+    const [startPart, endPart] = splitTypedRange(trimmed);
+    if (!startPart || !isValidBillingDate(startPart)) {
+      setTypedText(displayValue);
+      return;
+    }
+    const startIso = formatBillingDateIso(startPart);
+    const hasValidEnd = endPart && isValidBillingDate(endPart);
+    const endIso =
+      hasValidEnd && !isBefore(parseBillingDate(endPart), parseBillingDate(startPart))
+        ? formatBillingDateIso(endPart)
+        : "";
+    onRangeChange(startIso, endIso);
+    const startUs = formatBillingDateUs(startIso);
+    const endUs = endIso ? formatBillingDateUs(endIso) : "";
+    setTypedText(endUs && endUs !== startUs ? `${startUs} – ${endUs}` : startUs);
+  };
+
   const selectSingle = (day) => {
     onChange({ target: { name, value: formatBillingDateIso(day) } });
     setOpen(false);
@@ -144,24 +253,51 @@ export default function BillingDatePicker({
     );
   };
 
+  const calendarIcon = (
+    <svg className="w-5 h-5 shrink-0 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+    </svg>
+  );
+
   return (
     <div ref={rootRef} className="relative mt-1">
-      <button
-        type="button"
-        id={`${id}-trigger`}
-        aria-haspopup="dialog"
-        aria-expanded={open}
-        aria-controls={`${id}-popover`}
-        onClick={() => setOpen((isOpen) => !isOpen)}
-        className={`${inputClassName} w-full text-left flex items-center justify-between gap-2`}
+      <div
+        className={`${inputClassName} !p-0 flex items-center justify-between gap-1 overflow-hidden focus-within:ring-2 focus-within:ring-teal-500 focus-within:border-teal-500`}
       >
-        <span className={displayValue ? "text-gray-900" : "text-gray-400"}>
-          {displayValue || placeholder}
-        </span>
-        <svg className="w-5 h-5 shrink-0 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-        </svg>
-      </button>
+        <input
+          ref={inputRef}
+          type="text"
+          id={`${id}-trigger`}
+          name={name}
+          value={typedText}
+          inputMode="numeric"
+          autoComplete="off"
+          placeholder={range ? "MM/DD/YYYY – MM/DD/YYYY" : "MM/DD/YYYY"}
+          onChange={range ? handleTypedRangeChange : handleTypedChange}
+          onBlur={range ? commitTypedRange : commitTypedText}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              if (range) commitTypedRange();
+              else commitTypedText();
+              setOpen(false);
+              inputRef.current?.blur();
+            }
+          }}
+          className="w-full bg-transparent px-3 py-2 outline-none placeholder:text-gray-400"
+        />
+        <button
+          type="button"
+          aria-haspopup="dialog"
+          aria-expanded={open}
+          aria-controls={`${id}-popover`}
+          aria-label="Open calendar"
+          onClick={() => setOpen((isOpen) => !isOpen)}
+          className="shrink-0 px-2 py-2 text-gray-400 hover:text-gray-600"
+        >
+          {calendarIcon}
+        </button>
+      </div>
 
       {open && (
         <div
