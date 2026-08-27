@@ -83,7 +83,7 @@ function BillingSubmissionsInbox() {
       setLoading(true);
       setError("");
       try {
-        const data = await billingService.listSubmissions(200, 0);
+        const data = await billingService.listSubmissions(1000, 0);
         if (!cancelled) setSubmissions(data.submissions || []);
       } catch (err) {
         if (!cancelled) setError(err.message || "Failed to load billing submissions.");

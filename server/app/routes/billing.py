@@ -249,7 +249,7 @@ async def search_billing_cpt_modifiers(
 
 @router.get("/submissions")
 async def get_billing_submissions(
-    limit: int = Query(100, ge=1, le=500),
+    limit: int = Query(100, ge=1, le=2000),
     offset: int = Query(0, ge=0),
     current_user: SessionUser = Depends(require_billing_viewer),
 ):

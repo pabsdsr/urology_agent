@@ -128,12 +128,26 @@ export default function MedicalCodeCombobox({
     };
   }, [openPicker, query, codeType]);
 
+  // Curated descriptions from the live search, keyed by uppercased code. Used to
+  // fill in descriptions for recent/saved entries that were stored without one.
+  const descriptionByCode = useMemo(() => {
+    const map = new Map();
+    for (const item of results) {
+      const code = (item.code || "").toUpperCase();
+      if (code && item.description) map.set(code, item.description);
+    }
+    return map;
+  }, [results]);
+
   const recentOptions = useMemo(
     () =>
-      getRecentBillingCodes(codeType, { query: normalizedQuery }).filter(
-        (item) => !selectedSet.has(item.code.toUpperCase())
-      ),
-    [codeType, normalizedQuery, selectedSet]
+      getRecentBillingCodes(codeType, { query: normalizedQuery })
+        .filter((item) => !selectedSet.has(item.code.toUpperCase()))
+        .map((item) => ({
+          ...item,
+          description: item.description || descriptionByCode.get(item.code.toUpperCase()) || "",
+        })),
+    [codeType, normalizedQuery, selectedSet, descriptionByCode]
   );
 
   const recentCodeSet = useMemo(
@@ -254,7 +268,7 @@ export default function MedicalCodeCombobox({
       </div>
 
       <DropdownPortal open={!!openPicker} anchorEl={openPicker?.anchorEl}>
-        <div className="rounded-md border border-gray-200 bg-white shadow-lg text-sm max-h-72 overflow-y-auto">
+        <div className="rounded-md border border-gray-200 bg-white shadow-lg text-sm">
           {recentOptions.length > 0 && (
             <div>
               <p className="px-3 py-1.5 text-xs font-medium uppercase tracking-wide text-gray-500 bg-gray-50 border-b border-gray-100">
@@ -271,14 +285,19 @@ export default function MedicalCodeCombobox({
             </div>
           )}
 
-          {savedCodeOptions.map((code) => (
+          {savedCodeOptions.map((code) => {
+            const savedDescription = descriptionByCode.get(code.toUpperCase()) || "";
+            return (
             <div key={`saved-${code}`} className="flex items-center hover:bg-gray-100">
               <button
                 type="button"
-                className="flex-1 text-left px-3 py-2 font-mono text-gray-900"
-                onClick={() => addCode(code)}
+                className="flex-1 text-left px-3 py-2"
+                onClick={() => addCode(code, savedDescription)}
               >
-                {formatCodeLabel(codeType, code)}
+                <span className="font-mono text-gray-900">{formatCodeLabel(codeType, code)}</span>
+                {savedDescription ? (
+                  <span className="text-gray-600"> — {savedDescription}</span>
+                ) : null}
               </button>
               <button
                 type="button"
@@ -289,7 +308,8 @@ export default function MedicalCodeCombobox({
                 ×
               </button>
             </div>
-          ))}
+            );
+          })}
 
           {loading && <p className="px-3 py-2 text-gray-500">Searching...</p>}
           {!loading && searchError && <p className="px-3 py-2 text-red-600">{searchError}</p>}
