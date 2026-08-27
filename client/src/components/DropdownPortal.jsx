@@ -1,11 +1,7 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
-function isInsideMenu(eventTarget, menuEl) {
-  return Boolean(menuEl && eventTarget instanceof Node && menuEl.contains(eventTarget));
-}
-
-/** Fixed-position dropdown menu anchored to (and tracking) an input element. */
+/** Dropdown menu anchored to (and tracking) an input element. */
 export default function DropdownPortal({
   open,
   anchorEl,
@@ -21,6 +17,14 @@ export default function DropdownPortal({
     const update = () => {
       const rect = anchorEl.getBoundingClientRect();
       const gapPx = 4;
+      // Position in *document* coordinates (position: absolute) rather than
+      // fixed-to-viewport. iOS Safari doesn't fire scroll events or repaint
+      // fixed elements continuously during a touch-scroll gesture, which makes a
+      // fixed menu detach from its input while scrolling. Absolute positioning
+      // lets the browser scroll the menu together with the page natively.
+      const scrollX = window.scrollX || window.pageXOffset || 0;
+      const scrollY = window.scrollY || window.pageYOffset || 0;
+
       const viewport = window.visualViewport;
       const viewportBottom = viewport
         ? viewport.offsetTop + viewport.height
@@ -29,9 +33,9 @@ export default function DropdownPortal({
       const maxHeight = Math.min(menuMaxHeightPx, availableBelow);
 
       setStyle({
-        position: "fixed",
-        top: rect.bottom + gapPx,
-        left: rect.left,
+        position: "absolute",
+        top: rect.bottom + scrollY + gapPx,
+        left: rect.left + scrollX,
         width: rect.width,
         maxHeight,
         overflow: "auto",
@@ -40,23 +44,17 @@ export default function DropdownPortal({
       });
     };
 
-    // Reposition the menu to stay pinned under the input, but ignore scrolls that
-    // happen inside the menu itself so its own list can scroll normally.
-    const handleReposition = (event) => {
-      if (isInsideMenu(event.target, menuRef.current)) return;
-      update();
-    };
-
     update();
+    // Recompute on layout-affecting changes (rotation, keyboard show/hide).
+    // Page scrolling is handled natively by absolute positioning, so we don't
+    // reposition on every scroll event (which is janky/deferred on iOS Safari).
     window.addEventListener("resize", update);
-    window.addEventListener("scroll", handleReposition, true);
+    window.addEventListener("orientationchange", update);
     window.visualViewport?.addEventListener("resize", update);
-    window.visualViewport?.addEventListener("scroll", update);
     return () => {
       window.removeEventListener("resize", update);
-      window.removeEventListener("scroll", handleReposition, true);
+      window.removeEventListener("orientationchange", update);
       window.visualViewport?.removeEventListener("resize", update);
-      window.visualViewport?.removeEventListener("scroll", update);
     };
   }, [open, anchorEl, menuMaxHeightPx]);
 
