@@ -8,49 +8,10 @@ import {
   getDatesInRange,
   getPacificDateString,
 } from "../utils/calendarPacific.js";
+import { PODS } from "../config/pods.js";
 
 // Surgery column key from backend (same as server SURGERY_COLUMN_KEY)
 const SURGERY_COLUMN_KEY = "Surgery";
-
-// Practitioner pods and desired display order within each pod.
-const PODS = [
-  {
-    name: "North Pod",
-    callKey: "North Pod",
-    practitioners: [
-      "Don Bui",
-      "Leah Nakamura",
-      "Paul Oh",
-      "Tammy Ho",
-      "Ashley Swanson",
-      "Michael Bui",
-    ],
-  },
-  {
-    name: "Central Pod",
-    callKey: "Central Pod",
-    practitioners: [
-      "Moses Kim",
-      "Daniel Su",
-      "Aaron Spitz",
-      "Neyssan Tebyani",
-      "Daniel Cabanero",
-      "Taralyn Johnson",
-    ],
-  },
-  {
-    name: "South Pod",
-    callKey: "South Pod",
-    practitioners: [
-      "Josh Randall",
-      "Poone Shoureshi",
-      "Karan Singh",
-      "James Meaglia",
-      "Olivia Carr",
-      "Jennifer Kim",
-    ],
-  },
-];
 
 const NON_SURGERY_PRACTITIONERS = [
   "Olivia Carr",

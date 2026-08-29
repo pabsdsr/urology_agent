@@ -6,6 +6,8 @@ import MedicalCodeCombobox from "./MedicalCodeCombobox.jsx";
 import CptLinesEditor from "./CptLinesEditor.jsx";
 import BillingDatePicker from "./BillingDatePicker.jsx";
 import { BILLING_INPUT_CLASS } from "../utils/billingUi.js";
+import { POD_PRACTITIONER_NAMES, ATTENDING_PRACTITIONER_NAMES } from "../config/pods.js";
+import { BILLING_LOCATIONS } from "../config/billingLocations.js";
 
 const inputClassName = `mt-1 ${BILLING_INPUT_CLASS}`;
 
@@ -68,6 +70,7 @@ export default function BillingSubmissionFields({
             addOptionSuffix="provider"
             value={form.providerName}
             onChange={(providerName) => setForm((prev) => ({ ...prev, providerName }))}
+            defaultOptions={POD_PRACTITIONER_NAMES}
             required
           />
           <label className="mt-3 flex items-center gap-2">
@@ -97,6 +100,8 @@ export default function BillingSubmissionFields({
               addOptionSuffix="provider"
               value={form.attendingName}
               onChange={(attendingName) => setForm((prev) => ({ ...prev, attendingName }))}
+              defaultOptions={ATTENDING_PRACTITIONER_NAMES}
+              usageKey={`${BILLING_PROVIDERS_STORAGE_KEY}AttendingUsage`}
               required
             />
           </div>
@@ -110,6 +115,7 @@ export default function BillingSubmissionFields({
           placeholder="Select or type a location"
           value={form.location}
           onChange={(location) => setForm((prev) => ({ ...prev, location }))}
+          defaultOptions={BILLING_LOCATIONS}
           required
         />
       </div>
