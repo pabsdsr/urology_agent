@@ -154,8 +154,8 @@ def test_submit_billing_accepts_cpt_modifiers(authenticated_client, monkeypatch)
     assert save_mock.call_args.kwargs["cpt_lines"] == [{"code": "51798", "modifiers": ["25", "57"]}]
 
 
-def test_submit_billing_accepts_incident_to_with_attending(monkeypatch, authenticated_client):
-    save_mock = Mock(return_value={"id": "sub-incident"})
+def test_submit_billing_accepts_split_shared_with_attending(monkeypatch, authenticated_client):
+    save_mock = Mock(return_value={"id": "sub-split-shared"})
     monkeypatch.setattr("app.routes.billing.save_submission", save_mock)
 
     response = authenticated_client.post(
@@ -166,7 +166,7 @@ def test_submit_billing_accepts_incident_to_with_attending(monkeypatch, authenti
             "location": "North Pod",
             "date_of_service": "2026-05-10",
             "provider_name": "Dr. NP",
-            "incident_to": "true",
+            "split_shared": "true",
             "attending_name": "Dr. Attending",
             "cpt_code": "51798",
             "icd10_code": "N40.1",
@@ -176,11 +176,11 @@ def test_submit_billing_accepts_incident_to_with_attending(monkeypatch, authenti
 
     assert response.status_code == 200
     kwargs = save_mock.call_args.kwargs
-    assert kwargs["incident_to"] is True
+    assert kwargs["split_shared"] is True
     assert kwargs["attending_name"] == "Dr. Attending"
 
 
-def test_submit_billing_requires_attending_when_incident_to(authenticated_client):
+def test_submit_billing_requires_attending_when_split_shared(authenticated_client):
     response = authenticated_client.post(
         "/billing/submit",
         data={
@@ -189,7 +189,7 @@ def test_submit_billing_requires_attending_when_incident_to(authenticated_client
             "location": "North Pod",
             "date_of_service": "2026-05-10",
             "provider_name": "Dr. NP",
-            "incident_to": "true",
+            "split_shared": "true",
             "cpt_code": "51798",
             "icd10_code": "N40.1",
         },

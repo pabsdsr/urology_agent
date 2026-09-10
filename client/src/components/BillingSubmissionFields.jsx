@@ -59,7 +59,7 @@ export default function BillingSubmissionFields({
 
       <div
         className={`grid gap-4 md:col-span-2 ${
-          form.incidentTo ? "grid-cols-1 md:grid-cols-2" : "grid-cols-1"
+          form.splitShared ? "grid-cols-1 md:grid-cols-2" : "grid-cols-1"
         }`}
       >
         <div className="block">
@@ -76,22 +76,22 @@ export default function BillingSubmissionFields({
           <label className="mt-3 flex items-center gap-2">
             <input
               type="checkbox"
-              name="incidentTo"
-              checked={Boolean(form.incidentTo)}
+              name="splitShared"
+              checked={Boolean(form.splitShared)}
               onChange={(event) => {
                 const checked = event.target.checked;
                 setForm((prev) => ({
                   ...prev,
-                  incidentTo: checked,
+                  splitShared: checked,
                   attendingName: checked ? prev.attendingName : "",
                 }));
               }}
               className="h-4 w-4 rounded border-gray-300 text-teal-600 focus:ring-teal-500"
             />
-            <span className="text-sm font-medium text-gray-700">Incident To</span>
+            <span className="text-sm font-medium text-gray-700">Split Shared</span>
           </label>
         </div>
-        {form.incidentTo ? (
+        {form.splitShared ? (
           <div className="block">
             <LocationCombobox
               storageKey={BILLING_PROVIDERS_STORAGE_KEY}

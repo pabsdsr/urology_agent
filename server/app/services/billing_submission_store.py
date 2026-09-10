@@ -54,7 +54,12 @@ def _normalize_entry(entry: Dict[str, Any]) -> Dict[str, Any]:
     normalized = ensure_entry_cpt_lines(dict(entry))
     normalized["processed"] = bool(normalized.get("processed"))
     normalized.setdefault("cpt_modifiers", "")
-    normalized["incident_to"] = bool(normalized.get("incident_to"))
+    # Migrate the legacy ``incident_to`` key to ``split_shared`` on read so
+    # existing stored submissions keep their value after the rename.
+    normalized["split_shared"] = bool(
+        normalized.get("split_shared", normalized.get("incident_to"))
+    )
+    normalized.pop("incident_to", None)
     normalized.setdefault("attending_name", "")
     normalized.setdefault("date_of_service_end", "")
     return normalized
@@ -172,7 +177,7 @@ def save_submission(
     date_of_service: str,
     date_of_service_end: str = "",
     provider_name: str,
-    incident_to: bool = False,
+    split_shared: bool = False,
     attending_name: str = "",
     cpt_code: str,
     icd10_code: str,
@@ -204,8 +209,8 @@ def save_submission(
         "date_of_service": date_of_service,
         "date_of_service_end": date_of_service_end,
         "provider_name": provider_name,
-        "incident_to": bool(incident_to),
-        "attending_name": attending_name if incident_to else "",
+        "split_shared": bool(split_shared),
+        "attending_name": attending_name if split_shared else "",
         "cpt_code": cpt_code,
         "icd10_code": icd10_code,
         "cpt_modifiers": cpt_modifiers,
@@ -353,7 +358,7 @@ def _apply_submission_update(
     date_of_service: str,
     provider_name: str,
     date_of_service_end: str = "",
-    incident_to: bool = False,
+    split_shared: bool = False,
     attending_name: str = "",
     cpt_code: str,
     icd10_code: str,
@@ -369,8 +374,8 @@ def _apply_submission_update(
     entry["date_of_service"] = date_of_service
     entry["date_of_service_end"] = date_of_service_end
     entry["provider_name"] = provider_name
-    entry["incident_to"] = bool(incident_to)
-    entry["attending_name"] = attending_name if incident_to else ""
+    entry["split_shared"] = bool(split_shared)
+    entry["attending_name"] = attending_name if split_shared else ""
     entry["cpt_code"] = cpt_code
     entry["icd10_code"] = icd10_code
     entry["cpt_modifiers"] = cpt_modifiers
@@ -392,7 +397,7 @@ def update_submission(
     date_of_service: str,
     date_of_service_end: str = "",
     provider_name: str,
-    incident_to: bool = False,
+    split_shared: bool = False,
     attending_name: str = "",
     cpt_code: str,
     icd10_code: str,
@@ -428,7 +433,7 @@ def update_submission(
             date_of_service=date_of_service,
             date_of_service_end=date_of_service_end,
             provider_name=provider_name,
-            incident_to=incident_to,
+            split_shared=split_shared,
             attending_name=attending_name,
             cpt_code=cpt_code,
             icd10_code=icd10_code,

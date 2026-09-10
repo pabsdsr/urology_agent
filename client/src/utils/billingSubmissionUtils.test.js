@@ -88,17 +88,17 @@ describe("billingSubmissionUtils", () => {
     expect(compareBillingSubmissions(a, b, "provider_name", "asc")).toBeLessThan(0);
   });
 
-  it("maps incident to fields for edit and submit", () => {
+  it("maps split shared fields for edit and submit", () => {
     expect(
       submissionToEditForm({
         patient_name: "Jane",
         provider_name: "Dr. NP",
-        incident_to: true,
+        split_shared: true,
         attending_name: "Dr. Attending",
       })
     ).toMatchObject({
       providerName: "Dr. NP",
-      incidentTo: true,
+      splitShared: true,
       attendingName: "Dr. Attending",
     });
 
@@ -109,13 +109,13 @@ describe("billingSubmissionUtils", () => {
         dateOfService: "5/10/2026",
         location: "North Pod",
         providerName: "Dr. NP",
-        incidentTo: true,
+        splitShared: true,
         attendingName: "Dr. Attending",
         cptLines: [{ code: "51798", modifiers: [] }],
         icd10Codes: ["N40.1"],
       })
     ).toMatchObject({
-      incidentTo: true,
+      splitShared: true,
       attendingName: "Dr. Attending",
     });
 
@@ -126,7 +126,7 @@ describe("billingSubmissionUtils", () => {
         dateOfService: "5/10/2026",
         location: "North Pod",
         providerName: "Dr. NP",
-        incidentTo: false,
+        splitShared: false,
         attendingName: "ignored",
         cptLines: [{ code: "51798", modifiers: [] }],
         icd10Codes: ["N40.1"],

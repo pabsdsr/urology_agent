@@ -83,13 +83,13 @@ export function lastUpdatedAt(submission) {
 }
 
 export function submissionToEditForm(submission) {
-  const incidentTo = Boolean(submission.incident_to);
+  const splitShared = Boolean(submission.split_shared);
   return {
     patientName: submission.patient_name || "",
     patientDob: formatBillingDateUs(submission.patient_dob || ""),
     providerName: submission.provider_name || "",
-    incidentTo,
-    attendingName: incidentTo ? submission.attending_name || "" : "",
+    splitShared,
+    attendingName: splitShared ? submission.attending_name || "" : "",
     location: submission.location || "",
     dateOfService: formatBillingDateUs(submission.date_of_service || ""),
     dateOfServiceEnd: formatBillingDateUs(submission.date_of_service_end || ""),
@@ -101,7 +101,7 @@ export function submissionToEditForm(submission) {
 /** Map billing form state to the API payload shape. */
 export function formToSubmissionPayload(form, billingSheetFile = null) {
   const cptLines = normalizeCptLines(form.cptLines);
-  const incidentTo = Boolean(form.incidentTo);
+  const splitShared = Boolean(form.splitShared);
   return {
     patientName: form.patientName.trim(),
     patientDob: formatBillingDateUs(form.patientDob),
@@ -109,8 +109,8 @@ export function formToSubmissionPayload(form, billingSheetFile = null) {
     dateOfService: formatBillingDateUs(form.dateOfService),
     dateOfServiceEnd: form.dateOfServiceEnd ? formatBillingDateUs(form.dateOfServiceEnd) : "",
     providerName: form.providerName.trim(),
-    incidentTo,
-    attendingName: incidentTo ? form.attendingName.trim() : "",
+    splitShared,
+    attendingName: splitShared ? form.attendingName.trim() : "",
     cptLinesJson: serializeCptLinesForApi(cptLines),
     icd10Code: formatBillingCodeList(form.icd10Codes),
     billingSheetFile,

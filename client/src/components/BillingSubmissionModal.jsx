@@ -230,8 +230,8 @@ export default function BillingSubmissionModal({
                 <DetailRow label="Patient name" value={submission.patient_name} />
                 <DetailRow label="Patient DOB" value={formatBillingDateUs(submission.patient_dob)} />
                 <DetailRow label="Provider" value={submission.provider_name} />
-                <DetailRow label="Incident To" value={submission.incident_to ? "Yes" : "No"} />
-                {submission.incident_to ? (
+                <DetailRow label="Split Shared" value={submission.split_shared ? "Yes" : "No"} />
+                {submission.split_shared ? (
                   <DetailRow label="Attending Name" value={submission.attending_name} />
                 ) : null}
                 <DetailRow label="Location" value={submission.location} />

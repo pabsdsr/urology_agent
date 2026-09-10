@@ -16,7 +16,7 @@ const EMPTY_FORM = {
   dateOfService: "",
   dateOfServiceEnd: "",
   providerName: "",
-  incidentTo: false,
+  splitShared: false,
   attendingName: "",
   cptLines: [{ ...EMPTY_CPT_LINE }],
   icd10Codes: [],

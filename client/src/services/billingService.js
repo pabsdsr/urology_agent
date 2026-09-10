@@ -8,7 +8,7 @@ function buildBillingFormData(payload, { includeSheet = true } = {}) {
   formData.append("date_of_service", payload.dateOfService || "");
   formData.append("date_of_service_end", payload.dateOfServiceEnd || "");
   formData.append("provider_name", payload.providerName || "");
-  formData.append("incident_to", payload.incidentTo ? "true" : "false");
+  formData.append("split_shared", payload.splitShared ? "true" : "false");
   formData.append("attending_name", payload.attendingName || "");
   formData.append("cpt_lines", payload.cptLinesJson || "[]");
   formData.append("icd10_code", payload.icd10Code);

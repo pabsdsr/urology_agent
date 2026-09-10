@@ -73,7 +73,7 @@ def _inline_content_disposition(filename: str, submission_id: str, content_type:
     return f'inline; filename="{safe}"'
 
 
-def _parse_incident_to(value: str) -> bool:
+def _parse_split_shared(value: str) -> bool:
     return str(value or "").strip().lower() in ("true", "1", "yes", "on")
 
 
@@ -86,7 +86,7 @@ def _parse_billing_form_fields(
     provider_name: str,
     icd10_code: str,
     date_of_service_end: str = "",
-    incident_to: str = "false",
+    split_shared: str = "false",
     attending_name: str = "",
     cpt_lines: str = "",
     cpt_code: str = "",
@@ -99,7 +99,7 @@ def _parse_billing_form_fields(
     date_of_service_end = date_of_service_end.strip()
     provider_name = provider_name.strip()
     attending_name = attending_name.strip()
-    incident_to_flag = _parse_incident_to(incident_to)
+    split_shared_flag = _parse_split_shared(split_shared)
 
     if not patient_name or not patient_dob:
         raise HTTPException(status_code=400, detail="Patient name and DOB are required.")
@@ -109,12 +109,12 @@ def _parse_billing_form_fields(
         raise HTTPException(status_code=400, detail="Date of service is required.")
     if not provider_name:
         raise HTTPException(status_code=400, detail="Provider name is required.")
-    if incident_to_flag and not attending_name:
+    if split_shared_flag and not attending_name:
         raise HTTPException(
             status_code=400,
-            detail="Attending Name is required when Incident To is checked.",
+            detail="Attending Name is required when Split Shared is checked.",
         )
-    if not incident_to_flag:
+    if not split_shared_flag:
         attending_name = ""
 
     parsed_lines = parse_cpt_lines_json(
@@ -139,7 +139,7 @@ def _parse_billing_form_fields(
         "date_of_service": date_of_service,
         "date_of_service_end": date_of_service_end,
         "provider_name": provider_name,
-        "incident_to": incident_to_flag,
+        "split_shared": split_shared_flag,
         "attending_name": attending_name,
         "cpt_lines": validated_lines,
         "cpt_code": legacy_cpt_code,
@@ -166,7 +166,7 @@ async def submit_billing(
     date_of_service: str = Form(""),
     date_of_service_end: str = Form(""),
     provider_name: str = Form(""),
-    incident_to: str = Form("false"),
+    split_shared: str = Form("false"),
     attending_name: str = Form(""),
     cpt_lines: str = Form(""),
     cpt_code: str = Form(""),
@@ -182,7 +182,7 @@ async def submit_billing(
         date_of_service=date_of_service,
         date_of_service_end=date_of_service_end,
         provider_name=provider_name,
-        incident_to=incident_to,
+        split_shared=split_shared,
         attending_name=attending_name,
         cpt_lines=cpt_lines,
         cpt_code=cpt_code,
@@ -312,7 +312,7 @@ async def update_billing_submission(
     date_of_service: str = Form(""),
     date_of_service_end: str = Form(""),
     provider_name: str = Form(""),
-    incident_to: str = Form("false"),
+    split_shared: str = Form("false"),
     attending_name: str = Form(""),
     cpt_lines: str = Form(""),
     cpt_code: str = Form(""),
@@ -328,7 +328,7 @@ async def update_billing_submission(
         date_of_service=date_of_service,
         date_of_service_end=date_of_service_end,
         provider_name=provider_name,
-        incident_to=incident_to,
+        split_shared=split_shared,
         attending_name=attending_name,
         cpt_lines=cpt_lines,
         cpt_code=cpt_code,
