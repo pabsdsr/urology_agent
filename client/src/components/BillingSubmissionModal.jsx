@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import BillingSheetImage from "./BillingSheetImage.jsx";
 import BillingProcessedToggle from "./BillingProcessedToggle.jsx";
 import BillingSubmissionFields from "./BillingSubmissionFields.jsx";
-import { validateBillingForm, validateBillingSheetFile, BILLING_IMAGE_ACCEPT, formatBillingDateUs } from "../utils/billingFormValidation.js";
+import BillingSheetInput from "./BillingSheetInput.jsx";
+import { validateBillingForm, formatBillingDateUs } from "../utils/billingFormValidation.js";
 import { formatCptLinesDisplay } from "../utils/cptLines.js";
 import { formatPacificDateTime } from "../utils/calendarPacific.js";
 import {
@@ -40,6 +41,7 @@ export default function BillingSubmissionModal({
   const [isEditing, setIsEditing] = useState(initialEditing);
   const [form, setForm] = useState(() => submissionToEditForm(submission));
   const [billingSheetFile, setBillingSheetFile] = useState(null);
+  const [sheetBusy, setSheetBusy] = useState(false);
   const [formError, setFormError] = useState("");
   const [sheetReloadKey, setSheetReloadKey] = useState(0);
 
@@ -47,6 +49,7 @@ export default function BillingSubmissionModal({
     setIsEditing(initialEditing);
     setForm(submissionToEditForm(submission));
     setBillingSheetFile(null);
+    setSheetBusy(false);
     setFormError("");
     setSheetReloadKey(0);
   }, [submission, initialEditing]);
@@ -73,23 +76,6 @@ export default function BillingSubmissionModal({
   const onInputChange = (event) => {
     const { name, value } = event.target;
     setForm((prev) => ({ ...prev, [name]: value }));
-  };
-
-  const onSheetFileChange = (event) => {
-    const file = event.target.files?.[0] || null;
-    if (!file) {
-      setBillingSheetFile(null);
-      return;
-    }
-    const fileError = validateBillingSheetFile(file);
-    if (fileError) {
-      setBillingSheetFile(null);
-      setFormError(fileError);
-      event.target.value = "";
-      return;
-    }
-    setBillingSheetFile(file);
-    setFormError("");
   };
 
   const startEditing = () => {
@@ -186,17 +172,19 @@ export default function BillingSubmissionModal({
               cptLinesResetKey={submission.id}
               className="grid grid-cols-1 sm:grid-cols-2 gap-4"
             >
-              <label className="block sm:col-span-2">
-                <span className="text-sm font-medium text-gray-700">
+              <div className="sm:col-span-2">
+                <span className="block text-sm font-medium text-gray-700 mb-1">
                   Replace billing sheet (optional)
                 </span>
-                <input
-                  type="file"
-                  accept={BILLING_IMAGE_ACCEPT}
-                  onChange={onSheetFileChange}
-                  className="mt-1 block w-full text-sm text-gray-600 file:mr-3 file:py-2 file:px-3 file:rounded-md file:border-0 file:bg-teal-50 file:text-teal-700 hover:file:bg-teal-100"
+                <BillingSheetInput
+                  file={billingSheetFile}
+                  onFileChange={(nextFile) => {
+                    setBillingSheetFile(nextFile);
+                    setFormError("");
+                  }}
+                  onBusyChange={setSheetBusy}
                 />
-              </label>
+              </div>
             </BillingSubmissionFields>
             <div className="flex justify-end gap-3 border-t border-gray-200 pt-4">
               <button
@@ -209,10 +197,10 @@ export default function BillingSubmissionModal({
               </button>
               <button
                 type="submit"
-                disabled={saving}
+                disabled={saving || sheetBusy}
                 className="px-4 py-2 text-sm font-medium text-white bg-teal-600 rounded-md hover:bg-teal-700 disabled:bg-teal-300"
               >
-                {saving ? "Saving..." : "Save changes"}
+                {saving ? "Saving..." : sheetBusy ? "Preparing image..." : "Save changes"}
               </button>
             </div>
           </form>

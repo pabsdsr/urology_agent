@@ -38,6 +38,7 @@ function BillingPage() {
     searchRef,
   } = usePatientSearch();
   const [billingSheetFile, setBillingSheetFile] = useState(null);
+  const [sheetBusy, setSheetBusy] = useState(false);
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -223,6 +224,7 @@ function BillingPage() {
               <BillingSheetInput
                 file={billingSheetFile}
                 onFileChange={onFileChange}
+                onBusyChange={setSheetBusy}
               />
             </div>
           </div>
@@ -241,10 +243,10 @@ function BillingPage() {
           {canSubmit && (
             <button
               type="submit"
-              disabled={submitting}
+              disabled={submitting || sheetBusy}
               className="w-full md:w-auto px-5 py-2.5 bg-teal-600 text-white rounded-md font-medium hover:bg-teal-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
             >
-              {submitting ? "Saving..." : "Submit Billing"}
+              {submitting ? "Saving..." : sheetBusy ? "Preparing image..." : "Submit Billing"}
             </button>
           )}
           </fieldset>
